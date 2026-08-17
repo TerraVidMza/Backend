@@ -29,6 +29,9 @@ import { LecturasIotModule } from './modules/lecturas-iot/lecturas-iot.module';
 import { CuadrillasModule } from './modules/cuadrillas/cuadrillas.module';
 import { PesajeVendimiaModule } from './modules/pesaje-vendimia/pesaje-vendimia.module';
 import { RemitosModule } from './modules/remitos/remitos.module';
+import { ConfiguracionModule } from './modules/configuracion/configuracion.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { InteligenciaAgronomicaModule } from './modules/inteligencia-agronomica/inteligencia-agronomica.module';
 
 @Module({
   imports: [
@@ -57,6 +60,9 @@ import { RemitosModule } from './modules/remitos/remitos.module';
     CuadrillasModule,
     PesajeVendimiaModule,
     RemitosModule,
+    ConfiguracionModule,
+    DashboardModule,
+    InteligenciaAgronomicaModule,
   ],
   controllers: [AppController],
   providers: [
