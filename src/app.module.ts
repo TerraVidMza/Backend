@@ -21,6 +21,11 @@ import { CatalogoItemModule } from './modules/catalogo-item/catalogo-item.module
 import { InsumosModule } from './modules/insumos/insumos.module';
 import { TipoLaborModule } from './modules/tipo-labor/tipo-labor.module';
 import { RegistroLaborModule } from './modules/registro-labor/registro-labor.module';
+import { NotificacionesModule } from './modules/notificaciones/notificaciones.module';
+import { SensoresModule } from './modules/sensores/sensores.module';
+import { UmbralSensorModule } from './modules/umbral-sensor/umbral-sensor.module';
+import { AlertasIotModule } from './modules/alertas-iot/alertas-iot.module';
+import { LecturasIotModule } from './modules/lecturas-iot/lecturas-iot.module';
 
 @Module({
   imports: [
@@ -41,6 +46,11 @@ import { RegistroLaborModule } from './modules/registro-labor/registro-labor.mod
     InsumosModule,
     TipoLaborModule,
     RegistroLaborModule,
+    NotificacionesModule,
+    SensoresModule,
+    UmbralSensorModule,
+    AlertasIotModule,
+    LecturasIotModule,
   ],
   controllers: [AppController],
   providers: [

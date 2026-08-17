@@ -4,11 +4,12 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { Usuario } from './entities/usuario.entity';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
+import { RolNombre } from '../../common/enums/rol.enum';
 
 const SALT_ROUNDS = parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '10', 10);
 
@@ -94,6 +95,13 @@ export class UsuariosService {
     await this.usuarioRepository.update(usuario.id, {
       intentosFallidos: intentos,
       bloqueadoHasta,
+    });
+  }
+
+  async findByRolesInEmpresa(empresaId: string, roles: RolNombre[]): Promise<Usuario[]> {
+    return this.usuarioRepository.find({
+      where: { empresaId, activo: true, rol: { nombreRol: In(roles) } },
+      relations: { rol: true },
     });
   }
 
