@@ -26,6 +26,9 @@ import { SensoresModule } from './modules/sensores/sensores.module';
 import { UmbralSensorModule } from './modules/umbral-sensor/umbral-sensor.module';
 import { AlertasIotModule } from './modules/alertas-iot/alertas-iot.module';
 import { LecturasIotModule } from './modules/lecturas-iot/lecturas-iot.module';
+import { CuadrillasModule } from './modules/cuadrillas/cuadrillas.module';
+import { PesajeVendimiaModule } from './modules/pesaje-vendimia/pesaje-vendimia.module';
+import { RemitosModule } from './modules/remitos/remitos.module';
 
 @Module({
   imports: [
@@ -51,6 +54,9 @@ import { LecturasIotModule } from './modules/lecturas-iot/lecturas-iot.module';
     UmbralSensorModule,
     AlertasIotModule,
     LecturasIotModule,
+    CuadrillasModule,
+    PesajeVendimiaModule,
+    RemitosModule,
   ],
   controllers: [AppController],
   providers: [
