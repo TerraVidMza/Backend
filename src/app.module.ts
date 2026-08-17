@@ -32,6 +32,7 @@ import { RemitosModule } from './modules/remitos/remitos.module';
 import { ConfiguracionModule } from './modules/configuracion/configuracion.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InteligenciaAgronomicaModule } from './modules/inteligencia-agronomica/inteligencia-agronomica.module';
+import { AyudaModule } from './modules/ayuda/ayuda.module';
 
 @Module({
   imports: [
@@ -63,6 +64,7 @@ import { InteligenciaAgronomicaModule } from './modules/inteligencia-agronomica/
     ConfiguracionModule,
     DashboardModule,
     InteligenciaAgronomicaModule,
+    AyudaModule,
   ],
   controllers: [AppController],
   providers: [

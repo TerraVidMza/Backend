@@ -10,6 +10,11 @@ import {
   CatalogoItem,
   CatalogoTipo,
 } from '../../modules/catalogo-item/entities/catalogo-item.entity';
+import {
+  ArticuloAyuda,
+  ModuloAyuda,
+  TipoArticulo,
+} from '../../modules/ayuda/entities/articulo-ayuda.entity';
 import { RolNombre } from '../../common/enums/rol.enum';
 
 async function seed() {
@@ -20,6 +25,9 @@ async function seed() {
   const usuarioRepo = app.get<Repository<Usuario>>(getRepositoryToken(Usuario));
   const catalogoRepo = app.get<Repository<CatalogoItem>>(
     getRepositoryToken(CatalogoItem),
+  );
+  const articuloAyudaRepo = app.get<Repository<ArticuloAyuda>>(
+    getRepositoryToken(ArticuloAyuda),
   );
 
   console.log('Sembrando roles...');
@@ -81,6 +89,57 @@ async function seed() {
     });
     if (!existente) {
       await catalogoRepo.save(catalogoRepo.create({ ...item, activo: true }));
+    }
+  }
+
+  console.log('Sembrando artículos del Centro de Ayuda...');
+  const articulos: Array<{
+    tipo: TipoArticulo;
+    modulo: ModuloAyuda;
+    titulo: string;
+    contenido: string;
+    orden: number;
+  }> = [
+    {
+      tipo: TipoArticulo.MANUAL,
+      modulo: ModuloAyuda.AUTENTICACION,
+      titulo: 'Cómo iniciar sesión',
+      contenido:
+        'Ingresá tu email y contraseña en la pantalla de login. Si olvidaste tu contraseña, usá el enlace "Recuperar contraseña".',
+      orden: 1,
+    },
+    {
+      tipo: TipoArticulo.FAQ,
+      modulo: ModuloAyuda.AUTENTICACION,
+      titulo: '¿Qué pasa si fallo el login varias veces?',
+      contenido:
+        'Después de 5 intentos fallidos, la cuenta se bloquea temporalmente por 15 minutos por seguridad.',
+      orden: 1,
+    },
+    {
+      tipo: TipoArticulo.MANUAL,
+      modulo: ModuloAyuda.OPERACIONES,
+      titulo: 'Registrar una labor en modo offline',
+      contenido:
+        'La app móvil permite registrar labores sin conexión. Los registros se sincronizan automáticamente al recuperar señal, usando un identificador único para evitar duplicados.',
+      orden: 1,
+    },
+    {
+      tipo: TipoArticulo.MANUAL,
+      modulo: ModuloAyuda.VENDIMIA,
+      titulo: 'Generar un remito de vendimia',
+      contenido:
+        'Desde el cuartel con pesajes pendientes, generá un borrador de remito. El Propietario o Agrónomo debe aprobarlo o rechazarlo antes de liquidar.',
+      orden: 1,
+    },
+  ];
+
+  for (const articulo of articulos) {
+    const existente = await articuloAyudaRepo.findOne({
+      where: { tipo: articulo.tipo, modulo: articulo.modulo, titulo: articulo.titulo },
+    });
+    if (!existente) {
+      await articuloAyudaRepo.save(articuloAyudaRepo.create({ ...articulo, activo: true }));
     }
   }
 
