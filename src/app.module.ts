@@ -1,0 +1,77 @@
+import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { AppController } from './app.controller';
+import { AppService } from './app.service';
+import typeormConfig from './config/typeorm.config';
+import { HttpExceptionFilter } from './common/filters/http-exception.filter';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
+
+import { RolesModule } from './modules/roles/roles.module';
+import { UsuariosModule } from './modules/usuarios/usuarios.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { LogAuditoriaModule } from './modules/log-auditoria/log-auditoria.module';
+import { TokenRecuperacionModule } from './modules/token-recuperacion/token-recuperacion.module';
+import { EmpresasModule } from './modules/empresas/empresas.module';
+import { FincasModule } from './modules/fincas/fincas.module';
+import { CuartelesModule } from './modules/cuarteles/cuarteles.module';
+import { CatalogoItemModule } from './modules/catalogo-item/catalogo-item.module';
+import { InsumosModule } from './modules/insumos/insumos.module';
+import { TipoLaborModule } from './modules/tipo-labor/tipo-labor.module';
+import { RegistroLaborModule } from './modules/registro-labor/registro-labor.module';
+import { NotificacionesModule } from './modules/notificaciones/notificaciones.module';
+import { SensoresModule } from './modules/sensores/sensores.module';
+import { UmbralSensorModule } from './modules/umbral-sensor/umbral-sensor.module';
+import { AlertasIotModule } from './modules/alertas-iot/alertas-iot.module';
+import { LecturasIotModule } from './modules/lecturas-iot/lecturas-iot.module';
+import { CuadrillasModule } from './modules/cuadrillas/cuadrillas.module';
+import { PesajeVendimiaModule } from './modules/pesaje-vendimia/pesaje-vendimia.module';
+import { RemitosModule } from './modules/remitos/remitos.module';
+import { ConfiguracionModule } from './modules/configuracion/configuracion.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { InteligenciaAgronomicaModule } from './modules/inteligencia-agronomica/inteligencia-agronomica.module';
+import { AyudaModule } from './modules/ayuda/ayuda.module';
+
+@Module({
+  imports: [
+    ConfigModule.forRoot({ isGlobal: true, load: [typeormConfig] }),
+    TypeOrmModule.forRootAsync({
+      inject: [typeormConfig.KEY],
+      useFactory: (config: ReturnType<typeof typeormConfig>) => config,
+    }),
+    RolesModule,
+    UsuariosModule,
+    AuthModule,
+    LogAuditoriaModule,
+    TokenRecuperacionModule,
+    EmpresasModule,
+    FincasModule,
+    CuartelesModule,
+    CatalogoItemModule,
+    InsumosModule,
+    TipoLaborModule,
+    RegistroLaborModule,
+    NotificacionesModule,
+    SensoresModule,
+    UmbralSensorModule,
+    AlertasIotModule,
+    LecturasIotModule,
+    CuadrillasModule,
+    PesajeVendimiaModule,
+    RemitosModule,
+    ConfiguracionModule,
+    DashboardModule,
+    InteligenciaAgronomicaModule,
+    AyudaModule,
+  ],
+  controllers: [AppController],
+  providers: [
+    AppService,
+    { provide: APP_FILTER, useClass: HttpExceptionFilter },
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
+  ],
+})
+export class AppModule {}
