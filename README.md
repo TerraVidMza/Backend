@@ -1,33 +1,17 @@
 # TerraVid — Backend
 
-ERP agrícola para la trazabilidad integral desde la plantación hasta la vendimia.
+ERP agrícola para la trazabilidad integral desde la plantación hasta la vendimia. API REST construida con **NestJS + TypeORM + PostgreSQL/PostGIS**, siguiendo el modelo de datos y las historias de usuario definidas en el documento del proyecto final (UTN FRM).
 
 > **Nota de alcance:** este repositorio contiene el código y la documentación del **Backend**. No se encontró código de Frontend en ninguna rama del repo al momento de escribir esto; si existe en otro repositorio, actualizar esta nota con el enlace correspondiente.
 
 ## Stack
 
 - **NestJS (v11) + TypeScript**
-- **TypeORM** sobre **PostgreSQL 16 + PostGIS**
-- **Passport / JWT** para autenticación y autorización por rol
-
-> El detalle completo de arquitectura, tecnologías y entornos está en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Las instrucciones de puesta en marcha (instalación, variables de entorno, seed) viven en el `README.md` de la rama `backend`, donde está el código.
-
-## Documentación
-
-Punto de entrada: [`docs/README.md`](docs/README.md).
-
-## Contribuir
-
-Ver [`CONTRIBUTING.md`](CONTRIBUTING.md) para la política de branching (Gitflow) del proyecto.
-ERP agrícola para trazabilidad desde la plantación hasta la vendimia. API REST construida con **NestJS + TypeORM + PostgreSQL/PostGIS**, siguiendo el modelo de datos y las historias de usuario definidas en el documento del proyecto final (UTN FRM).
-
-## Stack
-
-- **Node.js / NestJS** (TypeScript)
-- **PostgreSQL 16 + PostGIS** (persistencia, extensión geoespacial habilitada para futuros usos)
-- **TypeORM** (ORM, `synchronize: true` en desarrollo)
-- **JWT (Passport)** para autenticación, guards globales + `@Public()` / `@Roles()` para autorización
+- **TypeORM** sobre **PostgreSQL 16 + PostGIS** (extensión geoespacial habilitada para futuros usos)
+- **Passport / JWT** para autenticación y autorización por rol (guards globales + `@Public()` / `@Roles()`)
 - **class-validator / class-transformer** para DTOs
+
+> El detalle completo de arquitectura, tecnologías y entornos del sistema (incluyendo componentes aún no implementados) está en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Requisitos
 
@@ -66,7 +50,7 @@ Usuario demo creado por el seed:
 
 ### Pendiente para siguientes entregas
 
-Telemetría IoT (sensores, lecturas, umbrales, alertas), logística de vendimia (cuadrillas, pesajes, remitos), notificaciones, configuración del sistema, dashboards y los módulos de inteligencia agronómica (MVP). Las entidades ya están mapeadas en el diagrama de Entidad-Relación (Anexo 2 del documento) y siguen el mismo patrón de los módulos ya construidos.
+Telemetría IoT (sensores, lecturas, umbrales, alertas), logística de vendimia (cuadrillas, pesajes, remitos), notificaciones, configuración del sistema, dashboards y los módulos de inteligencia agronómica (MVP). Las entidades ya están mapeadas en el diagrama de Entidad-Relación (Anexo 2 del documento maestro — ver [`docs/REFERENCES.md`](docs/REFERENCES.md)) y siguen el mismo patrón de los módulos ya construidos.
 
 ## Autenticación
 
@@ -86,3 +70,11 @@ POST /api/auth/cambiar-password
 - **Historial de costos**: `costo_insumo` y `costo_labor` son tablas append-only con `valid_from`; el costo vigente se calcula al momento de sincronizar cada registro, preservando el costo histórico aplicado.
 - **Catálogos**: la baja de un valor de catálogo en uso se bloquea (se ofrece desactivar en su lugar), replicando el criterio de aceptación de HU-34.
 - `synchronize: true` sólo aplica fuera de producción; para producción se recomienda migrar a `migrations` de TypeORM.
+
+## Documentación
+
+Punto de entrada: [`docs/README.md`](docs/README.md) — arquitectura del sistema completo, decisiones de diseño y referencias al documento maestro del proyecto.
+
+## Contribuir
+
+Ver [`CONTRIBUTING.md`](CONTRIBUTING.md) para la política de branching (Gitflow) del proyecto.
