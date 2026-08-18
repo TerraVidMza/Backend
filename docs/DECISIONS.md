@@ -18,6 +18,6 @@ Bitácora de decisiones de arquitectura y discrepancias entre el diseño documen
 
 **Contexto:** [`CONTRIBUTING.md`](../CONTRIBUTING.md) establece que toda rama `feature/` parte de `develop` y se integra de nuevo en `develop` vía Pull Request. La rama `backend` (con el scaffold NestJS y los módulos ya mencionados en D-001) se ramificó directamente del *Initial commit* del repositorio, no de `develop`, y sus commits nunca se integraron vía PR.
 
-**Decisión:** se documenta como pendiente. Antes de sumar nuevos módulos sobre `backend`, se recomienda abrir un Pull Request `backend → develop`, revisando que no haya conflictos con lo que `develop` ya incorporó de forma independiente (por ejemplo `CONTRIBUTING.md`, que no existe en `backend`).
+**Decisión:** se abrió y mergeó el Pull Request `backend → develop` ([#4](https://github.com/TerraVidMza/Backend/pull/4)), integrando los 5 commits de `backend` a `develop`.
 
-**Estado:** ⚠️ Pendiente — requiere acción del equipo antes de continuar el desarrollo sobre esa rama.
+**Estado:** ✅ Resuelto. Nota post-merge: el merge automático de `README.md` concatenó ambas versiones del archivo en vez de reconciliarlas (quedó una sección "Stack" duplicada y una nota desactualizada); se corrigió aparte consolidando el contenido en un único README coherente.
