@@ -34,7 +34,7 @@ TerraVid adopta una **arquitectura en capas desacoplada y orientada a servicios 
 │                                   CAPA DE SERVICIOS                                     │
 │                                           │                                             │
 │   ┌───────────────────────────────────────▼─────────────────────────────────────────┐   │
-│   │                           BACKEND API (Node.js / Express)                       │   │
+│   │                        BACKEND API (NestJS / TypeORM)                          │   │
 │   │   - Módulos: Auth (RBAC), Cartografía, Costeo, Vendimia, Auditoría              │   │
 │   │   - Endpoints RESTful para clientes Web / Mobile                                │   │
 │   │   - Ingesta de Telemetría IoT (Endpoint HTTP/MQTTS con API Key) ◄── Nodos IoT   │   │
@@ -90,12 +90,26 @@ Las tecnologías han sido seleccionadas en estricta coherencia con el análisis 
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Frontend Web** | Web Desktop / Responsive | **JavaScript / TypeScript** | **React (v18+)** + Vite, Chart.js, Leaflet / Google Maps API | N/A (Consumo de APIs REST) | Renderizado reactivo del Dashboard gerencial, gráficos dinámicos de correlación IoT vs. costos y visualización interactiva de mapas topológicos. |
 | **Aplicación Mobile** | Mobile Híbrida Cross-Platform | **JavaScript / TypeScript** | **React Native (v0.71+) / Expo** | **SQLite** (Persistencia local en dispositivo) | Soporte nativo para funcionamiento *Offline-First* en viñedos, UI empática adaptada a luz solar/uso con guantes y sincronización asíncrona. |
-| **Backend API** | Servidor de Lógica de Negocio | **JavaScript / Node.js (v18+)** | **Express.js**, `node-cron`, `jsonwebtoken`, `bcrypt` | **BullMQ** (Procesamiento asíncrono) | E/S no bloqueante de alto rendimiento, unificación del stack JavaScript, gestión centralizada de endpoints RESTful y tareas programadas de consolidación. |
-| **Base de Datos Central** | Persistencia Relacional y Espacial | **SQL** | Extensión **PostGIS** | **PostgreSQL (v15+)** | Consistencia transaccional ACID, normalización 3NF para costeo directo, almacenamiento de geometrías espaciales y log de auditoría inmutable. |
+| **Backend API** | Servidor de Lógica de Negocio | **TypeScript / Node.js (v20+)** | **NestJS (v11)**, **TypeORM**, `@nestjs/jwt` + `passport-jwt`, `bcrypt` | **BullMQ** (Procesamiento asíncrono, *a incorporar*) | Arquitectura modular por dominio (módulos NestJS), inyección de dependencias y guards nativos para RBAC, ORM tipado sobre PostgreSQL y ecosistema maduro de testing (Jest). |
+| **Base de Datos Central** | Persistencia Relacional y Espacial | **SQL** | Extensión **PostGIS** | **PostgreSQL (v16)** | Consistencia transaccional ACID, normalización 3NF para costeo directo, almacenamiento de geometrías espaciales y log de auditoría inmutable. |
 | **Caché y Colas** | Broker en Memoria | N/A | **BullMQ** | **Redis** | Desacoplamiento de tareas críticas en memoria RAM, absorción de ráfagas concurrentes de sincronización móvil y despacho de alertas. |
 | **Nodo IoT** | Firmware Embebido | **C / C++ (C++11+)** | **ESP-IDF / Arduino Framework** | Protocolo **MQTT / MQTTS (v5.0 *a validar*)** | Microcontrolador ESP32 WROOM/S3 de bajo consumo con sensores DHT22 y de humedad de suelo capacitivo, optimizado para alimentación solar/batería LiPo. |
 
 > **Nota de corrección (revisión previa a incorporación):** la versión de MQTT quedó marcada como *"a validar"* porque el soporte de **MQTT v5.0** depende de si el firmware se implementa sobre **ESP-IDF nativo** (que sí lo soporta) o sobre **Arduino Framework** con librerías como PubSubClient (que en general solo soportan **MQTT v3.1.1**). Debe confirmarse en la etapa de desarrollo de firmware cuál de los dos frameworks se utiliza para cerrar esta definición.
+
+> **Nota de corrección (framework de Backend):** el diseño original de este documento especificaba **Node.js/Express**. La implementación real (rama `backend`) usa **NestJS + TypeORM**, decisión ya tomada y en código — ver [`docs/DECISIONS.md`](DECISIONS.md#d-001--framework-de-backend-express--nestjs) para el detalle.
+
+### 2.1. Estado de Implementación
+
+Este documento describe la arquitectura objetivo del sistema completo. A la fecha, lo efectivamente construido (rama `backend`) cubre solo una parte:
+
+**Ya implementado:**
+- Backend API (NestJS + TypeORM + PostgreSQL/PostGIS): módulos de autenticación (login, logout, recuperación de contraseña), usuarios/roles, log de auditoría, empresas (multi-tenant), fincas/cuarteles, catálogos maestros, insumos/tipos de labor, registro de labores con sincronización offline idempotente (`local_uuid`).
+
+**Diseñado pero aún no codeado:**
+- Frontend Web, Mobile App (React Native/Expo/SQLite), telemetría IoT (ingesta, umbrales, alertas), Redis/BullMQ, logística de vendimia, dashboard e inteligencia agronómica.
+
+Ver [`docs/REFERENCES.md`](REFERENCES.md) para las Historias de Usuario que detallan el alcance funcional completo por módulo.
 
 ---
 
@@ -115,7 +129,7 @@ El ciclo de desarrollo y despliegue del sistema se organiza en tres entornos baj
   * **Backend API & Workers:** Ejecución local con Node.js — API REST en `http://localhost:3000` y dashboard/monitor de Workers (BullMQ) en `http://localhost:5000`.
   * **Frontend Web:** Servidor de desarrollo local con Vite/React (`http://localhost:5173`).
   * **Mobile:** Entorno Expo / Emulador Android Studio / Dispositivos físicos conectados mediante Expo Go en red local.
-  * **Bases de Datos & Redis:** Instancias locales de PostgreSQL 15 (con extensión PostGIS) y Redis ejecutadas en local o mediante contenedores Docker locales.
+  * **Bases de Datos & Redis:** Instancias locales de PostgreSQL 16 (con extensión PostGIS) y Redis ejecutadas en local o mediante contenedores Docker locales.
   * **IoT:** Nodos ESP32 de laboratorio/banco de prueba apuntando a endpoints locales simulados o mockers de telemetría GeoJSON para no consumir cuotas de servicios cloud.
 
 ### 3.2. Entorno de Pruebas y Validación (Staging / QA)
@@ -130,7 +144,7 @@ El ciclo de desarrollo y despliegue del sistema se organiza en tres entornos baj
 * **Infraestructura y Ejecución:**
   * **Cloud Hosting:** Servidor Privado Virtual (**VPS Linux**).
   * **Reverse Proxy / Web Server:** **Nginx** configurado con certificados criptográficos **SSL/TLS (HTTPS)** para terminación segura y proxy reverso hacia el proceso Node.js administrado por PM2.
-  * **Base de Datos Productiva:** **PostgreSQL v15 + PostGIS** en servidor cloud con políticas de *backup* diario automatizado.
+  * **Base de Datos Productiva:** **PostgreSQL v16 + PostGIS** en servidor cloud con políticas de *backup* diario automatizado.
   * **Servidor Redis:** Instancia segura en producción para la gestión de colas activas con BullMQ.
   * **Frontend Web:** Servido a través de Nginx como Single Page Application (SPA) optimizada.
   * **Aplicación Mobile:** Binarios compilados (APK / AAB) distribuidos mediante **Google Play Store Console** y soporte iOS mediante **App Store Connect**.
