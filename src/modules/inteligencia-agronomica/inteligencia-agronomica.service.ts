@@ -17,22 +17,37 @@ export interface SerieDiaria {
 @Injectable()
 export class InteligenciaAgronomicaService {
   constructor(
-    @InjectRepository(Cuartel) private readonly cuartelRepository: Repository<Cuartel>,
-    @InjectRepository(Sensor) private readonly sensorRepository: Repository<Sensor>,
-    @InjectRepository(LecturaIot) private readonly lecturaRepository: Repository<LecturaIot>,
-    @InjectRepository(AlertaIot) private readonly alertaRepository: Repository<AlertaIot>,
-    @InjectRepository(RegistroLabor) private readonly registroLaborRepository: Repository<RegistroLabor>,
+    @InjectRepository(Cuartel)
+    private readonly cuartelRepository: Repository<Cuartel>,
+    @InjectRepository(Sensor)
+    private readonly sensorRepository: Repository<Sensor>,
+    @InjectRepository(LecturaIot)
+    private readonly lecturaRepository: Repository<LecturaIot>,
+    @InjectRepository(AlertaIot)
+    private readonly alertaRepository: Repository<AlertaIot>,
+    @InjectRepository(RegistroLabor)
+    private readonly registroLaborRepository: Repository<RegistroLabor>,
     @InjectRepository(DetalleInsumoLabor)
     private readonly detalleInsumoLaborRepository: Repository<DetalleInsumoLabor>,
-    @InjectRepository(PesajeVendimia) private readonly pesajeRepository: Repository<PesajeVendimia>,
+    @InjectRepository(PesajeVendimia)
+    private readonly pesajeRepository: Repository<PesajeVendimia>,
   ) {}
 
-  async correlacionSensorCostos(cuartelId: string, sensorId: string, desde: string, hasta: string) {
-    const cuartel = await this.cuartelRepository.findOne({ where: { id: cuartelId } });
+  async correlacionSensorCostos(
+    cuartelId: string,
+    sensorId: string,
+    desde: string,
+    hasta: string,
+  ) {
+    const cuartel = await this.cuartelRepository.findOne({
+      where: { id: cuartelId },
+    });
     if (!cuartel) {
       throw new NotFoundException('Cuartel no encontrado');
     }
-    const sensor = await this.sensorRepository.findOne({ where: { id: sensorId } });
+    const sensor = await this.sensorRepository.findOne({
+      where: { id: sensorId },
+    });
     if (!sensor) {
       throw new NotFoundException('Sensor no encontrado');
     }
@@ -44,8 +59,12 @@ export class InteligenciaAgronomicaService {
       .map((s) => s.fecha)
       .filter((fecha) => serieCosto.some((c) => c.fecha === fecha));
 
-    const valoresSensor = fechasComunes.map((f) => serieSensor.find((s) => s.fecha === f)!.valor);
-    const valoresCosto = fechasComunes.map((f) => serieCosto.find((c) => c.fecha === f)!.valor);
+    const valoresSensor = fechasComunes.map(
+      (f) => serieSensor.find((s) => s.fecha === f)!.valor,
+    );
+    const valoresCosto = fechasComunes.map(
+      (f) => serieCosto.find((c) => c.fecha === f)!.valor,
+    );
 
     const coeficienteCorrelacion = this.pearson(valoresSensor, valoresCosto);
 
@@ -58,15 +77,25 @@ export class InteligenciaAgronomicaService {
     };
   }
 
-  async getRecomendaciones(cuartelId: string): Promise<{ tipo: string; severidad: string; mensaje: string }[]> {
-    const cuartel = await this.cuartelRepository.findOne({ where: { id: cuartelId } });
+  async getRecomendaciones(
+    cuartelId: string,
+  ): Promise<{ tipo: string; severidad: string; mensaje: string }[]> {
+    const cuartel = await this.cuartelRepository.findOne({
+      where: { id: cuartelId },
+    });
     if (!cuartel) {
       throw new NotFoundException('Cuartel no encontrado');
     }
 
-    const recomendaciones: { tipo: string; severidad: string; mensaje: string }[] = [];
+    const recomendaciones: {
+      tipo: string;
+      severidad: string;
+      mensaje: string;
+    }[] = [];
 
-    const sensoresFinca = await this.sensorRepository.find({ where: { fincaId: cuartel.fincaId, activo: true } });
+    const sensoresFinca = await this.sensorRepository.find({
+      where: { fincaId: cuartel.fincaId, activo: true },
+    });
     const sensorIds = sensoresFinca.map((s) => s.id);
 
     if (sensorIds.length > 0) {
@@ -90,14 +119,17 @@ export class InteligenciaAgronomicaService {
     const labores = await this.registroLaborRepository
       .createQueryBuilder('r')
       .where('r.cuartel_id = :cuartelId', { cuartelId })
-      .andWhere('r.fecha >= :desde', { desde: hace14Dias.toISOString().slice(0, 10) })
+      .andWhere('r.fecha >= :desde', {
+        desde: hace14Dias.toISOString().slice(0, 10),
+      })
       .getCount();
 
     if (labores === 0) {
       recomendaciones.push({
         tipo: 'sin_labores_recientes',
         severidad: 'media',
-        mensaje: 'No se registraron labores en este cuartel durante los últimos 14 días. Verificar si corresponde planificar una labor de mantenimiento.',
+        mensaje:
+          'No se registraron labores en este cuartel durante los últimos 14 días. Verificar si corresponde planificar una labor de mantenimiento.',
       });
     }
 
@@ -105,7 +137,8 @@ export class InteligenciaAgronomicaService {
       recomendaciones.push({
         tipo: 'sin_novedades',
         severidad: 'baja',
-        mensaje: 'No se detectaron novedades relevantes para este cuartel en el período reciente.',
+        mensaje:
+          'No se detectaron novedades relevantes para este cuartel en el período reciente.',
       });
     }
 
@@ -119,7 +152,9 @@ export class InteligenciaAgronomicaService {
     desde2: string,
     hasta2: string,
   ) {
-    const cuartel = await this.cuartelRepository.findOne({ where: { id: cuartelId } });
+    const cuartel = await this.cuartelRepository.findOne({
+      where: { id: cuartelId },
+    });
     if (!cuartel) {
       throw new NotFoundException('Cuartel no encontrado');
     }
@@ -132,13 +167,26 @@ export class InteligenciaAgronomicaService {
     return {
       periodo1: { desde: desde1, hasta: hasta1, ...periodo1 },
       periodo2: { desde: desde2, hasta: hasta2, ...periodo2 },
-      variacionKgCosechados: this.variacionPorcentual(periodo1.kgCosechados, periodo2.kgCosechados),
-      variacionCostoTotal: this.variacionPorcentual(periodo1.costoTotal, periodo2.costoTotal),
-      variacionMargenBruto: this.variacionPorcentual(periodo1.margenBruto, periodo2.margenBruto),
+      variacionKgCosechados: this.variacionPorcentual(
+        periodo1.kgCosechados,
+        periodo2.kgCosechados,
+      ),
+      variacionCostoTotal: this.variacionPorcentual(
+        periodo1.costoTotal,
+        periodo2.costoTotal,
+      ),
+      variacionMargenBruto: this.variacionPorcentual(
+        periodo1.margenBruto,
+        periodo2.margenBruto,
+      ),
     };
   }
 
-  private async getIndicadoresPeriodo(cuartelId: string, desde: string, hasta: string) {
+  private async getIndicadoresPeriodo(
+    cuartelId: string,
+    desde: string,
+    hasta: string,
+  ) {
     const registros = await this.registroLaborRepository.find({
       where: { cuartelId, fecha: Between(desde, hasta) },
     });
@@ -155,14 +203,23 @@ export class InteligenciaAgronomicaService {
         .where('d.registro_labor_id IN (:...ids)', { ids: registroIds })
         .getMany();
       costoInsumos = detalles.reduce(
-        (acc, d) => acc + Number(d.cantidadUsada) * Number(d.costoUnitarioAlSync ?? 0),
+        (acc, d) =>
+          acc + Number(d.cantidadUsada) * Number(d.costoUnitarioAlSync ?? 0),
         0,
       );
     }
 
-    const pesajes = await this.pesajeRepository.find({ where: { cuartelId, fecha: Between(desde, hasta) } });
-    const kgCosechados = pesajes.reduce((acc, p) => acc + Number(p.kgTotales), 0);
-    const ingresoLiquidacion = pesajes.reduce((acc, p) => acc + Number(p.montoLiquidacion ?? 0), 0);
+    const pesajes = await this.pesajeRepository.find({
+      where: { cuartelId, fecha: Between(desde, hasta) },
+    });
+    const kgCosechados = pesajes.reduce(
+      (acc, p) => acc + Number(p.kgTotales),
+      0,
+    );
+    const ingresoLiquidacion = pesajes.reduce(
+      (acc, p) => acc + Number(p.montoLiquidacion ?? 0),
+      0,
+    );
 
     const costoTotal = costoLabores + costoInsumos;
 
@@ -176,13 +233,20 @@ export class InteligenciaAgronomicaService {
     };
   }
 
-  private async getSerieDiariaSensor(sensorId: string, desde: string, hasta: string): Promise<SerieDiaria[]> {
+  private async getSerieDiariaSensor(
+    sensorId: string,
+    desde: string,
+    hasta: string,
+  ): Promise<SerieDiaria[]> {
     const rows = await this.lecturaRepository
       .createQueryBuilder('l')
       .select("to_char(l.sensor_timestamp, 'YYYY-MM-DD')", 'fecha')
       .addSelect('AVG(l.valor)', 'valor')
       .where('l.sensor_id = :sensorId', { sensorId })
-      .andWhere('l.sensor_timestamp BETWEEN :desde AND :hasta', { desde, hasta: `${hasta} 23:59:59` })
+      .andWhere('l.sensor_timestamp BETWEEN :desde AND :hasta', {
+        desde,
+        hasta: `${hasta} 23:59:59`,
+      })
       .groupBy("to_char(l.sensor_timestamp, 'YYYY-MM-DD')")
       .orderBy('fecha', 'ASC')
       .getRawMany<{ fecha: string; valor: string }>();
@@ -190,18 +254,25 @@ export class InteligenciaAgronomicaService {
     return rows.map((r) => ({ fecha: r.fecha, valor: Number(r.valor) }));
   }
 
-  private async getSerieDiariaCosto(cuartelId: string, desde: string, hasta: string): Promise<SerieDiaria[]> {
+  private async getSerieDiariaCosto(
+    cuartelId: string,
+    desde: string,
+    hasta: string,
+  ): Promise<SerieDiaria[]> {
     const registros = await this.registroLaborRepository.find({
       where: { cuartelId, fecha: Between(desde, hasta) },
     });
 
     const normalizarFecha = (fecha: string | Date): string =>
-      fecha instanceof Date ? fecha.toISOString().slice(0, 10) : String(fecha).slice(0, 10);
+      fecha instanceof Date
+        ? fecha.toISOString().slice(0, 10)
+        : String(fecha).slice(0, 10);
 
     const costoPorFecha = new Map<string, number>();
     for (const registro of registros) {
       const fecha = normalizarFecha(registro.fecha);
-      const costoLabor = Number(registro.cantidad) * Number(registro.costoUnitarioAlSync ?? 0);
+      const costoLabor =
+        Number(registro.cantidad) * Number(registro.costoUnitarioAlSync ?? 0);
       costoPorFecha.set(fecha, (costoPorFecha.get(fecha) ?? 0) + costoLabor);
     }
 
@@ -215,8 +286,12 @@ export class InteligenciaAgronomicaService {
         .getRawAndEntities();
 
       detalles.entities.forEach((detalle, index) => {
-        const fecha = normalizarFecha(detalles.raw[index].fecha as string | Date);
-        const costoInsumo = Number(detalle.cantidadUsada) * Number(detalle.costoUnitarioAlSync ?? 0);
+        const fecha = normalizarFecha(
+          (detalles.raw[index] as { fecha: string | Date }).fecha,
+        );
+        const costoInsumo =
+          Number(detalle.cantidadUsada) *
+          Number(detalle.costoUnitarioAlSync ?? 0);
         costoPorFecha.set(fecha, (costoPorFecha.get(fecha) ?? 0) + costoInsumo);
       });
     }

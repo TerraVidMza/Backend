@@ -3,7 +3,10 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Finca } from '../fincas/entities/finca.entity';
 import { Cuartel } from '../cuarteles/entities/cuartel.entity';
-import { AlertaIot, EstadoAlerta } from '../alertas-iot/entities/alerta-iot.entity';
+import {
+  AlertaIot,
+  EstadoAlerta,
+} from '../alertas-iot/entities/alerta-iot.entity';
 import { RegistroLabor } from '../registro-labor/entities/registro-labor.entity';
 import { DetalleInsumoLabor } from '../registro-labor/entities/detalle-insumo-labor.entity';
 import { PesajeVendimia } from '../pesaje-vendimia/entities/pesaje-vendimia.entity';
@@ -12,14 +15,20 @@ import { Remito, EstadoRemito } from '../remitos/entities/remito.entity';
 @Injectable()
 export class DashboardService {
   constructor(
-    @InjectRepository(Finca) private readonly fincaRepository: Repository<Finca>,
-    @InjectRepository(Cuartel) private readonly cuartelRepository: Repository<Cuartel>,
-    @InjectRepository(AlertaIot) private readonly alertaRepository: Repository<AlertaIot>,
-    @InjectRepository(RegistroLabor) private readonly registroLaborRepository: Repository<RegistroLabor>,
+    @InjectRepository(Finca)
+    private readonly fincaRepository: Repository<Finca>,
+    @InjectRepository(Cuartel)
+    private readonly cuartelRepository: Repository<Cuartel>,
+    @InjectRepository(AlertaIot)
+    private readonly alertaRepository: Repository<AlertaIot>,
+    @InjectRepository(RegistroLabor)
+    private readonly registroLaborRepository: Repository<RegistroLabor>,
     @InjectRepository(DetalleInsumoLabor)
     private readonly detalleInsumoLaborRepository: Repository<DetalleInsumoLabor>,
-    @InjectRepository(PesajeVendimia) private readonly pesajeRepository: Repository<PesajeVendimia>,
-    @InjectRepository(Remito) private readonly remitoRepository: Repository<Remito>,
+    @InjectRepository(PesajeVendimia)
+    private readonly pesajeRepository: Repository<PesajeVendimia>,
+    @InjectRepository(Remito)
+    private readonly remitoRepository: Repository<Remito>,
   ) {}
 
   async getIndicadoresClave(empresaId: string): Promise<{
@@ -31,7 +40,9 @@ export class DashboardService {
     costoLaboresTotal: number;
     costoInsumosTotal: number;
   }> {
-    const fincaIds = (await this.fincaRepository.find({ where: { empresaId, activa: true } })).map((f) => f.id);
+    const fincaIds = (
+      await this.fincaRepository.find({ where: { empresaId, activa: true } })
+    ).map((f) => f.id);
 
     const fincasActivas = fincaIds.length;
 
@@ -54,7 +65,10 @@ export class DashboardService {
       .getCount();
 
     const cuartelIds = (
-      await this.cuartelRepository.createQueryBuilder('c').where('c.finca_id IN (:...fincaIds)', { fincaIds }).getMany()
+      await this.cuartelRepository
+        .createQueryBuilder('c')
+        .where('c.finca_id IN (:...fincaIds)', { fincaIds })
+        .getMany()
     ).map((c) => c.id);
 
     if (cuartelIds.length === 0) {
@@ -83,12 +97,14 @@ export class DashboardService {
       .getCount();
 
     const anioActual = new Date().getFullYear();
-    const { sum: kgCosechados } = await this.pesajeRepository
-      .createQueryBuilder('p')
-      .select('COALESCE(SUM(p.kg_totales), 0)', 'sum')
-      .where('p.cuartel_id IN (:...cuartelIds)', { cuartelIds })
-      .andWhere('EXTRACT(YEAR FROM p.fecha) = :anio', { anio: anioActual })
-      .getRawOne();
+    const kgCosechados = (
+      await this.pesajeRepository
+        .createQueryBuilder('p')
+        .select('COALESCE(SUM(p.kg_totales), 0)', 'sum')
+        .where('p.cuartel_id IN (:...cuartelIds)', { cuartelIds })
+        .andWhere('EXTRACT(YEAR FROM p.fecha) = :anio', { anio: anioActual })
+        .getRawOne<{ sum: string }>()
+    )?.sum;
 
     const registros = await this.registroLaborRepository
       .createQueryBuilder('r')
@@ -108,7 +124,8 @@ export class DashboardService {
         .where('d.registro_labor_id IN (:...ids)', { ids: registroIds })
         .getMany();
       costoInsumosTotal = detalles.reduce(
-        (acc, d) => acc + Number(d.cantidadUsada) * Number(d.costoUnitarioAlSync ?? 0),
+        (acc, d) =>
+          acc + Number(d.cantidadUsada) * Number(d.costoUnitarioAlSync ?? 0),
         0,
       );
     }
