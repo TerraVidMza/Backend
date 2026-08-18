@@ -1,6 +1,6 @@
 # Guía de Contribución
 
-## 6.2 Gestión de Política de Branching (Gitflow)
+## Política de Branching (Gitflow)
 
 Se implementa el flujo de trabajo **Gitflow** para estructurar la colaboración y el ciclo de vida del código, garantizando que solo el código estable llegue a producción.
 
