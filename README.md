@@ -2,7 +2,18 @@
 
 ERP agrícola para la trazabilidad integral desde la plantación hasta la vendimia. API REST construida con **NestJS + TypeORM + PostgreSQL/PostGIS**, siguiendo el modelo de datos y las historias de usuario definidas en el documento del proyecto final (UTN FRM).
 
-> **Nota de alcance:** este repositorio contiene el código y la documentación del **Backend**. No se encontró código de Frontend en ninguna rama del repo al momento de escribir esto; si existe en otro repositorio, actualizar esta nota con el enlace correspondiente.
+> **Alcance:** este repositorio contiene únicamente el **Backend**. El proyecto TerraVid se organiza en 4 repositorios dentro de la organización [TerraVidMza](https://github.com/TerraVidMza) en GitHub.
+
+## Repositorios del proyecto
+
+| Repo | Contenido |
+|---|---|
+| [`Backend`](https://github.com/TerraVidMza/Backend) (este repo) | API REST — NestJS + TypeORM + PostgreSQL/PostGIS |
+| [`Web`](https://github.com/TerraVidMza/Web) | Frontend web de oficina (Dashboard, finanzas, ABMs, mapas) |
+| [`Mobile`](https://github.com/TerraVidMza/Mobile) | App móvil offline-first para campo (React Native / Expo) |
+| [`IoTSensor`](https://github.com/TerraVidMza/IoTSensor) | Firmware de los nodos de telemetría (ESP32) |
+
+> Cómo se comunican estos 4 componentes entre sí está detallado en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Stack
 
