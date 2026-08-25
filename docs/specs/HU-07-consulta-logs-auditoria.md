@@ -18,7 +18,9 @@
 >
 > **Cierre (2026-08-25):** la auditoría transversal y los filtros del listado están cerrados. **Pendiente:** el criterio de inmutabilidad pide restricciones **a nivel de BD**. Hoy el endpoint solo expone GET, pero la aplicación se conecta con el superusuario `postgres`, así que nada impide un UPDATE o un DELETE por fuera de la API. Falta el GRANT/REVOKE y dejar de usar el superusuario: es trabajo de despliegue, no de código.
 >
-> **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** El log es **append-only en la base**: un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE` sobre `log_auditoria`. Se eligió un trigger y no solo `GRANT`/`REVOKE` porque los privilegios no aplican mientras la aplicación se conecte con el superusuario `postgres`; el trigger sí, y está verificado contra la base. El `REVOKE` queda igual como defensa en profundidad para cuando se deje de usar el superusuario.
+> **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** El log es **append-only en la base**: un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE` sobre `log_auditoria`. Se eligió un trigger y no solo `GRANT`/`REVOKE` porque los privilegios no aplican mientras la aplicación se conecte con el superusuario `postgres`; el trigger sí, y está verificado contra la base. El `REVOKE` queda igual como defensa en profundidad.
+>
+> **Rol acotado (2026-08-26):** ya no hace falta esperar al despliegue. La aplicación puede correr con `terravid_app`, un rol **sin privilegios de DDL** y con solo `SELECT`/`INSERT` sobre `log_auditoria` ([D-017](../DECISIONS.md)). Las dos capas conviven a propósito: el trigger cubre el caso de conectarse como superusuario, el privilegio cubre el caso de que alguien deshabilite el trigger.
 
 ## Descripción
 

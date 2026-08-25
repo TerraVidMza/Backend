@@ -257,3 +257,33 @@ Lo que sí protege el dato ya está: el CHECK `kg_totales > 0` en la base (F2-1)
 **Si más adelante se necesita**, el lugar correcto es el **remito** (HU-26/27), que sí representa un despacho concreto a la bodega y donde una patente y una capacidad tienen sentido.
 
 **Estado:** ✅ Vigente. Criterio descopeado de HU-24.
+
+---
+
+## D-017 — La aplicación y las migraciones usan roles distintos
+
+**Contexto:** la API se conectaba con el superusuario `postgres`. Eso tiene dos consecuencias que no se ven hasta que importan:
+
+1. Una inyección SQL en cualquier endpoint hereda permiso para `DROP TABLE`, no solo para leer datos que no le tocan.
+2. **Vuelve decorativo el `REVOKE` que protege el log de auditoría**, porque los superusuarios ignoran los privilegios. Por eso la inmutabilidad de HU-07 se resolvió con un trigger —que sí aplica a un superusuario— y no solo con `GRANT`/`REVOKE`.
+
+**Decisión:** dos roles con propósitos separados.
+
+| Rol | Para qué | Puede |
+|---|---|---|
+| `DB_MIGRATION_USERNAME` | Correr migraciones | DDL: crear y alterar tablas, índices, triggers |
+| `DB_USERNAME` (`terravid_app`) | La aplicación | DML: `SELECT`/`INSERT`/`UPDATE`/`DELETE` y usar secuencias |
+
+El rol de aplicación **no** puede crear ni borrar tablas, no puede tocar la tabla `migrations`, y sobre `log_auditoria` solo puede leer e insertar.
+
+**Las variables de migración caen a las de la aplicación cuando no están definidas.** En desarrollo, con un solo `postgres`, no hay nada que configurar y todo sigue funcionando igual; la separación es una decisión de despliegue, no una fricción diaria.
+
+**Por qué un script y no una migración.** Una migración es DDL versionado del esquema; crear un rol con contraseña es configuración del entorno, y una contraseña no puede vivir en el repositorio. `npm run db:rol-app` la toma de `DB_APP_PASSWORD` y falla si no está: no hay valor por defecto, porque una contraseña conocida no es una contraseña.
+
+**La verificación intenta las operaciones en vez de leer los privilegios.** `npm run db:verificar-privilegios` se conecta con las credenciales reales de la API e intenta modificar el log, crear una tabla y leer `migrations`, revirtiendo todo. Inspeccionar `information_schema` diría lo que *debería* pasar; esto dice lo que pasa. Sale con código 1 si algo no cumple, para encadenarlo en el despliegue.
+
+**Defensa en profundidad, no reemplazo.** El trigger y el `REVOKE` cubren cosas distintas: el trigger protege incluso si alguien se conecta como superusuario, y el privilegio protege si alguien deshabilita el trigger. Las dos capas se quedan.
+
+**Verificación:** con la API conectada como `terravid_app`, el smoke test completo pasa **172/172** — la restricción no le saca nada que necesite.
+
+**Estado:** ✅ Vigente e implementado.

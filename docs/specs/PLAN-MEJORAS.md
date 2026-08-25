@@ -12,7 +12,7 @@ Lo único abierto es **HU-35**: el push FCM está implementado, pero el envío r
 >
 > Se cumplió: **los 10 problemas sistémicos están cerrados.** El último en caer fue S3 en su parte de base — el log de auditoría es ahora append-only por trigger, verificado contra PostgreSQL — y S10, con los tres huecos de test que faltaban.
 >
-> Queda como trabajo de despliegue, no de código: dejar de conectar la aplicación con el superusuario `postgres`. El trigger protege el log igual —los superusuarios ignoran los privilegios pero no los triggers—, y el `REVOKE` ya está puesto para cuando se haga el cambio.
+> También quedó cerrado el endurecimiento de despliegue: la aplicación ya puede correr con un **rol acotado sin privilegios de DDL** ([D-017](../DECISIONS.md)), creado por `npm run db:rol-app` y comprobado por `npm run db:verificar-privilegios`. Con la API conectada así, el smoke test pasa 172/172.
 
 ---
 
@@ -141,7 +141,7 @@ Estos son explotables hoy contra la instancia tal como está.
 - **F2-1 — Migraciones TypeORM (S5).** ✅ `src/config/data-source.ts` + scripts `migration:generate|run|revert|show`. Migración inicial `EsquemaInicial` con las 27 tablas, los UNIQUE de vigencia (`costo_insumo`, `costo_labor`, `tarifa_cuadrilla`), el UNIQUE `(registro_labor_id, insumo_id)`, los CHECK de cantidades positivas y los 12 índices. `synchronize` quedó **apagado por defecto** y detrás de `DB_SYNCHRONIZE`; en producción se ignora la variable.
   > Durante esta fase el problema se manifestó en vivo: un `dist/` viejo con `synchronize: true` **revirtió el esquema y borró las constraints recién creadas**. Es exactamente el modo de falla que S5 describía.
   >
-  > **Pendiente de F2-1:** los GRANT/RLS del append-only de HU-07 y dejar de usar el superusuario `postgres`. Son de despliegue, no de código.
+  > ✅ **Cerrado lo que faltaba de F2-1:** el append-only de HU-07 quedó garantizado por un trigger (que aplica también a superusuarios) y la aplicación tiene su rol acotado, con verificación ejecutable ([D-017](../DECISIONS.md)).
 - **F2-2 — Utilidad de paginación (S4).** ✅ `PaginationQueryDto` + envelope `{data, total, page, pageSize, totalPages}` con techo duro de 100 filas. Aplicado a usuarios, log de auditoría, notificaciones, lecturas IoT, historial de labores, pesajes por cuartel y remitos. De paso: el listado de remitos **ya no exige `cuartelId`** (el panel de aprobaciones de HU-27 era inexpresable) y `GET /remitos/:id` devuelve el detalle de pesajes que la vista imprimible necesitaba.
 - **F2-3 — Auditoría transversal (S3).** ✅ `LogAuditoriaModule` pasó a `@Global` —el import olvidado fallaba en silencio—, `registrar()` acepta un `EntityManager` para ser transaccional (HU-07) y **sanitiza credenciales y tokens** antes de persistir. Decorador `@Auditar` sobre **43 endpoints de 15 módulos**, resuelto por un interceptor que corre después de los guards. La IP se propaga con `AsyncLocalStorage` en vez de cablearla por ~40 firmas, y `trust proxy` quedó configurado. El listado tiene filtros por actor, entidad, acción y rango de fechas.
 - **F2-4 — `MailModule` (S7).** ✅ `MailService` global que resuelve el SMTP por empresa desde `configuracion` y cae a variables de entorno, con modo `MAIL_TRANSPORT=log` para desarrollo. **El flujo de recuperación de HU-03 ahora manda el correo** (antes solo generaba el token y lo devolvía en la respuesta HTTP). Tickets dejó de tener su propio `createTransport`. Las claves `smtp_*`, `support_email`, `nombre_organizacion`, `moneda`, `unidades` y `zona_horaria` se seedean.
@@ -232,7 +232,7 @@ El orden que se siguió, ya ejecutado:
 El plan de mejoras está cerrado. Lo que queda **no es deuda del backend**:
 
 1. **Verificar el push real** (HU-35): con el service account de un proyecto de Firebase y `PUSH_TRANSPORT=fcm`. Es lo único que impide marcar HU-35 como completa.
-2. **Endurecer el despliegue:** dejar de conectar con el superusuario `postgres`. El log de auditoría ya es inmutable por trigger, así que esto es defensa en profundidad, no un agujero abierto.
+2. ~~Endurecer el despliegue.~~ ✅ **Hecho** ([D-017](../DECISIONS.md)). Al desplegar hay que correr `npm run db:rol-app` una vez por entorno y apuntar `DB_USERNAME` al rol nuevo; `npm run db:verificar-privilegios` lo comprueba y sale con código 1 si algo falta, así que conviene dejarlo como paso del pipeline.
 3. **Revisar las 6 vulnerabilidades moderadas** que arrastra `firebase-admin` en dependencias transitivas, cuando el SDK publique la corrección ([D-015](../DECISIONS.md)).
 4. **Los clientes:** Web, Mobile e IoTSensor, cada uno en su repo. Ahí falta el 100%.
 
