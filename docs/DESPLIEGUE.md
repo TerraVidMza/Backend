@@ -327,6 +327,8 @@ Este apéndice reemplaza las secciones 3 a 8 del camino principal por un desplie
 
 Los archivos de despliegue están en [`deploy/`](../deploy): `docker-compose.prod.yml`, `Caddyfile`, `backup-db.sh` y los dos ejemplos de entorno.
 
+> **Sobre el shell.** Los comandos que corren *en tu máquina* usan sintaxis POSIX (`VAR=valor`, `$(comando)`, `openssl`). En Windows, corrélos desde **Git Bash** o WSL, no desde PowerShell, donde la asignación de variables y la sustitución de comandos son distintas. Los que corren *dentro de la VM* son Linux en los dos casos.
+
 ## A.1 Por qué esta opción, y qué se entrega a cambio
 
 La razón no es solo el precio: **una VM hace desaparecer las tres restricciones de la [sección 2](#2-tres-restricciones-del-código-que-fijan-la-configuración)**. Hay un proceso Node vivo de verdad, así que el cron de `@nestjs/schedule` corre a las 3 AM, los handlers de `EventEmitterModule` procesan las alertas al instante, y las migraciones corren donde está `src/`. Cero refactor.
@@ -370,9 +372,21 @@ Los límites cambian: confirmalos en la [página del nivel gratuito](https://clo
 Antes de crear nada, un presupuesto con alertas. Es lo más barato del apéndice:
 
 ```bash
-# Facturación → Presupuestos y alertas → Crear presupuesto
-# Monto: USD 10. Alertas al 50 %, 90 % y 100 %, por mail.
+# El presupuesto se crea sobre la cuenta de facturación, no sobre el
+# proyecto. El ID sale de: gcloud billing accounts list
+gcloud billing budgets create \
+  --billing-account=<ID-DE-LA-CUENTA> \
+  --display-name="TerraVid — piloto" \
+  --budget-amount=10USD \
+  --threshold-rule=percent=0.5 \
+  --threshold-rule=percent=0.9 \
+  --threshold-rule=percent=1.0
+
+# Verificar que quedó, y que no haya duplicados:
+gcloud billing budgets list --billing-account=<ID-DE-LA-CUENTA>
 ```
+
+Requiere `billingbudgets.googleapis.com`, que se habilita en [A.3](#a3-requisitos-previos). Con la API deshabilitada, `budgets list` **falla** en vez de devolver una lista vacía: si se silencia el error, se lee como «no hay presupuestos» y se termina creando uno duplicado. Por consola es *Facturación → Presupuestos y alertas → Crear presupuesto*.
 
 ## A.3 Requisitos previos
 
@@ -388,7 +402,11 @@ VM=terravid
 DOMINIO=terravid-api.duckdns.org
 
 gcloud config set project $PROJECT
-gcloud services enable compute.googleapis.com artifactregistry.googleapis.com storage.googleapis.com
+gcloud services enable \
+  compute.googleapis.com \
+  artifactregistry.googleapis.com \
+  storage.googleapis.com \
+  billingbudgets.googleapis.com
 ```
 
 ## A.4 Crear la VM y abrir el firewall
@@ -405,7 +423,7 @@ echo "IP reservada: $IP"
 gcloud compute instances create $VM \
   --zone=$ZONA \
   --machine-type=e2-micro \
-  --image-family=ubuntu-2404-lts \
+  --image-family=ubuntu-2404-lts-amd64 \
   --image-project=ubuntu-os-cloud \
   --boot-disk-size=30GB \
   --boot-disk-type=pd-standard \
@@ -414,7 +432,12 @@ gcloud compute instances create $VM \
   --scopes=https://www.googleapis.com/auth/cloud-platform
 ```
 
-Dos parámetros que importan: `--boot-disk-type=pd-standard` porque el nivel gratuito no cubre SSD, y `--scopes=cloud-platform` porque sin eso la VM no puede bajar la imagen de Artifact Registry ni subir backups a Cloud Storage.
+Tres parámetros que importan. `--boot-disk-type=pd-standard`, porque el nivel gratuito no cubre SSD. `--scopes=cloud-platform`, porque sin eso la VM no puede bajar la imagen de Artifact Registry ni subir backups a Cloud Storage. Y el sufijo `-amd64` de la familia de imagen: desde 24.04 Canonical publica las familias con la arquitectura en el nombre, y `ubuntu-2404-lts` a secas falla con un «resource not found» que no da ninguna pista del motivo. Para ver los nombres vigentes:
+
+```bash
+gcloud compute images list --project=ubuntu-os-cloud \
+  --filter="family~ubuntu AND family~lts" --format='value(family)' | sort -u
+```
 
 El firewall de la VPC por defecto no trae reglas para 80 y 443, así que se crean:
 
@@ -488,7 +511,10 @@ curl "https://www.duckdns.org/update?domains=terravid-api&token=<TOKEN>&ip=${IP}
 **Verificá que resuelve antes de seguir.** Si Caddy arranca con el DNS sin propagar, el desafío HTTP-01 falla, y Let's Encrypt limita a 5 certificados por dominio por semana:
 
 ```bash
-dig +short $DOMINIO      # tiene que devolver la IP de la VM
+# `dig` no viene con Windows; `nslookup` sí, y en PowerShell también está
+# `Resolve-DnsName`. Cualquiera de los tres sirve.
+dig +short $DOMINIO
+nslookup $DOMINIO 8.8.8.8   # contra un resolver público, sin caché local
 ```
 
 Conviene hacer este paso justo después de [A.4](#a4-crear-la-vm-y-abrir-el-firewall), y usar [A.5](#a5-preparar-el-sistema) como tiempo de propagación.
