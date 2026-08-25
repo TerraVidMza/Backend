@@ -1,0 +1,120 @@
+# Despliegue de producción sobre una VM e2-micro del nivel gratuito de Google
+# Cloud. Ver el Apéndice A de docs/DESPLIEGUE.md para el procedimiento completo.
+#
+# Tres servicios: la base, la API y Caddy como reverse proxy con TLS automático.
+# La API no publica ningún puerto al host — solo Caddy la alcanza, por la red
+# interna de Compose.
+#
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Dos archivos de configuración, y la separación es deliberada:
+#
+#   .env       parámetros de la infraestructura. Compose lo lee solo para
+#              interpolar los ${...} de este archivo; su contenido NO entra en
+#              ningún contenedor. Acá vive POSTGRES_ROOT_PASSWORD.
+#   .env.app   variables de la aplicación. Es lo único que ve el proceso Node.
+#
+# Con un solo archivo para las dos cosas, `env_file` le metía al contenedor de
+# la API la contraseña del superusuario de Postgres. Eso vuelve decorativo el
+# rol acotado de D-017: el sentido de que la aplicación no pueda hacer DDL es
+# que no tenga a mano una credencial que sí puede.
+
+name: terravid
+
+services:
+  db:
+    # `postgres` y no `postgis/postgis` como en desarrollo: el esquema no usa
+    # tipos espaciales y la única extensión que piden las migraciones es
+    # `btree_gist`, que viene en contrib (D-018). Si alguna vez se agrega una
+    # columna `geometry`, esta imagen hay que cambiarla — en desarrollo el
+    # cambio pasaría inadvertido porque ahí PostGIS sí está instalado.
+    image: postgres:16-alpine
+    container_name: terravid-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_ROOT_PASSWORD:?falta POSTGRES_ROOT_PASSWORD en .env}
+      # Literal y no interpolado: el nombre de la base no es un secreto y no
+      # cambia. Interpolarlo obligaría a repetirlo en .env y en .env.app, que
+      # es una divergencia esperando ocurrir.
+      POSTGRES_DB: terravid
+    # Solo loopback. La base no se expone a internet: las migraciones llegan
+    # por un túnel SSH (Apéndice A.8), no por un puerto abierto.
+    ports:
+      - '127.0.0.1:5432:5432'
+    # Con 1 GB de RAM en la e2-micro, `max_connections` por defecto (100)
+    # reserva memoria para conexiones que nunca van a existir: hay una sola
+    # instancia de la API y el pool de TypeORM abre 10.
+    command:
+      - postgres
+      - -c
+      - max_connections=50
+      - -c
+      - shared_buffers=128MB
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d terravid']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'
+
+  api:
+    # Imagen construida y publicada desde una máquina de desarrollo (A.7).
+    # Construirla acá adentro con 0,25 vCPU de línea base tarda muchísimo y
+    # puede quedarse sin memoria durante `tsc`.
+    image: ${API_IMAGE:?falta API_IMAGE en .env}
+    container_name: terravid-api
+    restart: unless-stopped
+    # `depends_on` sin healthcheck solo espera que el contenedor arranque, no
+    # que Postgres acepte conexiones: la API se caería al primer intento.
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file:
+      - .env.app
+    environment:
+      NODE_ENV: production
+      # `db` es el nombre del servicio: lo resuelve el DNS interno de Compose.
+      DB_HOST: db
+      DB_PORT: '5432'
+      # Un solo proxy delante (Caddy). Determina de dónde sale `req.ip`, que
+      # alimenta el log de auditoría y el rate limiting.
+      TRUST_PROXY_HOPS: '1'
+    expose:
+      - '8080'
+    logging: *logging
+
+  caddy:
+    # Pide y renueva el certificado de Let's Encrypt solo, sin cron ni certbot.
+    image: caddy:2-alpine
+    container_name: terravid-caddy
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - '80:80'
+      - '443:443'
+      - '443:443/udp' # HTTP/3
+    environment:
+      DOMINIO: ${DOMINIO:?falta DOMINIO en .env}
+      EMAIL_ACME: ${EMAIL_ACME:?falta EMAIL_ACME en .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # `caddy_data` guarda los certificados. Si se borra, Let's Encrypt los
+      # vuelve a emitir, y ahí sí se puede topar con el límite de 5 por semana
+      # para el mismo dominio.
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *logging
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
