@@ -9,6 +9,7 @@ import { DetalleInsumoLabor } from '../registro-labor/entities/detalle-insumo-la
 import { PesajeVendimia } from '../pesaje-vendimia/entities/pesaje-vendimia.entity';
 import { InteligenciaAgronomicaService } from './inteligencia-agronomica.service';
 import { InteligenciaAgronomicaController } from './inteligencia-agronomica.controller';
+import { ConfiguracionModule } from '../configuracion/configuracion.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { InteligenciaAgronomicaController } from './inteligencia-agronomica.cont
       DetalleInsumoLabor,
       PesajeVendimia,
     ]),
+    ConfiguracionModule,
   ],
   providers: [InteligenciaAgronomicaService],
   controllers: [InteligenciaAgronomicaController],

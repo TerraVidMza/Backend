@@ -8,7 +8,11 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { NotificacionesModule } from '../notificaciones/notificaciones.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([AlertaIot, Sensor]), UsuariosModule, NotificacionesModule],
+  imports: [
+    TypeOrmModule.forFeature([AlertaIot, Sensor]),
+    UsuariosModule,
+    NotificacionesModule,
+  ],
   providers: [AlertasIotService],
   controllers: [AlertasIotController],
   exports: [AlertasIotService],

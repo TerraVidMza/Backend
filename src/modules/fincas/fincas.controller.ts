@@ -18,13 +18,17 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolNombre } from '../../common/enums/rol.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { Auditar } from '../../common/audit/auditar.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('fincas')
 export class FincasController {
   constructor(private readonly fincasService: FincasService) {}
 
+  // El Auditor queda excluido a propósito: HU-07 acota su alcance al log de
+  // auditoría y al historial de operaciones por cuartel (HU-17).
   @Get()
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
   findAll(
     @CurrentUser() user: AuthenticatedUser,
     @Query('search') search?: string,
@@ -33,25 +37,47 @@ export class FincasController {
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
-    return this.fincasService.findById(id);
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
+  findOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.fincasService.findById(id, user.empresaId);
   }
 
   @Post()
+  @Auditar({ accion: 'CREAR_FINCA', entidad: 'finca' })
   @Roles(RolNombre.PROPIETARIO)
   create(@Body() dto: CreateFincaDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.fincasService.create(dto, user.id);
+    return this.fincasService.create(dto, user.id, user.empresaId);
   }
 
   @Patch(':id')
+  @Auditar({
+    accion: 'ACTUALIZAR_FINCA',
+    entidad: 'finca',
+    idDesde: 'param:id',
+  })
   @Roles(RolNombre.PROPIETARIO)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateFincaDto) {
-    return this.fincasService.update(id, dto);
+  update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateFincaDto,
+  ) {
+    return this.fincasService.update(id, dto, user.empresaId);
   }
 
   @Patch(':id/desactivar')
+  @Auditar({
+    accion: 'DESACTIVAR_FINCA',
+    entidad: 'finca',
+    idDesde: 'param:id',
+  })
   @Roles(RolNombre.PROPIETARIO)
-  desactivar(@Param('id', ParseUUIDPipe) id: string) {
-    return this.fincasService.desactivar(id);
+  desactivar(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.fincasService.desactivar(id, user.empresaId);
   }
 }

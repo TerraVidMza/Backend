@@ -1,11 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import * as nodemailer from 'nodemailer';
 import { TicketSoporte } from './entities/ticket-soporte.entity';
 import { CrearTicketDto } from './dto/crear-ticket.dto';
 import { ConfiguracionService } from '../configuracion/configuracion.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
+import { MailService } from '../../common/mail/mail.service';
 
 @Injectable()
 export class TicketSoporteService {
@@ -16,6 +16,7 @@ export class TicketSoporteService {
     private readonly ticketRepository: Repository<TicketSoporte>,
     private readonly configuracionService: ConfiguracionService,
     private readonly usuariosService: UsuariosService,
+    private readonly mailService: MailService,
   ) {}
 
   async crear(dto: CrearTicketDto, usuarioId: string): Promise<TicketSoporte> {
@@ -37,42 +38,54 @@ export class TicketSoporteService {
     return guardado;
   }
 
-  findAll(): Promise<TicketSoporte[]> {
-    return this.ticketRepository.find({ order: { createdAt: 'DESC' }, take: 100 });
+  /** Solo los tickets de usuarios de la empresa del solicitante. */
+  findAll(empresaId: string): Promise<TicketSoporte[]> {
+    return this.ticketRepository.find({
+      where: { usuario: { empresaId } },
+      relations: { usuario: true },
+      order: { createdAt: 'DESC' },
+      take: 100,
+    });
   }
 
-  private async intentarEnviarEmail(ticket: TicketSoporte, usuarioId: string): Promise<boolean> {
-    try {
-      const [host, port, user, pass, from, supportEmail] = await Promise.all([
-        this.configuracionService.findByClave('smtp_host'),
-        this.configuracionService.findByClave('smtp_port'),
-        this.configuracionService.findByClave('smtp_user'),
-        this.configuracionService.findByClave('smtp_pass'),
-        this.configuracionService.findByClave('smtp_from'),
-        this.configuracionService.findByClave('support_email'),
-      ]);
+  /**
+   * Notifica el ticket a la casilla de soporte de la empresa (HU-36).
+   *
+   * El armado del transport vive ahora en `MailService`: acá quedaba duplicado
+   * y era la única parte del sistema que sabía mandar correo, así que el resto
+   * de las notificaciones por mail de las HU simplemente no existían.
+   */
+  private async intentarEnviarEmail(
+    ticket: TicketSoporte,
+    usuarioId: string,
+  ): Promise<boolean> {
+    const usuario = await this.usuariosService.findById(usuarioId);
+    if (!usuario) {
+      this.logger.warn(
+        'No se pudo resolver el usuario del ticket; se guarda sin notificar.',
+      );
+      return false;
+    }
 
-      if (!host || !supportEmail) {
-        this.logger.warn('SMTP no configurado (smtp_host/support_email); ticket guardado sin notificar por email.');
-        return false;
-      }
+    const { empresaId } = usuario;
+    const supportEmail = await this.configuracionService.getValorInterno(
+      'support_email',
+      empresaId,
+    );
+    if (!supportEmail) {
+      this.logger.warn(
+        'Sin `support_email` configurado: ticket guardado sin notificar.',
+      );
+      return false;
+    }
 
-      const usuario = await this.usuariosService.findById(usuarioId);
-
-      const transporter = nodemailer.createTransport({
-        host: host.valor,
-        port: port ? parseInt(port.valor, 10) : 587,
-        secure: false,
-        auth: user && pass ? { user: user.valor, pass: pass.valor } : undefined,
-      });
-
-      await transporter.sendMail({
-        from: from?.valor ?? 'no-reply@terravid.local',
-        to: supportEmail.valor,
-        subject: `[TerraVid] Nueva consulta de soporte - módulo ${ticket.modulo}`,
-        text: [
-          `Usuario: ${usuario?.nombre ?? 'desconocido'} (${usuario?.email ?? usuarioId})`,
-          `Rol: ${usuario?.rol?.nombreRol ?? 'desconocido'}`,
+    return this.mailService.enviar(
+      {
+        para: supportEmail,
+        asunto: `[TerraVid] Nueva consulta de soporte - módulo ${ticket.modulo}`,
+        texto: [
+          `Usuario: ${usuario.nombre} (${usuario.email})`,
+          `Rol: ${usuario.rol?.nombreRol ?? 'desconocido'}`,
           `Módulo: ${ticket.modulo}`,
           `Versión de la app: ${ticket.appVersion ?? 'no especificada'}`,
           `Fecha: ${ticket.createdAt.toISOString()}`,
@@ -80,12 +93,8 @@ export class TicketSoporteService {
           'Descripción:',
           ticket.descripcion,
         ].join('\n'),
-      });
-
-      return true;
-    } catch (error) {
-      this.logger.error('No se pudo enviar el email de soporte', error as Error);
-      return false;
-    }
+      },
+      empresaId,
+    );
   }
 }

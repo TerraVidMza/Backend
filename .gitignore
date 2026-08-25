@@ -30,5 +30,8 @@ lerna-debug.log*
 *.launch
 .settings/
 
+# herramientas locales
+/.claude
+
 # temp
 tmp/
