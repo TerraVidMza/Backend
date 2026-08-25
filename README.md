@@ -80,6 +80,8 @@ npm run db:verificar-privilegios
 
 > El rol que corre `db:rol-app` tiene que ser **el mismo** que corre las migraciones: los `ALTER DEFAULT PRIVILEGES` que deja puestos aplican a las tablas que cree ese rol, y son los que evitan que una migración futura deje a la aplicación sin permisos sobre una tabla nueva.
 
+El orden completo para producción —crear la instancia, migrar, crear el rol, desplegar— está en [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
+
 ### Push a móviles (Firebase)
 
 `PUSH_TRANSPORT=log` escribe el envío en consola y alcanza para desarrollo. Para mandar de verdad hacen falta las credenciales del service account (Firebase → ⚙️ Configuración del proyecto → **Cuentas de servicio** → *Generar nueva clave privada*), que van a `.env`:
@@ -207,6 +209,7 @@ Punto de entrada: [`docs/README.md`](docs/README.md) — arquitectura del sistem
 - [`docs/specs/`](docs/specs/README.md) — **especificación funcional de cada Historia de Usuario (HU-01 a HU-36)**: criterios de aceptación, endpoints, entidad, pantalla de Figma y estado de implementación. Es el hub de especificaciones de los 4 repos del proyecto, no solo del Backend.
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — arquitectura, tecnologías y entornos.
 - [`docs/DECISIONS.md`](docs/DECISIONS.md) — bitácora de decisiones y discrepancias resueltas.
+- [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md) — **runbook de despliegue en Google Cloud** (Cloud Run + Cloud SQL): paso a paso con los comandos.
 - [`docs/REFERENCES.md`](docs/REFERENCES.md) — puente al documento maestro (UTN FRM).
 
 ## Contribuir

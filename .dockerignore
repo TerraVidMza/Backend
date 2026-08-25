@@ -1,0 +1,17 @@
+# Todo lo que no entra en el build. Fuera de ahorrar tiempo de subida, evita que
+# el `.env` de desarrollo termine horneado en la imagen.
+node_modules
+dist
+coverage
+.git
+.gitignore
+.claude
+.env
+.env.*
+test
+docs
+*.md
+docker-compose.yml
+eslint.config.mjs
+.prettierrc
+tmp
