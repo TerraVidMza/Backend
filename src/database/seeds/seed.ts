@@ -15,6 +15,7 @@ import {
   ModuloAyuda,
   TipoArticulo,
 } from '../../modules/ayuda/entities/articulo-ayuda.entity';
+import { Configuracion } from '../../modules/configuracion/entities/configuracion.entity';
 import { RolNombre } from '../../common/enums/rol.enum';
 
 async function seed() {
@@ -28,6 +29,9 @@ async function seed() {
   );
   const articuloAyudaRepo = app.get<Repository<ArticuloAyuda>>(
     getRepositoryToken(ArticuloAyuda),
+  );
+  const configuracionRepo = app.get<Repository<Configuracion>>(
+    getRepositoryToken(Configuracion),
   );
 
   console.log('Sembrando roles...');
@@ -56,7 +60,10 @@ async function seed() {
   const emailDemo = 'propietario@terravid.demo';
   let usuario = await usuarioRepo.findOne({ where: { email: emailDemo } });
   if (!usuario) {
-    const passwordHash = await bcrypt.hash('Terravid123!', 10);
+    const passwordHash = await bcrypt.hash(
+      'Terravid123!',
+      parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '12', 10),
+    );
     usuario = await usuarioRepo.save(
       usuarioRepo.create({
         nombre: 'Propietario Demo',
@@ -83,12 +90,16 @@ async function seed() {
     { tipo: CatalogoTipo.UNIDAD_MEDIDA, nombre: 'horas' },
   ];
 
+  // Los catálogos son por empresa (D-h): se siembran para la empresa demo, no
+  // como valores globales de la instancia.
   for (const item of catalogos) {
     const existente = await catalogoRepo.findOne({
-      where: { tipo: item.tipo, nombre: item.nombre },
+      where: { tipo: item.tipo, nombre: item.nombre, empresaId: empresa.id },
     });
     if (!existente) {
-      await catalogoRepo.save(catalogoRepo.create({ ...item, activo: true }));
+      await catalogoRepo.save(
+        catalogoRepo.create({ ...item, empresaId: empresa.id, activo: true }),
+      );
     }
   }
 
@@ -136,10 +147,44 @@ async function seed() {
 
   for (const articulo of articulos) {
     const existente = await articuloAyudaRepo.findOne({
-      where: { tipo: articulo.tipo, modulo: articulo.modulo, titulo: articulo.titulo },
+      where: {
+        tipo: articulo.tipo,
+        modulo: articulo.modulo,
+        titulo: articulo.titulo,
+      },
     });
     if (!existente) {
-      await articuloAyudaRepo.save(articuloAyudaRepo.create({ ...articulo, activo: true }));
+      await articuloAyudaRepo.save(
+        articuloAyudaRepo.create({ ...articulo, activo: true }),
+      );
+    }
+  }
+
+  // HU-33. Ninguna de estas claves se sembraba, y varias funcionalidades las
+  // leen: sin `support_email` el ticket de soporte nunca notificaba, y sin
+  // `zona_horaria` el bucketing por día de HU-32 agrupa en UTC.
+  console.log('Sembrando configuración por defecto...');
+  const configuracionPorDefecto: Record<string, string> = {
+    nombre_organizacion: 'Finca Demo TerraVid',
+    moneda: 'ARS',
+    unidades: 'metrico',
+    zona_horaria: 'America/Argentina/Mendoza',
+    support_email: 'soporte@terravid.demo',
+    // El SMTP real se carga desde la pantalla de configuración (HU-33) o por
+    // variables de entorno. No se siembran vacías: `MailService` interpreta la
+    // cadena vacía como "sin configurar" y no debe pisar el valor del entorno.
+    smtp_port: '587',
+    smtp_from: 'TerraVid <no-reply@terravid.demo>',
+  };
+
+  for (const [clave, valor] of Object.entries(configuracionPorDefecto)) {
+    const existente = await configuracionRepo.findOne({
+      where: { empresaId: empresa.id, clave },
+    });
+    if (!existente) {
+      await configuracionRepo.save(
+        configuracionRepo.create({ empresaId: empresa.id, clave, valor }),
+      );
     }
   }
 

@@ -9,7 +9,11 @@ import { ConfiguracionModule } from '../configuracion/configuracion.module';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([ArticuloAyuda, TicketSoporte]), ConfiguracionModule, UsuariosModule],
+  imports: [
+    TypeOrmModule.forFeature([ArticuloAyuda, TicketSoporte]),
+    ConfiguracionModule,
+    UsuariosModule,
+  ],
   providers: [ArticulosAyudaService, TicketSoporteService],
   controllers: [AyudaController],
 })

@@ -1,7 +1,25 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Finca } from '../../fincas/entities/finca.entity';
 
+/**
+ * El nombre es único **por finca y entre activas** (HU-23): dos fincas pueden
+ * tener su "Cuadrilla 1", y dar de baja una no puede bloquear ese nombre para
+ * siempre.
+ */
 @Entity('cuadrillas')
+@Index('uq_cuadrillas_nombre_activa', ['fincaId', 'nombre'], {
+  unique: true,
+  where: '"activa" = true',
+})
 export class Cuadrilla {
   @PrimaryGeneratedColumn('uuid')
   id: string;

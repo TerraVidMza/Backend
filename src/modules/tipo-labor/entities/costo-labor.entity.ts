@@ -5,11 +5,14 @@ import {
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  Unique,
 } from 'typeorm';
 import { TipoLabor } from './tipo-labor.entity';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
+/** Ver `CostoInsumo`: el UNIQUE hace determinista el costo vigente a fecha. */
 @Entity('costo_labor')
+@Unique('uq_costo_labor_vigencia', ['tipoLaborId', 'validFrom'])
 export class CostoLabor {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,4 +1,13 @@
-import { IsInt, IsNumber, IsString, IsUUID, Length, Min } from 'class-validator';
+import {
+  IsInt,
+  IsNumber,
+  IsOptional,
+  IsPositive,
+  IsString,
+  IsUUID,
+  Length,
+  Min,
+} from 'class-validator';
 
 export class CreateCuadrillaDto {
   @IsUUID()
@@ -12,7 +21,14 @@ export class CreateCuadrillaDto {
   @Min(1)
   cantidadIntegrantes: number;
 
-  @IsNumber()
-  @Min(0)
-  tarifaPorKgInicial: number;
+  /**
+   * Opcional porque un Capataz puede dar de alta la cuadrilla sin tarifa
+   * (HU-23): el Propietario la asigna después. El service ignora este campo
+   * cuando el rol del solicitante no es Propietario, así que enviarlo por
+   * manipulación del request no tiene efecto.
+   */
+  @IsOptional()
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  tarifaPorKgInicial?: number;
 }

@@ -1,10 +1,12 @@
-import { IsDateString, IsNumber, Min } from 'class-validator';
+import { IsDateString, IsNumber, IsPositive } from 'class-validator';
+import { EsFechaNoRetroactiva } from '../../../common/validators/no-retroactivo.validator';
 
 export class SetCostoInsumoDto {
-  @IsNumber()
-  @Min(0)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
   costoUnitario: number;
 
   @IsDateString()
+  @EsFechaNoRetroactiva()
   validFrom: string;
 }

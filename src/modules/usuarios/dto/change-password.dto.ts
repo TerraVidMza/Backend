@@ -1,10 +1,10 @@
-import { IsString, MinLength } from 'class-validator';
+import { IsString } from 'class-validator';
+import { EsPasswordSegura } from '../../../common/validators/password-segura.validator';
 
 export class ChangePasswordDto {
   @IsString()
   currentPassword: string;
 
-  @IsString()
-  @MinLength(8)
+  @EsPasswordSegura()
   newPassword: string;
 }

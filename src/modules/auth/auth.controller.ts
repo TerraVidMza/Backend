@@ -7,12 +7,14 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ChangePasswordDto } from '../usuarios/dto/change-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
+import { AnyRole } from '../../common/decorators/any-role.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from './strategies/jwt.strategy';
@@ -21,6 +23,9 @@ import type { AuthenticatedUser } from './strategies/jwt.strategy';
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  // 10 intentos por minuto y por IP: complementa el bloqueo por cuenta, que no
+  // frena un ataque distribuido sobre muchos emails distintos.
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('login')
@@ -28,13 +33,16 @@ export class AuthController {
     return this.authService.login(dto, ip);
   }
 
+  @AnyRole()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('logout')
   logout(@CurrentUser() user: AuthenticatedUser, @Ip() ip: string) {
-    return this.authService.logout(user.id, ip);
+    return this.authService.logout(user, ip);
   }
 
+  // HU-03 pide máximo 3 solicitudes por hora para prevenir spam de emails.
+  @Throttle({ default: { limit: 3, ttl: 3_600_000 } })
   @Public()
   @HttpCode(HttpStatus.OK)
   @Post('forgot-password')
@@ -55,6 +63,7 @@ export class AuthController {
     return { message: 'Contraseña actualizada correctamente.' };
   }
 
+  @AnyRole()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('cambiar-password')

@@ -12,7 +12,12 @@ import { Exclude } from 'class-transformer';
 import { Rol } from '../../roles/entities/rol.entity';
 import { Empresa } from '../../empresas/entities/empresa.entity';
 
+/**
+ * El listado de usuarios de HU-04 siempre acota por empresa y filtra por
+ * estado; `activo` solo no discrimina lo suficiente para justificar un índice.
+ */
 @Entity('usuarios')
+@Index('idx_usuarios_empresa_activo', ['empresaId', 'activo'])
 export class Usuario {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -37,6 +42,14 @@ export class Usuario {
 
   @Column({ type: 'boolean', default: true })
   activo: boolean;
+
+  /**
+   * Se marca al crear el usuario con contraseña temporal (HU-05). El cliente lo
+   * usa para forzar el cambio en el primer ingreso; se limpia al fijar una
+   * contraseña propia, sea por reset o por cambio con la actual.
+   */
+  @Column({ name: 'debe_cambiar_password', type: 'boolean', default: false })
+  debeCambiarPassword: boolean;
 
   @Column({ name: 'intentos_fallidos', type: 'smallint', default: 0 })
   intentosFallidos: number;

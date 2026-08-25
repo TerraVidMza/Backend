@@ -9,11 +9,13 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { UsuariosModule } from '../usuarios/usuarios.module';
 import { TokenRecuperacionModule } from '../token-recuperacion/token-recuperacion.module';
 import { LogAuditoriaModule } from '../log-auditoria/log-auditoria.module';
+import { TokenRevocadoModule } from './token-revocado.module';
 
 @Module({
   imports: [
     UsuariosModule,
     TokenRecuperacionModule,
+    TokenRevocadoModule,
     LogAuditoriaModule,
     PassportModule,
     JwtModule.registerAsync({

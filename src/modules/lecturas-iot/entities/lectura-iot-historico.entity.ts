@@ -1,7 +1,16 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Sensor } from '../../sensores/entities/sensor.entity';
 
 @Entity('lecturas_iot_historico')
+@Index('idx_lecturas_hist_sensor_fecha', ['sensorId', 'fechaHora'])
 export class LecturaIotHistorico {
   @PrimaryGeneratedColumn('uuid')
   id: string;

@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { SensoresService } from './sensores.service';
 import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
@@ -6,37 +16,78 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolNombre } from '../../common/enums/rol.enum';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { AlcanceEmpresaService } from '../../common/tenant/alcance-empresa.service';
+import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { Auditar } from '../../common/audit/auditar.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('sensores')
 export class SensoresController {
-  constructor(private readonly sensoresService: SensoresService) {}
+  constructor(
+    private readonly sensoresService: SensoresService,
+    private readonly alcance: AlcanceEmpresaService,
+  ) {}
 
   @Get()
-  findByFinca(@Query('fincaId', ParseUUIDPipe) fincaId: string) {
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
+  async findByFinca(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query('fincaId', ParseUUIDPipe) fincaId: string,
+  ) {
+    await this.alcance.verificarFinca(fincaId, user.empresaId);
     return this.sensoresService.findByFinca(fincaId);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string) {
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
+  async findOne(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.alcance.verificarSensor(id, user.empresaId);
     return this.sensoresService.findById(id);
   }
 
   @Post()
+  @Auditar({ accion: 'CREAR_SENSOR', entidad: 'sensor' })
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
-  create(@Body() dto: CreateSensorDto) {
+  async create(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CreateSensorDto,
+  ) {
+    await this.alcance.verificarFinca(dto.fincaId, user.empresaId);
     return this.sensoresService.create(dto);
   }
 
   @Patch(':id')
+  @Auditar({
+    accion: 'ACTUALIZAR_SENSOR',
+    entidad: 'sensor',
+    idDesde: 'param:id',
+  })
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
-  update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSensorDto) {
+  async update(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateSensorDto,
+  ) {
+    await this.alcance.verificarSensor(id, user.empresaId);
     return this.sensoresService.update(id, dto);
   }
 
   @Patch(':id/desactivar')
+  @Auditar({
+    accion: 'DESACTIVAR_SENSOR',
+    entidad: 'sensor',
+    idDesde: 'param:id',
+  })
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
-  desactivar(@Param('id', ParseUUIDPipe) id: string) {
+  async desactivar(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.alcance.verificarSensor(id, user.empresaId);
     return this.sensoresService.desactivar(id);
   }
 }

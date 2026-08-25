@@ -1,11 +1,18 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { Usuario } from './entities/usuario.entity';
+import { UsuarioFinca } from './entities/usuario-finca.entity';
+import { Finca } from '../fincas/entities/finca.entity';
 import { UsuariosService } from './usuarios.service';
 import { UsuariosController } from './usuarios.controller';
+import { TokenRecuperacionModule } from '../token-recuperacion/token-recuperacion.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Usuario])],
+  // `TokenRecuperacionModule` para el enlace de bienvenida de HU-05.
+  imports: [
+    TypeOrmModule.forFeature([Usuario, UsuarioFinca, Finca]),
+    TokenRecuperacionModule,
+  ],
   providers: [UsuariosService],
   controllers: [UsuariosController],
   exports: [UsuariosService],

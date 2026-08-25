@@ -2,13 +2,21 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
+/**
+ * Append-only y de crecimiento indefinido: el listado de HU-05 ordena por
+ * `created_at DESC` y filtra por actor, entidad y rango de fechas.
+ */
 @Entity('log_auditoria')
+@Index('idx_log_auditoria_created_at', ['createdAt'])
+@Index('idx_log_auditoria_actor', ['actorId'])
+@Index('idx_log_auditoria_entidad', ['entidad', 'entidadId'])
 export class LogAuditoria {
   @PrimaryGeneratedColumn('uuid')
   id: string;

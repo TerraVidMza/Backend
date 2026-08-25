@@ -1,4 +1,11 @@
-import { IsEnum, IsInt, IsOptional, IsString, Length, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Length,
+  Min,
+} from 'class-validator';
 import { ModuloAyuda, TipoArticulo } from '../entities/articulo-ayuda.entity';
 
 export class CreateArticuloDto {
