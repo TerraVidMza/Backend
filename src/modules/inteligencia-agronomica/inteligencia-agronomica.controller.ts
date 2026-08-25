@@ -1,12 +1,18 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { InteligenciaAgronomicaService } from './inteligencia-agronomica.service';
+import { CompararCampaniasDto } from './dto/comparar-campanias.dto';
+import { ResolverRecomendacionDto } from './dto/resolver-recomendacion.dto';
+import { EstadoRecomendacion } from './entities/recomendacion.entity';
+import { Auditar } from '../../common/audit/auditar.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolNombre } from '../../common/enums/rol.enum';
@@ -46,31 +52,73 @@ export class InteligenciaAgronomicaController {
     );
   }
 
+  /**
+   * Consultar evalúa las reglas y persiste lo que corresponda, así que este GET
+   * tiene efecto de escritura. Es deliberado: la HU pide que las
+   * recomendaciones se generen del histórico y queden accionables, y no hay
+   * ningún momento natural para dispararlas salvo abrir la pantalla. Reevaluar
+   * es idempotente — el índice parcial impide duplicar la recomendación activa.
+   */
   @Get('recomendaciones/:cuartelId')
   async recomendaciones(
     @CurrentUser() user: AuthenticatedUser,
     @Param('cuartelId', ParseUUIDPipe) cuartelId: string,
   ) {
     await this.alcance.verificarCuartel(cuartelId, user.empresaId);
-    return this.inteligenciaAgronomicaService.getRecomendaciones(cuartelId);
+    return this.inteligenciaAgronomicaService.getRecomendaciones(
+      cuartelId,
+      user.empresaId,
+    );
   }
 
+  @Patch('recomendaciones/:id')
+  @Auditar({
+    accion: 'RESOLVER_RECOMENDACION',
+    entidad: 'recomendacion',
+    idDesde: 'param:id',
+  })
+  async resolverRecomendacion(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResolverRecomendacionDto,
+  ) {
+    return this.inteligenciaAgronomicaService.resolverRecomendacion(
+      id,
+      user.empresaId,
+      dto.estado as unknown as
+        EstadoRecomendacion.APLICADA | EstadoRecomendacion.DESCARTADA,
+      dto.nota,
+      user.id,
+    );
+  }
+
+  /**
+   * Los períodos se piden por **id de campaña** (`campaniaA`/`campaniaB`).
+   * Las cuatro fechas sueltas siguen aceptándose para comparaciones ad-hoc que
+   * no coinciden con ninguna campaña cargada.
+   */
   @Get('comparar-campanias/:cuartelId')
   async compararCampanias(
     @CurrentUser() user: AuthenticatedUser,
     @Param('cuartelId', ParseUUIDPipe) cuartelId: string,
-    @Query('desde1') desde1: string,
-    @Query('hasta1') hasta1: string,
-    @Query('desde2') desde2: string,
-    @Query('hasta2') hasta2: string,
+    @Query() query: CompararCampaniasDto,
   ) {
     await this.alcance.verificarCuartel(cuartelId, user.empresaId);
     return this.inteligenciaAgronomicaService.compararCampanias(
       cuartelId,
-      desde1,
-      hasta1,
-      desde2,
-      hasta2,
+      user.empresaId,
+      {
+        a: {
+          campaniaId: query.campaniaA,
+          desde: query.desde1,
+          hasta: query.hasta1,
+        },
+        b: {
+          campaniaId: query.campaniaB,
+          desde: query.desde2,
+          hasta: query.hasta2,
+        },
+      },
     );
   }
 }

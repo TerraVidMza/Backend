@@ -7,6 +7,7 @@ import { RegistroLabor } from '../registro-labor/entities/registro-labor.entity'
 import { DetalleInsumoLabor } from '../registro-labor/entities/detalle-insumo-labor.entity';
 import { PesajeVendimia } from '../pesaje-vendimia/entities/pesaje-vendimia.entity';
 import { Remito } from '../remitos/entities/remito.entity';
+import { UsuarioFinca } from '../usuarios/entities/usuario-finca.entity';
 import { LogAuditoriaModule } from '../log-auditoria/log-auditoria.module';
 import { DashboardService } from './dashboard.service';
 import { DashboardController } from './dashboard.controller';
@@ -21,6 +22,7 @@ import { DashboardController } from './dashboard.controller';
       DetalleInsumoLabor,
       PesajeVendimia,
       Remito,
+      UsuarioFinca,
     ]),
     LogAuditoriaModule,
   ],

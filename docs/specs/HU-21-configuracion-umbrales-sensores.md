@@ -10,13 +10,15 @@
 | **Complejidad** | Baja |
 | **Precondiciones** | HU-18 completado (sensor activo registrado) |
 | **Pantallas (Figma)** | PAN-17: Gráficos de Telemetría y Configuración de Umbrales — [archivo Figma](https://www.figma.com/design/0ehP6Sf8WynahpnKUGIVpd/TerraVid---Wireframes---Design-System-v1) |
-| **Estado** | 🟠 PARCIAL — falta el aviso de «la última lectura ya supera el umbral» |
+| **Estado** | 🟢 COMPLETA — criterios de aceptación cubiertos |
 
 > **Auditoría (2026-08-24):** bug: el operador ?? hace imposible borrar un umbral ya configurado. Sin aviso de "la última lectura ya supera el umbral", sin auditoría. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
 > **Fase 2 (2026-08-24):** la corrección de F1-6 estaba **incompleta** y se cerró acá: omitir un umbral lo borraba igual que enviarlo en `null`, porque con `target: ES2023` `plainToInstance` materializa los campos declarados y el operador `in` daba `true`. Corregido comparando contra `undefined`, con test de regresión. La configuración queda auditada.
 >
 > **Cierre (2026-08-25):** **Pendiente:** el aviso «la última lectura del sensor ya supera el umbral que configuraste» al momento de guardar. El resto de los criterios está cubierto.
+>
+> **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** Al guardar un umbral, la respuesta trae `aviso` con el mensaje cuando la última lectura ya está fuera de rango. Es informativo y **no genera alerta**: las alertas las produce la ingesta al evaluar lecturas nuevas (HU-22). El campo se agrega al umbral plano en vez de envolverlo, para no romper el contrato anterior.
 
 ## Descripción
 

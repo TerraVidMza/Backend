@@ -14,6 +14,8 @@ const PG_UNIQUE_VIOLATION = '23505';
 const PG_CHECK_VIOLATION = '23514';
 const PG_FOREIGN_KEY_VIOLATION = '23503';
 const PG_NOT_NULL_VIOLATION = '23502';
+const PG_EXCLUSION_VIOLATION = '23P01';
+const PG_RESTRICT_VIOLATION = '23001';
 
 /**
  * Mensajes por constraint. La alternativa —exponer el texto de Postgres— filtra
@@ -33,6 +35,15 @@ const MENSAJES_POR_CONSTRAINT: Record<string, string> = {
     'La cantidad de la labor debe ser mayor que cero.',
   chk_detalle_cantidad_positiva:
     'La cantidad de insumo utilizada debe ser mayor que cero.',
+  excl_campanias_sin_solape:
+    'El rango se superpone con otra campaña de la empresa. Las campañas no pueden solaparse.',
+  chk_campania_rango:
+    'La fecha de fin de la campaña debe ser posterior a la de inicio.',
+  uq_campanias_nombre: 'Ya existe una campaña con ese nombre en la empresa.',
+  uq_device_token:
+    'Ese token de dispositivo ya está registrado para otro usuario.',
+  uq_recomendacion_activa:
+    'Ya existe una recomendación activa de esa regla para el cuartel.',
 };
 
 interface ErrorPostgres {
@@ -129,6 +140,26 @@ export class HttpExceptionFilter implements ExceptionFilter {
         return {
           status: HttpStatus.BAD_REQUEST,
           message: 'Falta un dato obligatorio.',
+          constraint,
+        };
+      // Solapamiento de campañas (D-014). El servicio ya lo valida y da un
+      // mensaje con la campaña que choca; acá se cubre el caso concurrente, en
+      // que dos altas pasan la validación antes de que cualquiera inserte.
+      case PG_EXCLUSION_VIOLATION:
+        return {
+          status: HttpStatus.CONFLICT,
+          message:
+            mensajeEspecifico ??
+            'El rango se superpone con otro registro existente.',
+          constraint,
+        };
+      // El trigger append-only del log de auditoría (HU-07). Que llegue acá
+      // significa que algún camino de la aplicación intentó modificarlo: es un
+      // bug, no una entrada inválida del usuario.
+      case PG_RESTRICT_VIOLATION:
+        return {
+          status: HttpStatus.FORBIDDEN,
+          message: 'La operación está prohibida sobre este registro.',
           constraint,
         };
       default:
