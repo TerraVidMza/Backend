@@ -62,10 +62,50 @@ npm run migration:revert   # deshace la última
 
 `DB_SYNCHRONIZE=true` reactiva el modo deducido para prototipar rápido. **No dejarlo prendido:** un renombre de columna se traduce a `DROP` + `ADD` y borra los datos sin avisar.
 
+### Rol de base de datos para producción
+
+En desarrollo todo corre con `postgres` y alcanza. **En producción la aplicación no debe conectarse con un superusuario** ([D-017](docs/DECISIONS.md)): migrar es DDL y la API solo necesita leer y escribir filas. Con un mismo rol para las dos cosas, una inyección SQL en cualquier endpoint tendría permiso para hacer `DROP TABLE`.
+
+```bash
+# Con el rol dueño del esquema —el mismo que corre las migraciones—:
+DB_APP_PASSWORD='<contraseña larga y generada>' npm run db:rol-app
+
+# Después, apuntando DB_USERNAME/DB_PASSWORD al rol nuevo:
+npm run db:verificar-privilegios
+```
+
+`db:rol-app` crea `terravid_app` con lo justo: DML sobre las tablas, uso de secuencias, **solo `SELECT`/`INSERT` sobre `log_auditoria`** (HU-07), sin `CREATE` sobre el esquema y sin acceso a la tabla `migrations`. Es idempotente.
+
+`db:verificar-privilegios` se conecta **con las credenciales reales de la API** e intenta cada operación, revirtiendo todo. No lee `information_schema`: eso diría lo que *debería* pasar, y lo que importa es lo que pasa. Sale con código 1 si algo no cumple, así que sirve como paso de despliegue.
+
+> El rol que corre `db:rol-app` tiene que ser **el mismo** que corre las migraciones: los `ALTER DEFAULT PRIVILEGES` que deja puestos aplican a las tablas que cree ese rol, y son los que evitan que una migración futura deje a la aplicación sin permisos sobre una tabla nueva.
+
+### Push a móviles (Firebase)
+
+`PUSH_TRANSPORT=log` escribe el envío en consola y alcanza para desarrollo. Para mandar de verdad hacen falta las credenciales del service account (Firebase → ⚙️ Configuración del proyecto → **Cuentas de servicio** → *Generar nueva clave privada*), que van a `.env`:
+
+```bash
+PUSH_TRANSPORT=fcm
+FIREBASE_PROJECT_ID=<project_id del JSON>
+FIREBASE_CLIENT_EMAIL=<client_email del JSON>
+FIREBASE_PRIVATE_KEY='<private_key del JSON, en UNA línea, con los \n>'
+```
+
+> ⚠️ **El JSON del service account da acceso al proyecto entero de Firebase.** No va al repositorio —ni siquiera a `.env.example`, que sí está versionado—. Borralo después de copiar los tres valores.
+
+La clave privada es donde falla todo el mundo. Copiala **tal cual sale del JSON**, en una línea y con los `\n` literales. Entre comillas simples el código los convierte; entre comillas dobles los convierte dotenv. Lo que no funciona es pegarla en varias líneas reales: dotenv corta el valor en el primer salto.
+
+```bash
+npm run push:diagnostico              # valida las credenciales contra Firebase
+npm run push:diagnostico -- <token>   # además envía a un dispositivo real
+```
+
+Sin token, el diagnóstico manda contra uno inválido a propósito. Suena raro pero es la prueba que sirve: **si Firebase rechaza el token, es porque autenticó la petición** y llegó hasta mirar el destinatario. Con credenciales malas el error aparecería antes. Esa distinción es todo lo que se puede saber mientras la app móvil no exista.
+
 ### Pruebas
 
 ```bash
-npm test              # 88 tests unitarios
+npm test              # 121 tests unitarios
 npm run test:smoke    # 172 casos end-to-end contra la API y la base reales
 ```
 
@@ -113,13 +153,16 @@ Los 24 módulos del backend están construidos y exponen sus endpoints REST. El 
 
 Los componentes que aún no están construidos son los **clientes**: Frontend Web, App Mobile y firmware IoT, cada uno en su propio repo.
 
-En el backend, **35 de las 36 HU están completas**. El plan de mejoras está cerrado: los 10 problemas sistémicos resueltos y las 8 decisiones de producto tomadas.
+En el backend, **las 36 HU están completas**. El plan de mejoras está cerrado: los 10 problemas sistémicos resueltos y las 8 decisiones de producto tomadas.
 
-Queda abierto:
+Lo que queda son pasos de **cada despliegue**, no código pendiente:
 
-- **Verificar el push real de HU-35.** La integración con FCM está implementada ([D-015](docs/DECISIONS.md)) y probada con `PUSH_TRANSPORT=log`, pero **el envío contra Firebase no está verificado**: hace falta el service account de un proyecto real. Es lo único que impide marcar HU-35 como completa.
-- **Endurecimiento de despliegue**: dejar de conectar con el superusuario `postgres`. El log de auditoría ya es **inmutable por trigger** —que aplica también a superusuarios—, así que esto es defensa en profundidad y no un agujero abierto.
-- **6 vulnerabilidades moderadas** en dependencias transitivas de `firebase-admin` que `npm audit fix` no resuelve sin `--force`. Asumidas a sabiendas; revisar cuando el SDK publique la corrección.
+- **`npm run db:rol-app`** crea el rol acotado y **`npm run db:verificar-privilegios`** comprueba que quedó bien ([D-017](docs/DECISIONS.md)).
+- **`npm run push:diagnostico`** comprueba que Firebase acepta el service account de ese entorno ([D-015](docs/DECISIONS.md)).
+
+Los dos salen con **código 1** si la configuración no sirve, así que conviene encadenarlos al pipeline: convierten un error de credenciales en un despliegue fallido, en vez de en una funcionalidad que calla y no anda.
+
+Aparte, una deuda de dependencias: **6 vulnerabilidades moderadas** en transitivas de `firebase-admin` que `npm audit fix` no resuelve sin `--force`. Asumidas a sabiendas; revisar cuando el SDK publique la corrección.
 
 El detalle por HU está en [`docs/specs/README.md`](docs/specs/README.md), y el cierre del plan en la sección 7 de [`docs/specs/PLAN-MEJORAS.md`](docs/specs/PLAN-MEJORAS.md).
 
@@ -153,7 +196,8 @@ POST /api/auth/cambiar-password
 - **Ingreso**: la única fuente de ingreso es `liquidaciones_bodega`, que cuelga del remito aprobado ([D-010](docs/DECISIONS.md)). El margen bruto se devuelve en `null` —no en 0— mientras no haya liquidaciones cargadas.
 - **Estado del cuartel**: el ciclo de vendimia (`pendiente`/`en_cosecha`/`cosechado`) es un enum que solo escribe el sistema al ocurrir hechos del circuito, y es independiente del catálogo de estado de plantación ([D-013](docs/DECISIONS.md)). No es una FK al catálogo a propósito: si se pudiera renombrar el valor desde el ABM, se romperían las transiciones.
 - **Campañas**: el eje temporal de los indicadores es la entidad `campanias`, con rango explícito y **sin solapamientos garantizados por un `EXCLUDE` en la base** ([D-014](docs/DECISIONS.md)) — sin eso, «la campaña actual» sería ambigua. Sin campaña cargada cada consumidor decide: la baja de cuartel es conservadora y el dashboard cae al año calendario, avisándolo.
-- **Log de auditoría inmutable**: un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE` sobre `log_auditoria` (HU-07). Se eligió un trigger sobre `GRANT`/`REVOKE` porque los privilegios no aplican a un superusuario y la app todavía se conecta como `postgres`; el `REVOKE` queda como defensa en profundidad.
+- **Log de auditoría inmutable**: un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE` sobre `log_auditoria` (HU-07). Se eligió un trigger **además** de `GRANT`/`REVOKE` porque los privilegios no aplican a un superusuario: las dos capas cubren cosas distintas ([D-017](docs/DECISIONS.md)).
+- **Privilegios mínimos**: la aplicación y las migraciones usan roles distintos. La API solo hace DML; el DDL queda del lado del rol que migra, así que una inyección SQL no hereda permiso para `DROP TABLE` ([D-017](docs/DECISIONS.md)).
 - **Push**: `PushService` manda a FCM con el mismo patrón que el correo (`PUSH_TRANSPORT=log|fcm`) y **nunca tumba la operación que lo disparó** ([D-015](docs/DECISIONS.md)): la notificación in-app se persiste primero y es la fuente de verdad.
 
 ## Documentación

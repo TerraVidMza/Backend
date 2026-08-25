@@ -9,11 +9,9 @@ Este directorio es el **hub de especificaciones funcionales de todo el proyecto 
 
 Usar [`TEMPLATE.md`](TEMPLATE.md) como base para cualquier HU nueva o para reescribir una existente.
 
-> 📋 **[PLAN-MEJORAS.md](PLAN-MEJORAS.md)** — resultado de la auditoría del código contra los criterios de aceptación de las 36 HU, con el plan de trabajo y su cierre. **El plan está cerrado: 35 HU completas y 1 parcial**, con los 10 problemas sistémicos resueltos y las 8 decisiones de producto tomadas.
+> 📋 **[PLAN-MEJORAS.md](PLAN-MEJORAS.md)** — resultado de la auditoría del código contra los criterios de aceptación de las 36 HU, con el plan de trabajo y su cierre. **El plan está cerrado: las 36 HU completas**, con los 10 problemas sistémicos resueltos y las 8 decisiones de producto tomadas.
 >
-> La única HU abierta es **HU-35**: el push FCM está implementado, pero **el envío real contra Firebase no se pudo verificar** porque hace falta un service account ([D-015](../DECISIONS.md)). El resto del criterio —los tres productores de evento, la tabla de device tokens, el alta idempotente— sí está probado.
->
-> Lo demás que queda no es deuda del backend: verificar ese push, dejar de conectar la base con el superusuario `postgres` (defensa en profundidad — el log ya es inmutable por trigger) y construir los clientes.
+> Lo que queda ya no es del backend: construir los clientes (Web, Mobile, IoTSensor). El endurecimiento de base está hecho —la aplicación corre con un rol sin privilegios de DDL ([D-017](../DECISIONS.md))— y el push contra Firebase está verificado ([D-015](../DECISIONS.md)); los dos con su comando de verificación ejecutable.
 
 **Figma:** [TerraVid — Wireframes / Design System v1](https://www.figma.com/design/0ehP6Sf8WynahpnKUGIVpd/TerraVid---Wireframes---Design-System-v1). Las referencias de pantalla (`PAN-XX`) usan la numeración de la **matriz de trazabilidad** (PAN-01 a PAN-19), confirmada como la que coincide con los nombres reales de los frames — no la numeración más granular que aparece dentro del documento de Historias de Usuario (que llega hasta PAN-39 y no coincide con Figma). Ver [D-004](../DECISIONS.md).
 
@@ -57,7 +55,7 @@ Usar [`TEMPLATE.md`](TEMPLATE.md) como base para cualquier HU nueva o para reesc
 | [HU-32](HU-32-dashboard-indicadores-clave.md) | Dashboard de indicadores | Dashboard y config | `dashboard` | — | — | 🟢 Completa |
 | [HU-33](HU-33-configuracion-general-sistema.md) | Configuración general | Dashboard y config | `configuracion` | CONFIGURACION | PAN-16 | 🟢 Completa |
 | [HU-34](HU-34-administrar-tablas-maestras.md) | Tablas maestras | Dashboard y config | `catalogo-item` | CATALOGO_ITEM | — | 🟢 Completa |
-| [HU-35](HU-35-gestion-notificaciones.md) | Gestión de notificaciones | Dashboard y config | `notificaciones` | NOTIFICACION | — | 🟠 Parcial |
+| [HU-35](HU-35-gestion-notificaciones.md) | Gestión de notificaciones | Dashboard y config | `notificaciones` | NOTIFICACION | — | 🟢 Completa |
 | [HU-36](HU-36-centro-ayuda.md) | Centro de ayuda | Dashboard y config | `ayuda` | ARTICULO_AYUDA, TICKET_SOPORTE | — | 🟢 Completa |
 
 **Leyenda:** 🟢 Completa — criterios cubiertos · 🟠 Parcial — funciona pero incumple algún criterio · 🔴 Incompleta — criterios centrales ausentes.

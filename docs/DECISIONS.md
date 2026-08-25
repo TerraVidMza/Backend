@@ -238,9 +238,19 @@ Detalles que vale la pena tener presentes:
 
 **Costo asumido:** `firebase-admin` arrastra `@google-cloud/storage` y `gaxios`, que hoy suman **6 vulnerabilidades moderadas** en dependencias transitivas que `npm audit fix` no resuelve sin `--force`. Se acepta a sabiendas por ser una dependencia de servidor sin exposición directa, y queda anotado para revisar cuando el SDK publique la corrección.
 
-**Verificación:** probada de punta a punta en modo `log`. **El envío real contra FCM no está verificado**: hace falta el service account de un proyecto de Firebase.
+**Verificación (2026-08-25):** ✅ **verificada contra Firebase real.** `npm run push:diagnostico` confirma que el proyecto acepta el service account.
 
-**Estado:** ✅ Vigente e implementado, pendiente de credenciales para verificar el envío real.
+El diagnóstico **intenta el envío en vez de leer la configuración**, con el mismo criterio que `db:verificar-privilegios`. Sin un token de dispositivo manda contra uno inválido a propósito, porque lo que se quiere distinguir es *credenciales rechazadas* de *token rechazado*: **si Firebase llegó a mirar el token, ya autenticó la petición**. Con credenciales malas el error aparece antes. Esa distinción es todo lo que se puede saber mientras no exista la app móvil, y es exactamente lo que hacía falta saber.
+
+La resolución de credenciales vive en `credenciales-firebase.ts` y la comparten `PushService` y el diagnóstico. Si cada uno leyera las variables por su cuenta, el diagnóstico podría dar verde sobre una configuración que la aplicación no acepta — la peor clase de herramienta de verificación.
+
+El camino que no se puede ejercitar en vivo —credenciales buenas y token rechazado— está cubierto por tests sobre la interpretación del error, con los códigos que devuelve Firebase en cada caso.
+
+**Un bug que solo apareció al enviar de verdad.** La desactivación de tokens muertos miraba `registration-token-not-registered` e `invalid-registration-token`, pero para un token mal formado **FCM devuelve `messaging/invalid-argument`**. Esos tokens nunca se apagaban: se acumulaban en la base y cada notificación gastaba una llamada por dispositivo fantasma. En modo `log` no hay respuesta que interpretar, así que era invisible hasta la primera verificación real.
+
+El arreglo no podía ser agregar el código a la lista: `invalid-argument` **también** aparece cuando el payload está mal armado, y desactivar ahí apagaría todos los dispositivos válidos de la base por un bug de una línea. El criterio quedó en `token-rechazado.ts`, que exige que el mensaje del error apunte al token, con tests para los dos sentidos del error.
+
+**Estado:** ✅ Vigente, implementado y verificado contra Firebase real. La entrega a un teléfono depende de que Mobile registre su token.
 
 ---
 
@@ -257,3 +267,33 @@ Lo que sí protege el dato ya está: el CHECK `kg_totales > 0` en la base (F2-1)
 **Si más adelante se necesita**, el lugar correcto es el **remito** (HU-26/27), que sí representa un despacho concreto a la bodega y donde una patente y una capacidad tienen sentido.
 
 **Estado:** ✅ Vigente. Criterio descopeado de HU-24.
+
+---
+
+## D-017 — La aplicación y las migraciones usan roles distintos
+
+**Contexto:** la API se conectaba con el superusuario `postgres`. Eso tiene dos consecuencias que no se ven hasta que importan:
+
+1. Una inyección SQL en cualquier endpoint hereda permiso para `DROP TABLE`, no solo para leer datos que no le tocan.
+2. **Vuelve decorativo el `REVOKE` que protege el log de auditoría**, porque los superusuarios ignoran los privilegios. Por eso la inmutabilidad de HU-07 se resolvió con un trigger —que sí aplica a un superusuario— y no solo con `GRANT`/`REVOKE`.
+
+**Decisión:** dos roles con propósitos separados.
+
+| Rol | Para qué | Puede |
+|---|---|---|
+| `DB_MIGRATION_USERNAME` | Correr migraciones | DDL: crear y alterar tablas, índices, triggers |
+| `DB_USERNAME` (`terravid_app`) | La aplicación | DML: `SELECT`/`INSERT`/`UPDATE`/`DELETE` y usar secuencias |
+
+El rol de aplicación **no** puede crear ni borrar tablas, no puede tocar la tabla `migrations`, y sobre `log_auditoria` solo puede leer e insertar.
+
+**Las variables de migración caen a las de la aplicación cuando no están definidas.** En desarrollo, con un solo `postgres`, no hay nada que configurar y todo sigue funcionando igual; la separación es una decisión de despliegue, no una fricción diaria.
+
+**Por qué un script y no una migración.** Una migración es DDL versionado del esquema; crear un rol con contraseña es configuración del entorno, y una contraseña no puede vivir en el repositorio. `npm run db:rol-app` la toma de `DB_APP_PASSWORD` y falla si no está: no hay valor por defecto, porque una contraseña conocida no es una contraseña.
+
+**La verificación intenta las operaciones en vez de leer los privilegios.** `npm run db:verificar-privilegios` se conecta con las credenciales reales de la API e intenta modificar el log, crear una tabla y leer `migrations`, revirtiendo todo. Inspeccionar `information_schema` diría lo que *debería* pasar; esto dice lo que pasa. Sale con código 1 si algo no cumple, para encadenarlo en el despliegue.
+
+**Defensa en profundidad, no reemplazo.** El trigger y el `REVOKE` cubren cosas distintas: el trigger protege incluso si alguien se conecta como superusuario, y el privilegio protege si alguien deshabilita el trigger. Las dos capas se quedan.
+
+**Verificación:** con la API conectada como `terravid_app`, el smoke test completo pasa **172/172** — la restricción no le saca nada que necesite.
+
+**Estado:** ✅ Vigente e implementado.

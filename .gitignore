@@ -33,5 +33,12 @@ lerna-debug.log*
 # herramientas locales
 /.claude
 
+# credenciales
+# El service account de Firebase da acceso al proyecto entero y se descarga como
+# JSON: que no pueda commitearse por accidente si queda en la carpeta.
+firebase-adminsdk*.json
+*-firebase-adminsdk-*.json
+service-account*.json
+
 # temp
 tmp/
