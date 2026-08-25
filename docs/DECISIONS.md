@@ -297,3 +297,21 @@ El rol de aplicación **no** puede crear ni borrar tablas, no puede tocar la tab
 **Verificación:** con la API conectada como `terravid_app`, el smoke test completo pasa **172/172** — la restricción no le saca nada que necesite.
 
 **Estado:** ✅ Vigente e implementado.
+
+---
+
+## D-018 — Producción en Cloud Run, no en un VPS con Nginx y PM2
+
+**Contexto:** [`ARCHITECTURE.md` §3.3](ARCHITECTURE.md) especifica para producción un **VPS Linux** con **Nginx** para terminación TLS y proxy reverso, el proceso Node administrado por **PM2**, y una instancia de **Redis** para las colas de BullMQ. Ese diseño precede a dos cosas que ya son ciertas en el código: las colas nunca se implementaron con BullMQ sino con `EventEmitterModule` in-process ([D-g](specs/PLAN-MEJORAS.md), decisión ya tomada para evitar la dependencia de Redis), y las tareas programadas corren con `@nestjs/schedule` dentro del mismo proceso.
+
+**Decisión:** producción se despliega en **Cloud Run + Cloud SQL**, documentado en [`DESPLIEGUE.md`](DESPLIEGUE.md). El VPS queda descartado: sin Redis y sin BullMQ, la mitad de lo que justificaba administrar un servidor propio ya no existe, y lo que queda —terminación TLS, supervisión del proceso, backups de la base— son exactamente las cosas que los servicios administrados hacen sin trabajo del equipo. Nginx, PM2 y Redis salen del alcance de producción.
+
+**Consecuencia: la configuración no es la del manual.** Cloud Run apaga las instancias sin tráfico y le corta la CPU al contenedor entre requests, y las dos decisiones in-process de arriba asumen un proceso vivo. El deploy va con `--no-cpu-throttling` (los handlers de `EventEmitterModule` corren después de que la respuesta salió, y con CPU asignada solo durante el request quedarían congelados hasta el request siguiente) y con `--min-instances=1 --max-instances=1` (con más de una instancia, cada una ejecuta su propia copia del cron). Es el costo, en dólares por mes, de haber elegido el in-process: una instancia siempre encendida.
+
+**Migraciones desde fuera del contenedor.** La imagen de producción solo lleva `dist/`, y el DataSource de la CLI apunta a `src/**/*.entity.ts` vía `ts-node`: `migration:run` no puede correr desde el contenedor desplegado. Se corre desde una máquina de desarrollo por el Cloud SQL Auth Proxy, lo que además **refuerza** [D-017](#d-017--la-aplicación-y-las-migraciones-usan-roles-distintos): las credenciales con permiso de DDL nunca llegan a Cloud Run.
+
+**PostGIS sale de los requisitos de producción.** El `docker-compose.yml` de desarrollo usa la imagen `postgis/postgis`, pero el centroide de los cuarteles son dos columnas `decimal(10,7)` y la única extensión que piden las migraciones es `btree_gist`. Una instancia PostgreSQL común alcanza; si más adelante hacen falta consultas espaciales, Cloud SQL habilita PostGIS con un `CREATE EXTENSION`.
+
+**Verificación:** la imagen del [`Dockerfile`](../Dockerfile) se construyó y se corrió contra la base local: arranca, conecta y `GET /api` responde 401 —el `JwtAuthGuard` global activo y la ruta raíz no pública, que es el comportamiento esperado—.
+
+**Estado:** ✅ Vigente. Pendiente la primera corrida real del runbook.
