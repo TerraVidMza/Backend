@@ -10,7 +10,7 @@
 | **Complejidad** | Media |
 | **Precondiciones** | HU-15 y HU-20 completados con datos de al menos dos campañas |
 | **Pantallas (Figma)** | PAN-19: Reporte de Tendencias y Recomendaciones de Manejo — [archivo Figma](https://www.figma.com/design/0ehP6Sf8WynahpnKUGIVpd/TerraVid---Wireframes---Design-System-v1) |
-| **Estado** | 🟠 PARCIAL — faltan los promedios IoT y el concepto de campaña (D-c) |
+| **Estado** | 🟢 COMPLETA — criterios de aceptación cubiertos |
 
 > **Auditoría (2026-08-24):** el "margen bruto" usa el monto de liquidación (un costo) como si fuera ingreso. Faltan costo/ha, los promedios IoT y distinguir 0 de "sin datos". Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
@@ -19,6 +19,12 @@
 > **Decisiones de modelo (2026-08-25):** ✅ el ingreso existe en el modelo ([D-010](../DECISIONS.md)), así que el margen bruto de la comparación es calculable.
 >
 > **Cierre (2026-08-25):** **Pendiente:** los **promedios IoT** por campaña (temperatura, humedad, precipitaciones) no están implementados, y el endpoint sigue recibiendo los rangos del cliente porque el concepto de campaña no existe en el modelo ([D-c](PLAN-MEJORAS.md)).
+>
+> **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** Los períodos se piden por **id de campaña** ([D-014](../DECISIONS.md)) y no como cuatro fechas sueltas, así que dos pantallas ya no pueden comparar «la campaña 2025» con recortes distintos. Se sumaron los **promedios IoT** por variable —la lluvia se acumula y el resto se promedia— y el **margen bruto real**.
+>
+> Se encontró al implementar: la liquidación de bodega ([D-010](../DECISIONS.md)) se había cableado al costeo de HU-15 pero **no acá**, así que esta comparación seguía devolviendo `margenBruto: null`. Es el mismo patrón que F1-9, corregido en un endpoint y no en el otro.
+>
+> El margen solo se compara si **las dos** campañas tienen liquidaciones: variar contra un período sin ingreso cargado daría −100 % y se leería como una caída real en vez de como un dato que falta.
 
 ## Descripción
 

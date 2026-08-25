@@ -17,6 +17,8 @@ import {
   calcularPaginacion,
   ResultadoPaginado,
 } from '../../common/dto/pagination-query.dto';
+import { rangoDeFechasComoTexto } from '../../common/fechas/rango-fechas';
+import { CampaniasService } from '../campanias/campanias.service';
 
 @Injectable()
 export class CuartelesService {
@@ -27,6 +29,7 @@ export class CuartelesService {
     private readonly registroLaborRepository: Repository<RegistroLabor>,
     @InjectRepository(PesajeVendimia)
     private readonly pesajeRepository: Repository<PesajeVendimia>,
+    private readonly campaniasService: CampaniasService,
   ) {}
 
   findByFinca(fincaId: string): Promise<Cuartel[]> {
@@ -122,22 +125,41 @@ export class CuartelesService {
   /**
    * Baja lógica del cuartel (HU-09).
    *
-   * Se bloquea si tiene labores o pesajes registrados: el histórico de costos y
-   * la trazabilidad de la cosecha cuelgan de él, y darlo de baja lo saca de los
-   * listados dejando esos registros sin contexto. La alternativa es archivar la
-   * finca completa al cerrar la campaña.
+   * Se bloquea si tiene labores o pesajes **de la campaña actual**: el histórico
+   * de costos y la trazabilidad de la cosecha cuelgan de él, y darlo de baja lo
+   * saca de los listados dejando esos registros sin contexto.
+   *
+   * El recorte por campaña es el que pide el criterio y llegó con `D-014`. Antes
+   * se contaba todo el histórico, así que un cuartel con una labor de hace cinco
+   * años quedaba imposible de dar de baja para siempre — más restrictivo que la
+   * HU, no menos, pero igual de incorrecto.
+   *
+   * **Sin campaña definida se sigue contando todo el histórico.** Es el lado
+   * conservador: negar una baja reversible es más barato que ocultar un cuartel
+   * con registros vivos.
    */
-  async desactivar(id: string): Promise<Cuartel> {
+  async desactivar(id: string, empresaId?: string): Promise<Cuartel> {
     const cuartel = await this.findById(id);
 
+    const campania = empresaId
+      ? await this.campaniasService.getActual(empresaId)
+      : null;
+    const rango = campania
+      ? rangoDeFechasComoTexto(campania.fechaDesde, campania.fechaHasta)
+      : undefined;
+    const filtro = rango ? { cuartelId: id, fecha: rango } : { cuartelId: id };
+
     const [labores, pesajes] = await Promise.all([
-      this.registroLaborRepository.count({ where: { cuartelId: id } }),
-      this.pesajeRepository.count({ where: { cuartelId: id } }),
+      this.registroLaborRepository.count({ where: filtro }),
+      this.pesajeRepository.count({ where: filtro }),
     ]);
 
     if (labores > 0 || pesajes > 0) {
+      const periodo = campania
+        ? ` en la campaña actual ("${campania.nombre}")`
+        : '';
       throw new ConflictException(
-        `El cuartel tiene ${labores} labor(es) y ${pesajes} pesaje(s) registrados, así que no puede darse de baja sin perder su trazabilidad.`,
+        `El cuartel tiene ${labores} labor(es) y ${pesajes} pesaje(s) registrados${periodo}, así que no puede darse de baja sin perder su trazabilidad.`,
       );
     }
 

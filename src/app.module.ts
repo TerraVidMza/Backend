@@ -6,6 +6,7 @@ import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
 import { MailModule } from './common/mail/mail.module';
+import { PushModule } from './common/push/push.module';
 import { TareasProgramadasModule } from './common/tareas/tareas-programadas.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -41,6 +42,7 @@ import { ConfiguracionModule } from './modules/configuracion/configuracion.modul
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InteligenciaAgronomicaModule } from './modules/inteligencia-agronomica/inteligencia-agronomica.module';
 import { AyudaModule } from './modules/ayuda/ayuda.module';
+import { CampaniasModule } from './modules/campanias/campanias.module';
 
 @Module({
   imports: [
@@ -60,7 +62,9 @@ import { AyudaModule } from './modules/ayuda/ayuda.module';
     ScheduleModule.forRoot(),
     AlcanceEmpresaModule,
     MailModule,
+    PushModule,
     TareasProgramadasModule,
+    CampaniasModule,
     RolesModule,
     UsuariosModule,
     AuthModule,

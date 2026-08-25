@@ -16,6 +16,7 @@ import {
   TipoArticulo,
 } from '../../modules/ayuda/entities/articulo-ayuda.entity';
 import { Configuracion } from '../../modules/configuracion/entities/configuracion.entity';
+import { Campania } from '../../modules/campanias/entities/campania.entity';
 import { RolNombre } from '../../common/enums/rol.enum';
 
 async function seed() {
@@ -32,6 +33,9 @@ async function seed() {
   );
   const configuracionRepo = app.get<Repository<Configuracion>>(
     getRepositoryToken(Configuracion),
+  );
+  const campaniaRepo = app.get<Repository<Campania>>(
+    getRepositoryToken(Campania),
   );
 
   console.log('Sembrando roles...');
@@ -186,6 +190,29 @@ async function seed() {
         configuracionRepo.create({ empresaId: empresa.id, clave, valor }),
       );
     }
+  }
+
+  console.log('Sembrando campaña actual...');
+  // Se siembra una campaña que contiene el día de hoy para que el dashboard y
+  // la comparación tengan un corte definido desde el arranque (D-014). El rango
+  // arranca el 1 de julio, que es el corte de año agrícola habitual en Cuyo: la
+  // vendimia de febrero-abril queda entera dentro de una sola campaña.
+  const hoy = new Date();
+  const anioInicio =
+    hoy.getMonth() + 1 >= 7 ? hoy.getFullYear() : hoy.getFullYear() - 1;
+  const nombreCampania = `${anioInicio}/${anioInicio + 1}`;
+  const yaExiste = await campaniaRepo.findOne({
+    where: { empresaId: empresa.id, nombre: nombreCampania },
+  });
+  if (!yaExiste) {
+    await campaniaRepo.save(
+      campaniaRepo.create({
+        empresaId: empresa.id,
+        nombre: nombreCampania,
+        fechaDesde: `${anioInicio}-07-01`,
+        fechaHasta: `${anioInicio + 1}-06-30`,
+      }),
+    );
   }
 
   console.log(

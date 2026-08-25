@@ -23,6 +23,7 @@ import {
   ResultadoPaginado,
 } from '../../common/dto/pagination-query.dto';
 import { rangoDeFechasComoTexto } from '../../common/fechas/rango-fechas';
+import { NotificacionesService } from '../notificaciones/notificaciones.service';
 
 export interface SyncResultItem {
   localUuid: string;
@@ -49,6 +50,7 @@ export class RegistroLaborService {
     private readonly detalleInsumoLaborRepository: Repository<DetalleInsumoLabor>,
     private readonly tipoLaborService: TipoLaborService,
     private readonly insumosService: InsumosService,
+    private readonly notificacionesService: NotificacionesService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -263,7 +265,47 @@ export class RegistroLaborService {
         });
       }
     }
+
+    await this.notificarErroresDeSync(resultados, usuarioId);
     return resultados;
+  }
+
+  /**
+   * Avisa al Capataz que parte de su lote quedó en error (HU-35).
+   *
+   * Es el tercer productor de eventos que pide la HU, junto con las alertas IoT
+   * y los remitos. Sin él, el trabajo que no entró solo se veía como un número
+   * en el dashboard del Propietario: **quien puede corregirlo no se enteraba**.
+   *
+   * Una sola notificación por lote y no una por registro: un lote de diez
+   * registros con un catálogo desactualizado falla entero, y diez avisos
+   * idénticos son ruido que se descarta sin leer.
+   */
+  private async notificarErroresDeSync(
+    resultados: SyncResultItem[],
+    usuarioId: string,
+  ): Promise<void> {
+    const fallidos = resultados.filter((r) => r.estado === EstadoSync.ERROR);
+    if (fallidos.length === 0) return;
+
+    try {
+      await this.notificacionesService.crear({
+        usuarioId,
+        tipo: 'error_sincronizacion',
+        titulo: `${fallidos.length} registro(s) no se sincronizaron`,
+        descripcion:
+          fallidos.length === 1
+            ? `El registro quedó en error: ${fallidos[0].errorMessage ?? 'motivo no informado'}`
+            : `${fallidos.length} registros de labor quedaron en error de sincronización. Revisalos y volvé a enviarlos.`,
+        urlAccion: '/labores?estadoSync=error',
+      });
+    } catch (error) {
+      // Que falle el aviso no puede cambiar el resultado de la sincronización,
+      // que ya está persistido y es lo que el dispositivo necesita saber.
+      this.logger.error(
+        `No se pudo notificar el error de sincronización: ${(error as Error).message}`,
+      );
+    }
   }
 
   /**

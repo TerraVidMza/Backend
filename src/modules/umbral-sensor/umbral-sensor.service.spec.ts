@@ -5,6 +5,7 @@ import { plainToInstance } from 'class-transformer';
 
 import { SetUmbralDto } from './dto/set-umbral.dto';
 import { UmbralSensor } from './entities/umbral-sensor.entity';
+import { LecturaIot } from '../lecturas-iot/entities/lectura-iot.entity';
 import { UmbralSensorService } from './umbral-sensor.service';
 
 const SENSOR_ID = '11111111-1111-1111-1111-111111111111';
@@ -52,6 +53,12 @@ describe('UmbralSensorService.setUmbral', () => {
       providers: [
         UmbralSensorService,
         { provide: getRepositoryToken(UmbralSensor), useValue: repo },
+        // Sin lecturas no hay aviso de HU-21 que calcular: estos casos son
+        // sobre qué se guarda, no sobre el mensaje.
+        {
+          provide: getRepositoryToken(LecturaIot),
+          useValue: { findOne: jest.fn().mockResolvedValue(null) },
+        },
       ],
     }).compile();
 
@@ -64,7 +71,7 @@ describe('UmbralSensorService.setUmbral', () => {
       comoLoArmaElPipe({ umbralMinimo: null }),
       USUARIO_ID,
     );
-    expect(r.umbralMinimo).toBeNull();
+    expect(r.umbral.umbralMinimo).toBeNull();
   });
 
   // Regresión: con el operador `in` el máximo omitido se borraba junto con el
@@ -75,7 +82,7 @@ describe('UmbralSensorService.setUmbral', () => {
       comoLoArmaElPipe({ umbralMinimo: null }),
       USUARIO_ID,
     );
-    expect(r.umbralMaximo).toBe(80);
+    expect(r.umbral.umbralMaximo).toBe(80);
   });
 
   it('borra ambos cuando ambos llegan en null', async () => {
@@ -84,8 +91,8 @@ describe('UmbralSensorService.setUmbral', () => {
       comoLoArmaElPipe({ umbralMinimo: null, umbralMaximo: null }),
       USUARIO_ID,
     );
-    expect(r.umbralMinimo).toBeNull();
-    expect(r.umbralMaximo).toBeNull();
+    expect(r.umbral.umbralMinimo).toBeNull();
+    expect(r.umbral.umbralMaximo).toBeNull();
   });
 
   it('actualiza solo el valor enviado', async () => {
@@ -94,8 +101,8 @@ describe('UmbralSensorService.setUmbral', () => {
       comoLoArmaElPipe({ umbralMinimo: 35 }),
       USUARIO_ID,
     );
-    expect(r.umbralMinimo).toBe(35);
-    expect(r.umbralMaximo).toBe(80);
+    expect(r.umbral.umbralMinimo).toBe(35);
+    expect(r.umbral.umbralMaximo).toBe(80);
   });
 
   it('rechaza un mínimo mayor o igual al máximo', async () => {
@@ -116,8 +123,8 @@ describe('UmbralSensorService.setUmbral', () => {
       comoLoArmaElPipe({ umbralMaximo: null }),
       USUARIO_ID,
     );
-    expect(r.umbralMaximo).toBeNull();
-    expect(r.umbralMinimo).toBe(20);
+    expect(r.umbral.umbralMaximo).toBeNull();
+    expect(r.umbral.umbralMinimo).toBe(20);
   });
 
   it('crea el umbral si el sensor no tenía uno', async () => {
@@ -128,6 +135,6 @@ describe('UmbralSensorService.setUmbral', () => {
       USUARIO_ID,
     );
     expect(repo.create).toHaveBeenCalled();
-    expect(r.umbralMaximo).toBe(40);
+    expect(r.umbral.umbralMaximo).toBe(40);
   });
 });

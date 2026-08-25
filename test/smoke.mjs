@@ -1335,6 +1335,387 @@ check(
   limpiadas.body,
 );
 
+// ====================================== Decisiones D-b/D-c/D-e, HU-30 y sueltos
+seccion('D-014 · campañas (D-c)');
+const campaniaActualSeed = await req('GET', '/campanias/actual');
+check(
+  'el seed dejó una campaña abierta que contiene hoy',
+  campaniaActualSeed.status === 200 && Boolean(campaniaActualSeed.body?.id),
+  campaniaActualSeed.body,
+);
+// El rango se elige por debajo de la campaña más vieja que ya exista: si no,
+// una segunda corrida contra la misma base chocaría con la que dejó la primera
+// —y ese 409 sería correcto, pero no es lo que este caso quiere probar—.
+const campaniasPrevias = (await req('GET', '/campanias')).body ?? [];
+const anioMasViejo = campaniasPrevias.reduce(
+  (min, c) => Math.min(min, Number(String(c.fechaDesde).slice(0, 4))),
+  2021,
+);
+const inicioVieja = anioMasViejo - 2;
+const campaniaVieja = await req('POST', '/campanias', {
+  nombre: `Vieja ${RUN}`,
+  fechaDesde: `${inicioVieja}-07-01`,
+  fechaHasta: `${inicioVieja + 1}-06-30`,
+});
+check('se puede crear una campaña pasada', campaniaVieja.status === 201, campaniaVieja);
+const campaniaViejaId = campaniaVieja.body?.id;
+
+check(
+  'una campaña que se solapa es rechazada con 409',
+  (
+    await req('POST', '/campanias', {
+      nombre: `Solapada ${RUN}`,
+      fechaDesde: `${inicioVieja + 1}-01-01`,
+      fechaHasta: `${inicioVieja + 1}-12-31`,
+    })
+  ).status === 409,
+  null,
+);
+check(
+  'el rango invertido es rechazado',
+  (
+    await req('POST', '/campanias', {
+      nombre: `Invertida ${RUN}`,
+      fechaDesde: `${inicioVieja - 5}-06-30`,
+      fechaHasta: `${inicioVieja - 5}-01-01`,
+    })
+  ).status === 400,
+  null,
+);
+const cerrada = await req('PATCH', `/campanias/${campaniaViejaId}/cerrar`);
+check('se puede cerrar una campaña', cerrada.body?.cerrada === true, cerrada.body);
+check(
+  'una campaña cerrada deja de ser "la actual"',
+  (await req('GET', '/campanias/actual')).body?.id !== campaniaViejaId,
+  null,
+);
+
+seccion('HU-09 · la baja de cuartel se acota a la campaña actual');
+const cuartelViejo = await req('POST', '/cuarteles', {
+  fincaId,
+  variedadId,
+  sistemaConduccionId: sistemaId,
+  nombre: `Cuartel Viejo ${RUN}`,
+  hectareas: 1,
+  anioImplantacion: 2015,
+});
+const cuartelViejoId = cuartelViejo.body?.id;
+const bajaSinRegistros = await req('PATCH', `/cuarteles/${cuartelViejoId}/desactivar`);
+check(
+  'un cuartel sin registros se da de baja',
+  bajaSinRegistros.status === 200,
+  bajaSinRegistros,
+);
+check(
+  'un cuartel con labores de la campaña actual sigue bloqueado',
+  (await req('PATCH', `/cuarteles/${cuartelId}/desactivar`)).status === 409,
+  null,
+);
+
+seccion('HU-31 · comparar por campaña, promedios IoT y margen real');
+const comparacion = await req(
+  'GET',
+  `/inteligencia-agronomica/comparar-campanias/${cuartelVentaId}?campaniaA=${campaniaActualSeed.body?.id}&campaniaB=${campaniaViejaId}`,
+);
+check(
+  'la comparación acepta ids de campaña',
+  comparacion.status === 200 &&
+    comparacion.body?.periodo1?.campaniaId === campaniaActualSeed.body?.id,
+  comparacion.body?.periodo1,
+);
+check(
+  'cada período informa el nombre de su campaña',
+  comparacion.body?.periodo2?.nombre === `Vieja ${RUN}`,
+  comparacion.body?.periodo2?.nombre,
+);
+check(
+  'el margen bruto de la campaña con liquidación ya es real',
+  comparacion.body?.periodo1?.margenBrutoDisponible === true &&
+    typeof comparacion.body?.periodo1?.margenBruto === 'number',
+  comparacion.body?.periodo1,
+);
+check(
+  'la campaña sin liquidación informa margen desconocido, no cero',
+  comparacion.body?.periodo2?.margenBrutoDisponible === false &&
+    comparacion.body?.periodo2?.margenBruto === null,
+  comparacion.body?.periodo2,
+);
+check(
+  'no se compara el margen contra un período sin ingreso cargado',
+  comparacion.body?.variaciones?.margenBruto === null,
+  comparacion.body?.variaciones,
+);
+check(
+  'el período trae los promedios IoT',
+  typeof comparacion.body?.periodo1?.promediosIot === 'object',
+  comparacion.body?.periodo1?.promediosIot,
+);
+check(
+  'sin campaña ni fechas, el período es rechazado',
+  (
+    await req(
+      'GET',
+      `/inteligencia-agronomica/comparar-campanias/${cuartelVentaId}?campaniaA=${campaniaViejaId}`,
+    )
+  ).status === 400,
+  null,
+);
+
+seccion('HU-32 · dashboard con campaña y estado de cosecha global');
+const tablero = await req('GET', '/dashboard/indicadores');
+check(
+  'el dashboard informa de qué campaña habla',
+  tablero.body?.campaniaActual?.id === campaniaActualSeed.body?.id,
+  tablero.body?.campaniaActual,
+);
+check(
+  'trae el reparto de cuarteles por estado de cosecha',
+  Array.isArray(tablero.body?.estadoCosechaGlobal?.porEstado) &&
+    tablero.body.estadoCosechaGlobal.porEstado.length === 3,
+  tablero.body?.estadoCosechaGlobal,
+);
+check(
+  'los porcentajes suman 100 cuando hay cuarteles',
+  tablero.body?.estadoCosechaGlobal?.total === 0 ||
+    Math.abs(
+      tablero.body.estadoCosechaGlobal.porEstado.reduce((a, e) => a + e.porcentaje, 0) -
+        100,
+    ) < 0.5,
+  tablero.body?.estadoCosechaGlobal,
+);
+check(
+  'los estados sin cuarteles vienen igual, en 0',
+  (tablero.body?.estadoCosechaGlobal?.porEstado ?? []).every(
+    (e) => typeof e.cuarteles === 'number',
+  ),
+  tablero.body?.estadoCosechaGlobal?.porEstado,
+);
+
+seccion('HU-06 · lista blanca de roles asignables');
+const usuarioParaRol = await req('POST', '/usuarios', {
+  nombre: 'Rol Smoke',
+  email: `rol.${RUN}@terravid.demo`,
+  rolId: rolCapataz?.id,
+});
+const usuarioRolId = usuarioParaRol.body?.id;
+check(
+  'un rolId inexistente da 404 y no 500',
+  (
+    await req('PATCH', `/usuarios/${usuarioRolId}`, {
+      rolId: '00000000-0000-0000-0000-000000000000',
+    })
+  ).status === 404,
+  null,
+);
+// Sin tilde: así lo siembra `RolNombre.AGRONOMO`. Buscarlo con tilde devolvía
+// `undefined`, el PATCH viajaba sin `rolId` y estos casos pasaban sin probar nada.
+const rolAgronomo = (roles.body ?? []).find((r) => r.nombreRol === 'Agronomo');
+check('el rol Agronomo existe en el catálogo', Boolean(rolAgronomo?.id), roles.body);
+const cambioDeRol = await req('PATCH', `/usuarios/${usuarioRolId}`, {
+  rolId: rolAgronomo?.id,
+});
+check(
+  'un rol del catálogo sí se asigna',
+  cambioDeRol.status === 200 && cambioDeRol.body?.rolId === rolAgronomo?.id,
+  cambioDeRol.body?.rolId,
+);
+const autoCambio = await req('PATCH', `/usuarios/${miId}`, {
+  rolId: rolAgronomo?.id,
+});
+check(
+  'sigue sin poder cambiarse el rol a sí mismo',
+  autoCambio.status === 403,
+  autoCambio.body,
+);
+check(
+  'y el rol propio quedó intacto',
+  (await req('GET', '/usuarios/me')).body?.rol?.nombreRol === 'Propietario',
+  null,
+);
+
+seccion('HU-21 · aviso de umbral ya superado');
+const sensorAviso = await req('POST', '/sensores', {
+  fincaId,
+  codigo: `AVISO-${RUN}`,
+  tipo: 'humedad_suelo',
+});
+await ingerir({
+  codigoSensor: sensorAviso.body?.codigo,
+  valor: 15,
+  unidad: '%',
+  sensorTimestamp: new Date().toISOString(),
+});
+const umbralConAviso = await req('PUT', `/sensores/${sensorAviso.body?.id}/umbral`, {
+  umbralMinimo: 30,
+});
+check(
+  'avisa que la última lectura ya está por debajo del mínimo',
+  typeof umbralConAviso.body?.aviso === 'string' &&
+    umbralConAviso.body.aviso.includes('15'),
+  umbralConAviso.body?.aviso,
+);
+check(
+  'la respuesta sigue trayendo el umbral plano',
+  Number(umbralConAviso.body?.umbralMinimo) === 30,
+  umbralConAviso.body,
+);
+const umbralSinAviso = await req('PUT', `/sensores/${sensorAviso.body?.id}/umbral`, {
+  umbralMinimo: 5,
+});
+check(
+  'sin superación no hay aviso',
+  umbralSinAviso.body?.aviso === null,
+  umbralSinAviso.body?.aviso,
+);
+
+seccion('HU-35 · device token para push (D-e)');
+const tokenFalso = `smoke-token-${RUN}-${'x'.repeat(30)}`;
+const altaToken = await req('POST', '/notificaciones/device-token', {
+  token: tokenFalso,
+  plataforma: 'android',
+});
+check('se registra el token del dispositivo', altaToken.status === 201, altaToken);
+check(
+  'reenviar el mismo token no duplica (es idempotente)',
+  (
+    await req('POST', '/notificaciones/device-token', {
+      token: tokenFalso,
+      plataforma: 'android',
+    })
+  ).body?.id === altaToken.body?.id,
+  null,
+);
+check(
+  'una plataforma inválida es rechazada',
+  (
+    await req('POST', '/notificaciones/device-token', {
+      token: `${tokenFalso}-2`,
+      plataforma: 'blackberry',
+    })
+  ).status === 400,
+  null,
+);
+check(
+  'la baja del token responde 204',
+  (await req('DELETE', '/notificaciones/device-token', { token: tokenFalso })).status ===
+    204,
+  null,
+);
+
+seccion('HU-35 · el error de sincronización notifica al Capataz');
+const antesDeFallar = await req('GET', '/notificaciones?soloNoLeidas=true');
+const loteFallido = await req('POST', '/registro-labor/sync', {
+  registros: [
+    {
+      localUuid: crypto.randomUUID(),
+      cuartelId,
+      tipoLaborId,
+      // Anterior a la vigencia del costo: el ítem falla dentro del lote, que es
+      // el camino que dispara el aviso. Un tipoLaborId inexistente no sirve: el
+      // controller lo verifica antes y devuelve 404 sin llegar a sincronizar.
+      fecha: diaRelativo(-45),
+      cantidad: 1,
+      insumos: [],
+      createdAtLocal: new Date().toISOString(),
+    },
+  ],
+});
+check(
+  'el ítem del lote queda en error',
+  loteFallido.body?.[0]?.estado === 'error',
+  loteFallido.body,
+);
+const despuesDeFallar = await req('GET', '/notificaciones?soloNoLeidas=true');
+const avisoDeError = (despuesDeFallar.body?.data ?? []).find(
+  (n) => n.tipo === 'error_sincronizacion',
+);
+check(
+  'el lote fallido genera una notificación de error de sincronización',
+  Boolean(avisoDeError),
+  despuesDeFallar.body?.data?.map((n) => n.tipo),
+);
+check(
+  'la notificación apunta al listado de registros en error',
+  Boolean(avisoDeError?.urlAccion?.includes('error')),
+  avisoDeError?.urlAccion,
+);
+check(
+  'el contador de no leídas subió',
+  (despuesDeFallar.body?.noLeidas ?? 0) > (antesDeFallar.body?.noLeidas ?? 0),
+  { antes: antesDeFallar.body?.noLeidas, despues: despuesDeFallar.body?.noLeidas },
+);
+
+seccion('HU-30 · recomendaciones persistidas y gate de 30 días');
+const recos = await req('GET', `/inteligencia-agronomica/recomendaciones/${cuartelId}`);
+check(
+  'el endpoint informa el gate de 30 días',
+  recos.status === 200 && typeof recos.body?.diasConDatos === 'number',
+  recos.body,
+);
+check(
+  'sin histórico suficiente informa cuántos días faltan',
+  recos.body?.disponible === true ||
+    (recos.body?.diasFaltantes > 0 && String(recos.body?.mensaje).includes('Faltan')),
+  { disponible: recos.body?.disponible, faltantes: recos.body?.diasFaltantes },
+);
+if (recos.body?.disponible && (recos.body.recomendaciones ?? []).length > 0) {
+  const reco = recos.body.recomendaciones[0];
+  check('las recomendaciones tienen id (son accionables)', Boolean(reco.id), reco);
+  check(
+    'traen patrón detectado y acción sugerida',
+    Boolean(reco.patronDetectado) && Boolean(reco.accionSugerida),
+    reco,
+  );
+  const reevaluada = await req(
+    'GET',
+    `/inteligencia-agronomica/recomendaciones/${cuartelId}`,
+  );
+  check(
+    'reevaluar no duplica la recomendación activa',
+    (reevaluada.body?.recomendaciones ?? []).filter((r) => r.reglaId === reco.reglaId)
+      .length === 1,
+    reevaluada.body?.recomendaciones?.map((r) => r.reglaId),
+  );
+  const resuelta = await req(
+    'PATCH',
+    `/inteligencia-agronomica/recomendaciones/${reco.id}`,
+    { estado: 'aplicada', nota: 'Aplicada desde el smoke test' },
+  );
+  check('se puede marcar como aplicada', resuelta.body?.estado === 'aplicada', resuelta.body);
+  check(
+    'resolver dos veces la misma recomendación da 409',
+    (
+      await req('PATCH', `/inteligencia-agronomica/recomendaciones/${reco.id}`, {
+        estado: 'descartada',
+      })
+    ).status === 409,
+    null,
+  );
+  check(
+    'reabrir a "activa" no es un estado válido',
+    (
+      await req('PATCH', `/inteligencia-agronomica/recomendaciones/${reco.id}`, {
+        estado: 'activa',
+      })
+    ).status === 400,
+    null,
+  );
+} else {
+  check(
+    'con el gate activo no se generan recomendaciones',
+    (recos.body?.recomendaciones ?? []).length === 0,
+    recos.body?.recomendaciones,
+  );
+}
+
+seccion('HU-07 · el log de auditoría solo expone lectura');
+check(
+  'no hay ruta de borrado ni de modificación del log',
+  (await req('DELETE', '/log-auditoria')).status === 404 &&
+    (await req('PATCH', '/log-auditoria')).status === 404,
+  null,
+);
+
 // ------------------------------------------------------------------ Resumen
 console.log(`\n${'='.repeat(60)}`);
 console.log(`RESULTADO: ${ok} OK, ${fallas.length} fallas`);

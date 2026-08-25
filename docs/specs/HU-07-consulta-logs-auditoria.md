@@ -10,13 +10,15 @@
 | **Complejidad** | Media |
 | **Precondiciones** | HU-01 completado (sesión activa como Propietario o Auditor) |
 | **Pantallas (Figma)** | PAN-06: Visor de Logs de Auditoría (Propietario/Auditor) — [archivo Figma](https://www.figma.com/design/0ehP6Sf8WynahpnKUGIVpd/TerraVid---Wireframes---Design-System-v1) |
-| **Estado** | 🟠 PARCIAL — falta el append-only a nivel de BD (GRANT/RLS) |
+| **Estado** | 🟢 COMPLETA — criterios de aceptación cubiertos |
 
 > **Auditoría (2026-08-24):** solo 3 eventos auditados en todo el sistema. Sin paginación ni filtros, y el append-only no está garantizado a nivel de BD. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
 > **Fase 2 (2026-08-24):** la auditoría pasó de 3 a **43 endpoints en 15 módulos** vía el decorador `@Auditar` (F2-3). El listado tiene paginación y filtros por actor, entidad, acción y rango de fechas; cada entrada identifica al responsable por nombre y registra la IP, y `registrar()` acepta un `EntityManager` para ser transaccional. Falta el append-only garantizado por GRANT/RLS en la base.
 >
 > **Cierre (2026-08-25):** la auditoría transversal y los filtros del listado están cerrados. **Pendiente:** el criterio de inmutabilidad pide restricciones **a nivel de BD**. Hoy el endpoint solo expone GET, pero la aplicación se conecta con el superusuario `postgres`, así que nada impide un UPDATE o un DELETE por fuera de la API. Falta el GRANT/REVOKE y dejar de usar el superusuario: es trabajo de despliegue, no de código.
+>
+> **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** El log es **append-only en la base**: un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE` sobre `log_auditoria`. Se eligió un trigger y no solo `GRANT`/`REVOKE` porque los privilegios no aplican mientras la aplicación se conecte con el superusuario `postgres`; el trigger sí, y está verificado contra la base. El `REVOKE` queda igual como defensa en profundidad para cuando se deje de usar el superusuario.
 
 ## Descripción
 

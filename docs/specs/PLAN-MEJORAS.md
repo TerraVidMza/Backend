@@ -4,11 +4,15 @@ Resultado de auditar el código real de los 24 módulos del backend contra los c
 
 **Veredicto original (2026-08-24): ninguna de las 36 HU cumplía el 100% de sus criterios de aceptación.** 12 sustancialmente incompletas, 24 parciales. Los endpoints existían y respondían — lo que faltaba eran reglas de negocio, validaciones, aislamiento entre empresas y auditoría.
 
-**Estado hoy (2026-08-25): 27 completas, 8 parciales, 1 incompleta.** Cerradas las Fases 0 (10/10), 1 (14/14) y 2 (cimientos y criterios por bloque), y resueltas las decisiones `D-a`, `D-d`, `D-f`, `D-g` y `D-h`. Verificado con 71 tests unitarios y un smoke test de 133 casos end-to-end contra PostgreSQL real.
+**Estado hoy (2026-08-26): 35 completas, 1 parcial.** Cerradas las Fases 0 (10/10), 1 (14/14) y 2 (cimientos, criterios por bloque y tests), y resueltas **las ocho decisiones de producto** de la sección 6. Verificado con 88 tests unitarios y un smoke test de 172 casos end-to-end contra PostgreSQL real, desde una base recreada desde cero y sin deriva entre las entidades y el esquema.
+
+Lo único abierto es **HU-35**: el push FCM está implementado, pero el envío real contra Firebase no se pudo verificar sin un service account ([D-015](../DECISIONS.md)). Todo lo demás del criterio —los tres productores de evento, la tabla de device tokens, el alta idempotente— sí está probado.
 
 > **Importante:** la mayoría de los problemas **no eran de las HU individuales sino transversales**. Arreglar los 10 problemas sistémicos de la sección 2 cerró criterios de aceptación en casi las 36 HU a la vez. Ir HU por HU habría sido mucho más caro y habría dejado los agujeros de seguridad abiertos más tiempo.
 >
-> Se cumplió: de los 10 sistémicos quedan abiertos **S3 y S5 solo en su parte de despliegue** (el `GRANT`/RLS que hace append-only el log de auditoría) y **S10 parcialmente** (faltan tests de bloqueo por intentos, lote parcialmente fallido y Pearson).
+> Se cumplió: **los 10 problemas sistémicos están cerrados.** El último en caer fue S3 en su parte de base — el log de auditoría es ahora append-only por trigger, verificado contra PostgreSQL — y S10, con los tres huecos de test que faltaban.
+>
+> Queda como trabajo de despliegue, no de código: dejar de conectar la aplicación con el superusuario `postgres`. El trigger protege el log igual —los superusuarios ignoran los privilegios pero no los triggers—, y el `REVOKE` ya está puesto para cuando se haga el cambio.
 
 ---
 
@@ -23,10 +27,10 @@ La columna **Motivo principal detectado** es el hallazgo original y se deja tal 
 | HU-03 Recuperar contraseña | 🟠 PARCIAL | **No se envía ningún email** → flujo inejecutable. Sin rate limiting, sin validación de complejidad server-side | 🟢 Completa |
 | HU-04 Datos personales + password | 🟠 PARCIAL | **Escalada de privilegios** (ver F0-1). Sin auditoría de cambio de contraseña | 🟢 Completa |
 | HU-05 ABM Usuarios | 🔴 INCOMPLETA | Sin contraseña temporal ni email de bienvenida, sin listado paginado/filtrado, **sin check de "último Propietario"**, sin auditoría | 🟢 Completa |
-| HU-06 Modificar rol | 🔴 INCOMPLETA | **Sin bloqueo de auto-cambio de rol**, sin lista blanca de roles asignables, sin auditoría | 🟠 Parcial — falta la lista blanca de roles asignables |
-| HU-07 Logs de auditoría | 🔴 INCOMPLETA | Solo 3 eventos auditados en todo el sistema. Sin paginación ni filtros, sin append-only real en BD | 🟠 Parcial — falta el append-only a nivel de BD (GRANT/RLS) |
+| HU-06 Modificar rol | 🔴 INCOMPLETA | **Sin bloqueo de auto-cambio de rol**, sin lista blanca de roles asignables, sin auditoría | 🟢 Completa |
+| HU-07 Logs de auditoría | 🔴 INCOMPLETA | Solo 3 eventos auditados en todo el sistema. Sin paginación ni filtros, sin append-only real en BD | 🟢 Completa |
 | HU-08 ABM fincas | 🟠 PARCIAL | Baja **no verifica cuarteles activos** (cuarteles huérfanos), sin contador de cuarteles, sin auditoría | 🟢 Completa |
-| HU-09 ABM cuarteles | 🟠 PARCIAL | Baja no verifica labores/pesajes, `estado` nunca se setea, año sin validar rango | 🟠 Parcial — la baja no acota los registros a la campaña actual (D-c) |
+| HU-09 ABM cuarteles | 🟠 PARCIAL | Baja no verifica labores/pesajes, `estado` nunca se setea, año sin validar rango | 🟢 Completa |
 | HU-10 Cuarteles en mapa | 🔴 INCOMPLETA | **`Cuartel` no tiene lat/lng** → imposible posicionar marcadores. `estado` siempre `null` → sin colores | 🟢 Completa |
 | HU-11 Búsqueda fincas/cuarteles | 🔴 INCOMPLETA | Sin búsqueda en cuarteles, sin filtros por variedad/estado/año, sin ordenamiento, sin paginación | 🟢 Completa |
 | HU-12 Registrar labor | 🟠 PARCIAL | No se persiste el timestamp de creación local | 🟢 Completa |
@@ -38,21 +42,21 @@ La columna **Motivo principal detectado** es el hallazgo original y se deja tal 
 | HU-18 Registro de sensores | 🟠 PARCIAL | **El listado no trae la última lectura** (requisito central), 400 en vez de 409, `update` no revalida unicidad | 🟢 Completa |
 | HU-19 Ingesta de lecturas | 🔴 INCOMPLETA | **Sin API key** (ver F0-3), no rechaza sensores inactivos, sin validación de rango físico, evaluación inline | 🟢 Completa |
 | HU-20 Monitoreo y gráficos | 🟠 PARCIAL | Sin `desde`/`hasta` (solo `limit`), sin agregación por hora/día, sin índice en la tabla de lecturas | 🟢 Completa |
-| HU-21 Umbrales | 🟠 PARCIAL | **Bug: imposible borrar un umbral** (ver F1-6). Sin aviso de "ya supera el umbral", sin auditoría | 🟠 Parcial — falta el aviso de «la última lectura ya supera el umbral» |
+| HU-21 Umbrales | 🟠 PARCIAL | **Bug: imposible borrar un umbral** (ver F1-6). Sin aviso de "ya supera el umbral", sin auditoría | 🟢 Completa |
 | HU-22 Alertas por umbral | 🟠 PARCIAL | **Sin deduplicación** → una alerta por lectura. **No se envía email**. Destinatarios por empresa, no por finca | 🟢 Completa |
 | HU-23 Cuadrillas | 🟠 PARCIAL | **La regla tarifa-por-rol no existe** (ver F0-6). Tarifa retro-datable, desempate no determinista | 🟢 Completa |
-| HU-24 Pesaje diario | 🟠 PARCIAL | Sin CHECK en BD, **el maestro de transportes no existe** → criterio inimplementable | 🟠 Parcial — el maestro de transportes no existe (D-b) |
+| HU-24 Pesaje diario | 🟠 PARCIAL | Sin CHECK en BD, **el maestro de transportes no existe** → criterio inimplementable | 🟢 Completa |
 | HU-25 Liquidación | 🟠 PARCIAL | Write-once correcto, pero **pesaje sin tarifa se guarda con monto `null` y estado SINCRONIZADO** | 🟢 Completa |
 | HU-26 Borrador de remito | 🔴 INCOMPLETA | **Sin fecha** (agrupa todo el histórico), **incluye pesajes no sincronizados**, sin control de concurrencia, sin notificación | 🟢 Completa |
 | HU-27 Aprobación de remitos | 🟠 PARCIAL | **Ningún criterio al 100%.** Motivo de rechazo acepta 2 chars, numeración con race condition, no existe estado "Observado" | 🟢 Completa |
 | HU-28 Estado de cosecha | 🔴 INCOMPLETA | **La máquina de estados del cuartel no existe** (ver F1-8). Sin tabla por finca, sin estado del último remito | 🟢 Completa |
 | HU-29 Correlación sensor-costos | 🟠 PARCIAL | **Pearson con umbral `n<2`** → correlaciones falsas de ±1.0. Sin interpretación textual, sin `@Roles` | 🟢 Completa |
-| HU-30 Recomendaciones | 🔴 INCOMPLETA | **No existe la tabla `recomendaciones`** — se calculan al vuelo y no tienen `id`. Sin gate de 30 días, reglas hardcodeadas | 🔴 Incompleta — no existe la entidad `recomendaciones` |
-| HU-31 Comparar campañas | 🟠 PARCIAL | **El "margen bruto" no es un margen** (ver F1-9). Faltan `costo/ha`, promedios IoT, y distinguir 0 de "sin datos" | 🟠 Parcial — faltan los promedios IoT y el concepto de campaña (D-c) |
-| HU-32 Dashboard | 🔴 INCOMPLETA | **No diferencia por rol en absoluto** → el Auditor recibe costos (ver F0-5) | 🟠 Parcial — faltan el estado de cosecha global y los cuarteles asignados al Capataz |
+| HU-30 Recomendaciones | 🔴 INCOMPLETA | **No existe la tabla `recomendaciones`** — se calculan al vuelo y no tienen `id`. Sin gate de 30 días, reglas hardcodeadas | 🟢 Completa |
+| HU-31 Comparar campañas | 🟠 PARCIAL | **El "margen bruto" no es un margen** (ver F1-9). Faltan `costo/ha`, promedios IoT, y distinguir 0 de "sin datos" | 🟢 Completa |
+| HU-32 Dashboard | 🔴 INCOMPLETA | **No diferencia por rol en absoluto** → el Auditor recibe costos (ver F0-5) | 🟢 Completa |
 | HU-33 Configuración | 🟠 PARCIAL | **`configuracion` no tiene `empresaId`** → global a la instancia. **`smtp_pass` en texto plano**. Sin claves seedeadas | 🟢 Completa |
 | HU-34 Tablas maestras | 🟠 PARCIAL | `update()` no revalida unicidad, sin auditoría, chequeo de referencias hardcodeado | 🟢 Completa |
-| HU-35 Notificaciones | 🔴 INCOMPLETA | Solo 1 de 3 productores de evento → **el Capataz nunca recibe notificaciones**. Sin FCM, sin purga, sin paginación | 🟠 Parcial — faltan el push FCM (D-e) y el aviso por error de sincronización |
+| HU-35 Notificaciones | 🔴 INCOMPLETA | Solo 1 de 3 productores de evento → **el Capataz nunca recibe notificaciones**. Sin FCM, sin purga, sin paginación | 🟠 Parcial — el envío push real no se pudo verificar sin credenciales de Firebase |
 | HU-36 Centro de ayuda | 🟠 PARCIAL | El email funciona pero **nunca se envía** (claves SMTP no seedeadas). Tickets sin filtrar por empresa | 🟢 Completa |
 
 Leyenda: 🔴 INCOMPLETA (criterios centrales ausentes) · 🟠 PARCIAL (funciona pero incumple algún criterio) · 🟢 COMPLETA (criterios cubiertos)
@@ -179,7 +183,7 @@ Todos son el mismo error de fondo — usar UTC donde el dominio es local— y **
 
 Corregido centralizando en `common/fechas/rango-fechas.ts` (`fechaLocal`, `hoyLocal`), y las comparaciones de vigencia pasaron a ser **texto contra texto** sobre columnas `date` —que no tienen hora ni huso— en vez de round-trips por `Date`. Con tests de regresión.
 
-**F2-7 — Tests (S10).** 🟡 Parcial. Hay **71 tests unitarios** (guards, DTOs, alcance multi-empresa, umbrales, paginación, rangos y fechas locales) y un **smoke test end-to-end de 133 casos** contra la API y PostgreSQL reales.
+**F2-7 — Tests (S10).** ✅ **Cerrado.** Hay **88 tests unitarios** (guards, DTOs, alcance multi-empresa, umbrales, paginación, rangos y fechas locales, bloqueo por intentos, lote parcialmente fallido y Pearson) y un **smoke test end-to-end de 172 casos** contra la API y PostgreSQL reales.
 
 Cubre: la escalada vía `PATCH /me`, la invalidación de token en logout, la política de contraseñas, el doble envío del mismo `local_uuid` con su 200, el límite de lote, el costo vigente a fecha vs. el costo actual, la máquina de estados del cuartel, el circuito completo de remitos, el rango físico y la ingesta por código, las bajas con dependencias y el costeo agregado.
 
@@ -201,10 +205,10 @@ No son bugs: son definiciones que faltan y que bloquean trabajo.
 | # | Decisión | Impacto |
 |---|---|---|
 | **D-a** | ✅ **Resuelta e implementada.** Entidad `liquidaciones_bodega` colgando del remito aprobado ([D-010](../DECISIONS.md)). El margen bruto de HU-15 y HU-31 ya es real: `ingresos − costoTotal`, y sigue devolviéndose en `null` cuando no hay liquidación cargada. | HU-15, HU-31, HU-32 |
-| **D-b** | **Maestro de transportes.** HU-24 exige validar contra "el límite máximo del maestro de transportes", que **no existe**. Crearlo o descopear el criterio. | HU-24 |
-| **D-c** | ⛔ **Abierta, y es la que más crece con el tiempo.** **Concepto de campaña.** No existe en el modelo. HU-31 delega los rangos al cliente y el dashboard usa año calendario hardcodeado — ya divergen, y cada indicador nuevo elige su propio criterio. Opciones: entidad `Campania`, o una clave `anio_agricola_inicio` en `configuracion`. También lo necesita el chequeo de baja de cuartel de HU-09, que hoy cuenta labores y pesajes sin acotar el período. | HU-09, HU-31, HU-32 |
+| **D-b** | ✅ **Resuelta: criterio descopeado** ([D-016](../DECISIONS.md)). El criterio mezclaba dos conceptos —el pesaje es el total de la jornada, no un viaje— y contradecía al criterio vecino, que admite varios pesajes por cuartel y día. Si más adelante hace falta, el lugar es el **remito**, que sí representa un despacho concreto. | HU-24 |
+| **D-c** | ✅ **Resuelta e implementada.** Entidad `campanias` con **rango explícito** por empresa y sin solapamientos, garantizado por un `EXCLUDE` en la base ([D-014](../DECISIONS.md)). Se eligió el rango sobre una clave `anio_agricola_inicio` porque la vendimia no termina el mismo día todos los años. Sin campaña cargada cada consumidor decide su comportamiento, y la respuesta no es la misma en todos: la baja de cuartel es conservadora, el dashboard cae al año calendario y lo informa. | HU-09, HU-31, HU-32 |
 | **D-d** | ✅ **Resuelta: se corrigió la especificación, no el código** ([D-006](../DECISIONS.md)). El rol se recarga de la base en cada request, así que aplica de inmediato; que un rol revocado siguiera vigente hasta el próximo login es peor postura de seguridad que lo que pedía la HU. | HU-06 |
-| **D-e** | **Push FCM (HU-35): ¿sigue en alcance?** No hay integración, ni tabla de device tokens, ni registro en login. Implementarlo o descopearlo explícitamente. | HU-35 |
+| **D-e** | ✅ **Resuelta: se implementó FCM completo** ([D-015](../DECISIONS.md)). Tabla `device_tokens`, alta idempotente, baja al cerrar sesión y desactivación de los tokens que FCM rechaza. Las credenciales salen de variables de entorno, nunca de un JSON en el repo. **`PUSH_TRANSPORT=log` está verificado; el envío real contra Firebase no**, porque hace falta un service account. | HU-35 |
 | **D-f** | ✅ **Resuelta e implementada** ([D-013](../DECISIONS.md)). No eran dos fuentes de verdad en conflicto sino **dos ciclos distintos**: el enum `EstadoCuartel` (`pendiente`/`en_cosecha`/`cosechado`) gobierna la vendimia y lo escribe solo el sistema; el catálogo `ESTADO_CUARTEL` (Productivo / En implantación) describe el ciclo de plantación y hoy no está vinculado a ninguna columna. | HU-09, HU-10, HU-28 |
 | **D-g** | ✅ **Resuelta en Fase 2: se tomó la alternativa intermedia.** `EventEmitter2` + `@nestjs/schedule`, sin Redis ni BullMQ. Cubre lo pendiente con un solo servicio de infraestructura (PostgreSQL). Se revisa cuando haga falta escalar a más de una instancia. | S6 |
 | **D-h** | ✅ **Resuelta e implementada.** `empresa_id` en `catalogo_item`, `insumos` y `tipos_labor`, con unicidad por empresa ([D-011](../DECISIONS.md)). Las tablas de costos heredan el tenant por la FK. La sincronización verifica que el tipo de labor y los insumos sean de la empresa. | S1, HU-16, HU-34 |
@@ -220,17 +224,18 @@ El orden que se siguió, ya ejecutado:
 3. ✅ **Fase 1** — correctitud de datos y dinero. `F1-8` (máquina de estados) desbloqueó HU-09, HU-10 y HU-28 de una vez.
 4. ✅ **Decisiones de la sección 6** — resueltas `D-a`, `D-d`, `D-f`, `D-g` y `D-h`.
 5. ✅ **F2-2 a F2-6 (cimientos)** antes de los criterios por bloque: cada uno cerró criterios en muchas HU a la vez.
-6. ✅ **Criterios por bloque**, y **tests** en su mayor parte (ver F2-7).
+6. ✅ **Criterios por bloque** y **tests** (F2-7 cerrado).
+7. ✅ **Las ocho decisiones de producto** de la sección 6.
 
 ### Qué sigue
 
-Ningún ítem que quede es un descuido: cada uno espera una definición o es trabajo de despliegue.
+El plan de mejoras está cerrado. Lo que queda **no es deuda del backend**:
 
-1. **Decidir `D-c` (concepto de campaña).** Es el que más cuesta postergar: cada indicador nuevo elige su propio corte y después reconciliarlos sale caro. Desbloquea HU-09, HU-31 y HU-32.
-2. **Decidir `D-b` (maestro de transportes) y `D-e` (push FCM).** Las dos son "implementarlo o descopear el criterio"; mientras no se decidan, HU-24 y HU-35 no pueden cerrarse ni descartarse.
-3. **Definir las reglas agronómicas de HU-30.** Es lo único que falta para modelar `recomendaciones`; ninguna HU las especifica hoy.
-4. **Endurecer la base para producción:** `GRANT`/`REVOKE` que hagan append-only el log de auditoría (cierra HU-07) y dejar de conectar con el superusuario `postgres`.
-5. **Trabajo suelto sin bloqueos:** la lista blanca de roles asignables (HU-06), el aviso al guardar un umbral ya superado (HU-21), los promedios IoT de HU-31, el estado de cosecha global de HU-32 y la notificación por error de sincronización de HU-35.
-6. **Cerrar F2-7:** tests de bloqueo por intentos y su expiración, lote parcialmente fallido y Pearson (r=1, r=−1, r=0, serie constante, n<7).
+1. **Verificar el push real** (HU-35): con el service account de un proyecto de Firebase y `PUSH_TRANSPORT=fcm`. Es lo único que impide marcar HU-35 como completa.
+2. **Endurecer el despliegue:** dejar de conectar con el superusuario `postgres`. El log de auditoría ya es inmutable por trigger, así que esto es defensa en profundidad, no un agujero abierto.
+3. **Revisar las 6 vulnerabilidades moderadas** que arrastra `firebase-admin` en dependencias transitivas, cuando el SDK publique la corrección ([D-015](../DECISIONS.md)).
+4. **Los clientes:** Web, Mobile e IoTSensor, cada uno en su repo. Ahí falta el 100%.
+
+> Los umbrales de las reglas agronómicas (`reglas-agronomicas.ts`) están calibrados para vid en Mendoza bajo riego. Si el sistema se despliega en otra región hay que revisarlos — están juntos y comentados en un solo archivo para que esa revisión sea barata.
 
 > Al cerrar cada ítem, actualizar el campo **Estado** de la spec de la HU correspondiente y la tabla índice de [`README.md`](README.md).

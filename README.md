@@ -65,8 +65,8 @@ npm run migration:revert   # deshace la última
 ### Pruebas
 
 ```bash
-npm test              # 71 tests unitarios
-npm run test:smoke    # 133 casos end-to-end contra la API y la base reales
+npm test              # 88 tests unitarios
+npm run test:smoke    # 172 casos end-to-end contra la API y la base reales
 ```
 
 El smoke test necesita la API corriendo (`npm run start:prod` en otra terminal) y verifica de punta a punta las correcciones de seguridad, correctitud de datos, paginación y auditoría.
@@ -98,12 +98,13 @@ Los 24 módulos del backend están construidos y exponen sus endpoints REST. El 
 | `pesaje-vendimia` | HU-24, HU-25, HU-28 | Pesaje diario (sync offline), cálculo de liquidación, estado de cosecha por cuartel |
 | `remitos` | HU-26, HU-27 | Generación de borrador, circuito de aprobación/rechazo |
 | **Inteligencia agronómica (MVP)** | | |
-| `inteligencia-agronomica` | HU-29, HU-30, HU-31 | Correlación sensor-costos, recomendaciones por reglas, comparación entre campañas |
+| `inteligencia-agronomica` | HU-29, HU-30, HU-31 | Correlación sensor-costos, recomendaciones por reglas (persistidas, con aplicar/descartar), comparación entre campañas |
 | **Dashboard, configuración y soporte** | | |
+| `campanias` | HU-09, HU-31, HU-32 | Campañas o años agrícolas: el eje temporal que comparten los indicadores |
 | `dashboard` | HU-32 | Indicadores clave |
 | `configuracion` | HU-33 | Parámetros generales (clave-valor): organización, moneda, unidades, zona horaria |
 | `catalogo-item` | HU-34 | Catálogos maestros genéricos: variedades, sistemas de conducción, estados de cuartel, unidades de medida |
-| `notificaciones` | HU-35 | Notificaciones in-app por rol |
+| `notificaciones` | HU-35 | Notificaciones in-app por rol y push a móviles (FCM) |
 | `ayuda` | HU-36 | Artículos de ayuda y tickets de soporte |
 
 > El estado por HU (🟢 completa / 🟠 parcial / 🔴 incompleta), con el motivo puntual de cada una que no está cerrada, se lleva en [`docs/specs/README.md`](docs/specs/README.md). Las entidades siguen el diagrama de Entidad-Relación (Anexo 2 del documento maestro — ver [`docs/REFERENCES.md`](docs/REFERENCES.md)).
@@ -112,15 +113,15 @@ Los 24 módulos del backend están construidos y exponen sus endpoints REST. El 
 
 Los componentes que aún no están construidos son los **clientes**: Frontend Web, App Mobile y firmware IoT, cada uno en su propio repo.
 
-En el backend, **27 de las 36 HU están completas**; quedan 8 parciales y 1 incompleta. Casi todo lo que falta espera una definición, no código:
+En el backend, **35 de las 36 HU están completas**. El plan de mejoras está cerrado: los 10 problemas sistémicos resueltos y las 8 decisiones de producto tomadas.
 
-- **Concepto de campaña** (`D-c`): no existe en el modelo. HU-31 delega los rangos al cliente y el dashboard usa año calendario, así que **ya divergen**. Bloquea HU-09, HU-31 y HU-32, y es el pendiente que más cuesta postergar: cada indicador nuevo elige su propio corte.
-- **Entidad `recomendaciones`** con aplicar/descartar (HU-30): falta definir qué reglas agronómicas se aplican, que ninguna HU especifica todavía.
-- **Maestro de transportes** (`D-b`) y **push FCM** (`D-e`): hay que implementarlos o descopear el criterio. Mientras tanto HU-24 y HU-35 no pueden cerrarse ni descartarse.
-- **Endurecimiento de base para producción**: GRANT/REVOKE que garanticen el append-only del log de auditoría (cierra HU-07) y dejar de conectar con el superusuario `postgres`.
-- **Trabajo suelto sin bloqueos**: lista blanca de roles asignables (HU-06), aviso al guardar un umbral ya superado (HU-21), promedios IoT (HU-31), estado de cosecha global (HU-32) y notificación por error de sincronización (HU-35).
+Queda abierto:
 
-El detalle por HU está en [`docs/specs/README.md`](docs/specs/README.md), y el orden sugerido en la sección 7 de [`docs/specs/PLAN-MEJORAS.md`](docs/specs/PLAN-MEJORAS.md).
+- **Verificar el push real de HU-35.** La integración con FCM está implementada ([D-015](docs/DECISIONS.md)) y probada con `PUSH_TRANSPORT=log`, pero **el envío contra Firebase no está verificado**: hace falta el service account de un proyecto real. Es lo único que impide marcar HU-35 como completa.
+- **Endurecimiento de despliegue**: dejar de conectar con el superusuario `postgres`. El log de auditoría ya es **inmutable por trigger** —que aplica también a superusuarios—, así que esto es defensa en profundidad y no un agujero abierto.
+- **6 vulnerabilidades moderadas** en dependencias transitivas de `firebase-admin` que `npm audit fix` no resuelve sin `--force`. Asumidas a sabiendas; revisar cuando el SDK publique la corrección.
+
+El detalle por HU está en [`docs/specs/README.md`](docs/specs/README.md), y el cierre del plan en la sección 7 de [`docs/specs/PLAN-MEJORAS.md`](docs/specs/PLAN-MEJORAS.md).
 
 La infraestructura de **Redis + BullMQ** que describe [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) **no es necesaria hoy**: el trabajo diferido se resuelve con `EventEmitter2` y `@nestjs/schedule` ([D-g](docs/DECISIONS.md)). Vuelve a hacer falta al escalar a más de una instancia, porque los cron son in-process.
 
@@ -151,6 +152,9 @@ POST /api/auth/cambiar-password
 - **Catálogos por empresa**: `catalogo_item`, `insumos` y `tipos_labor` llevan `empresa_id`; las tablas de costos heredan el tenant por la FK ([D-011](docs/DECISIONS.md)).
 - **Ingreso**: la única fuente de ingreso es `liquidaciones_bodega`, que cuelga del remito aprobado ([D-010](docs/DECISIONS.md)). El margen bruto se devuelve en `null` —no en 0— mientras no haya liquidaciones cargadas.
 - **Estado del cuartel**: el ciclo de vendimia (`pendiente`/`en_cosecha`/`cosechado`) es un enum que solo escribe el sistema al ocurrir hechos del circuito, y es independiente del catálogo de estado de plantación ([D-013](docs/DECISIONS.md)). No es una FK al catálogo a propósito: si se pudiera renombrar el valor desde el ABM, se romperían las transiciones.
+- **Campañas**: el eje temporal de los indicadores es la entidad `campanias`, con rango explícito y **sin solapamientos garantizados por un `EXCLUDE` en la base** ([D-014](docs/DECISIONS.md)) — sin eso, «la campaña actual» sería ambigua. Sin campaña cargada cada consumidor decide: la baja de cuartel es conservadora y el dashboard cae al año calendario, avisándolo.
+- **Log de auditoría inmutable**: un trigger rechaza `UPDATE`, `DELETE` y `TRUNCATE` sobre `log_auditoria` (HU-07). Se eligió un trigger sobre `GRANT`/`REVOKE` porque los privilegios no aplican a un superusuario y la app todavía se conecta como `postgres`; el `REVOKE` queda como defensa en profundidad.
+- **Push**: `PushService` manda a FCM con el mismo patrón que el correo (`PUSH_TRANSPORT=log|fcm`) y **nunca tumba la operación que lo disparó** ([D-015](docs/DECISIONS.md)): la notificación in-app se persiste primero y es la fuente de verdad.
 
 ## Documentación
 
