@@ -148,6 +148,8 @@ DB_APP_PASSWORD='<otra-contraseña-larga-generada>' npm run db:rol-app
 npm run db:verificar-privilegios
 
 # 4. Datos iniciales (roles de usuario, catálogos).
+#    El seed levanta un contexto Nest completo: AuthModule exige JWT_SECRET
+#    y JWT_REFRESH_SECRET aunque el seed solo inserte filas.
 npm run seed
 
 cp .env.desarrollo .env                   # volver a desarrollo
@@ -542,6 +544,14 @@ gcloud artifacts repositories add-iam-policy-binding terravid \
   --role="roles/artifactregistry.reader"
 ```
 
+El rol de IAM **no alcanza por sí solo**: Docker en la VM necesita además el helper de credenciales, o el `pull` falla con «Unauthenticated request» aunque el permiso esté bien puesto —y el mensaje sugiere un problema de permisos, no de configuración local—. Una vez, **dentro de la VM**:
+
+```bash
+gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+```
+
+Se configura para el usuario que corre `docker`. Con `sudo docker` el helper que se lee es el de `root`, así que habría que configurarlo ahí también; más simple es no usar `sudo` —el `usermod -aG docker` de [A.5](#a5-preparar-el-sistema) ya lo permite— y reconectarse por SSH para que el grupo tome efecto.
+
 Cada vez que se publica una versión, desde la raíz del repositorio:
 
 ```bash
@@ -563,6 +573,15 @@ Etiquetar con el SHA del commit y no con `latest` es lo que hace que se sepa qu�
 Primero la base sola, sin la API: el esquema todavía no existe.
 
 En la VM:
+
+Si la rama con `deploy/` todavía no está en `main`, el `git clone` no la trae; en ese caso los archivos van con `gcloud compute scp --recurse deploy/ terravid:/opt/terravid/`.
+
+> **Copiando desde Windows, normalizá los saltos de línea.** Los archivos llegan con CRLF, y eso rompe el `Caddyfile` y el shebang de `backup-db.sh`. El `.gitattributes` del repositorio cubre a quien clona, no a quien copia:
+> ```bash
+> sed -i 's/
+$//' docker-compose.prod.yml Caddyfile backup-db.sh
+> chmod +x backup-db.sh
+> ```
 
 ```bash
 sudo mkdir -p /opt/terravid && sudo chown "$USER" /opt/terravid
@@ -595,7 +614,15 @@ npm run migration:run
 npm run migration:show                    # todas con [X]
 
 DB_APP_PASSWORD='<contraseña-larga-generada>' npm run db:rol-app
+
+# verificar-privilegios se conecta con las credenciales REALES de la API:
+# para este paso DB_USERNAME/DB_PASSWORD apuntan al rol acotado, no a postgres.
 npm run db:verificar-privilegios
+
+# El seed levanta un contexto Nest completo, así que AuthModule exige
+# JWT_SECRET y JWT_REFRESH_SECRET aunque solo vaya a insertar filas. Sin
+# ellas falla con "JwtStrategy requires a secret or key", que no sugiere
+# que lo que falta sea una variable de entorno.
 npm run seed
 
 cp .env.desarrollo .env
