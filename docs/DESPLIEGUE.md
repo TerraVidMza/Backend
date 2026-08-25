@@ -385,7 +385,7 @@ PROJECT=terravid-prod
 ZONA=us-central1-a
 REGION=us-central1
 VM=terravid
-DOMINIO=api.terravid.duckdns.org
+DOMINIO=terravid-api.duckdns.org
 
 gcloud config set project $PROJECT
 gcloud services enable compute.googleapis.com artifactregistry.googleapis.com storage.googleapis.com
@@ -468,13 +468,32 @@ gcloud compute ssh $VM --zone=$ZONA --command="free -h && docker --version && do
 
 ## A.6 Apuntar el dominio
 
-Un registro **A** del dominio a la IP reservada en [A.4](#a4-crear-la-vm-y-abrir-el-firewall). En DuckDNS es pegar la IP en el panel; en un dominio propio, un registro A en el DNS del registrador.
+Un registro **A** del dominio a la IP reservada en [A.4](#a4-crear-la-vm-y-abrir-el-firewall). En un dominio propio es un registro A en el DNS del registrador. Con [DuckDNS](https://www.duckdns.org) —gratis, y alcanza para esta fase— son cuatro pasos:
+
+1. **Entrar.** No hay registro con email: se entra con Google, GitHub, Reddit o Twitter.
+2. **Crear el dominio.** El nombre va en el campo *sub domain* → *add domain*. Hasta 5 por cuenta. Conviene registrar el nombre completo que se va a usar (`terravid-api` da `terravid-api.duckdns.org`) y no un sub-subdominio: DuckDNS resuelve `algo.tudominio.duckdns.org` al mismo IP, pero es una dependencia que no hace falta.
+3. **Copiar el token**, arriba del panel. Es una credencial —quien lo tenga puede repuntar el dominio— así que va al gestor de contraseñas del equipo, no al repositorio.
+4. **Apuntarlo a la IP.** Desde el panel, o por HTTP, que es más fácil de repetir:
+
+```bash
+IP=$(gcloud compute addresses describe ${VM}-ip --region=$REGION --format='value(address)')
+
+# `domains=` va SIN el .duckdns.org. Responde OK; si dice KO, el token o el
+# nombre están mal.
+curl "https://www.duckdns.org/update?domains=terravid-api&token=<TOKEN>&ip=${IP}"
+```
+
+> **No hace falta el cron actualizador** que instalan casi todas las guías de DuckDNS. Ese paso existe porque el caso típico del servicio es una conexión doméstica con IP dinámica; acá la IP está reservada en [A.4](#a4-crear-la-vm-y-abrir-el-firewall) y no se mueve. Solo se repite el `curl` si se borra y recrea la VM.
 
 **Verificá que resuelve antes de seguir.** Si Caddy arranca con el DNS sin propagar, el desafío HTTP-01 falla, y Let's Encrypt limita a 5 certificados por dominio por semana:
 
 ```bash
 dig +short $DOMINIO      # tiene que devolver la IP de la VM
 ```
+
+Conviene hacer este paso justo después de [A.4](#a4-crear-la-vm-y-abrir-el-firewall), y usar [A.5](#a5-preparar-el-sistema) como tiempo de propagación.
+
+Dos cosas sobre DuckDNS a tener presentes. Es un servicio gratuito mantenido por voluntarios: si se cae, el dominio no resuelve y la API queda inalcanzable —el certificado no se rompe, porque dura 90 días, pero el acceso sí—. Y a favor: `duckdns.org` está en la Public Suffix List, así que cada `X.duckdns.org` cuenta como dominio independiente para los límites de Let's Encrypt, y no se comparte el cupo con el resto de los usuarios del servicio. Para la defensa conviene igual un dominio propio.
 
 ## A.7 Publicar la imagen en Artifact Registry
 
