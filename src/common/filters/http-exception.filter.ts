@@ -16,6 +16,13 @@ const PG_FOREIGN_KEY_VIOLATION = '23503';
 const PG_NOT_NULL_VIOLATION = '23502';
 const PG_EXCLUSION_VIOLATION = '23P01';
 const PG_RESTRICT_VIOLATION = '23001';
+/**
+ * Dato con sintaxis inválida para el tipo de la columna: una fecha que no es
+ * fecha, un número que no es número. Es siempre entrada mal formada del cliente,
+ * nunca una falla del servidor.
+ */
+const PG_INVALID_DATETIME_FORMAT = '22007';
+const PG_INVALID_TEXT_REPRESENTATION = '22P02';
 
 /**
  * Mensajes por constraint. La alternativa —exponer el texto de Postgres— filtra
@@ -160,6 +167,23 @@ export class HttpExceptionFilter implements ExceptionFilter {
         return {
           status: HttpStatus.FORBIDDEN,
           message: 'La operación está prohibida sobre este registro.',
+          constraint,
+        };
+      /**
+       * Red de seguridad para los parámetros mal formados que se escapen de un
+       * DTO. Un `?desde=basura` llegaba al SQL y devolvía **500**, que le dice
+       * al cliente "el servidor se cayó" cuando el problema es lo que mandó.
+       *
+       * Lo correcto sigue siendo validar en el DTO —así el mensaje dice qué
+       * campo y qué formato se espera—; esto sólo garantiza que un descuido
+       * cueste un 400 y no una caída, en un endpoint nuevo o en uno viejo que
+       * nadie revisó.
+       */
+      case PG_INVALID_DATETIME_FORMAT:
+      case PG_INVALID_TEXT_REPRESENTATION:
+        return {
+          status: HttpStatus.BAD_REQUEST,
+          message: 'Alguno de los datos enviados tiene un formato inválido.',
           constraint,
         };
       default:

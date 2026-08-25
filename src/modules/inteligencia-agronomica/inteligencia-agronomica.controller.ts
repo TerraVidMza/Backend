@@ -10,6 +10,7 @@ import {
 } from '@nestjs/common';
 import { InteligenciaAgronomicaService } from './inteligencia-agronomica.service';
 import { CompararCampaniasDto } from './dto/comparar-campanias.dto';
+import { CorrelacionDto } from './dto/correlacion.dto';
 import { ResolverRecomendacionDto } from './dto/resolver-recomendacion.dto';
 import { EstadoRecomendacion } from './entities/recomendacion.entity';
 import { Auditar } from '../../common/audit/auditar.decorator';
@@ -35,19 +36,17 @@ export class InteligenciaAgronomicaController {
   async correlacion(
     @CurrentUser() user: AuthenticatedUser,
     @Param('cuartelId', ParseUUIDPipe) cuartelId: string,
-    @Query('sensorId', ParseUUIDPipe) sensorId: string,
-    @Query('desde') desde: string,
-    @Query('hasta') hasta: string,
+    @Query() query: CorrelacionDto,
   ) {
     // Se verifican los dos: si no, se podría cruzar el sensor de una empresa
     // con los costos de un cuartel de otra.
     await this.alcance.verificarCuartel(cuartelId, user.empresaId);
-    await this.alcance.verificarSensor(sensorId, user.empresaId);
+    await this.alcance.verificarSensor(query.sensorId, user.empresaId);
     return this.inteligenciaAgronomicaService.correlacionSensorCostos(
       cuartelId,
-      sensorId,
-      desde,
-      hasta,
+      query.sensorId,
+      query.desde,
+      query.hasta,
       user.empresaId,
     );
   }

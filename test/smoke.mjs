@@ -559,10 +559,15 @@ seccion('F2-4 · el flujo de recuperación de contraseña envía correo');
 const olvido = await req('POST', '/auth/forgot-password', {
   email: 'propietario@terravid.demo',
 });
+// 429 es un resultado válido por el mismo motivo que en el check de abajo: el
+// límite de HU-03 es de 3 solicitudes por hora y por IP, así que la segunda
+// corrida del script dentro de la hora lo alcanza. Lo que se verifica igual en
+// los dos casos es lo que importa: que la respuesta no filtre el email.
 check(
   'forgot-password responde sin revelar si la cuenta existe',
-  olvido.status === 200 && !JSON.stringify(olvido.body).includes('@'),
-  olvido.body,
+  (olvido.status === 200 || olvido.status === 429) &&
+    !JSON.stringify(olvido.body).includes('@'),
+  { status: olvido.status, body: olvido.body },
 );
 const olvidoInexistente = await req('POST', '/auth/forgot-password', {
   email: 'no-existe@terravid.demo',
@@ -1714,6 +1719,148 @@ check(
   (await req('DELETE', '/log-auditoria')).status === 404 &&
     (await req('PATCH', '/log-auditoria')).status === 404,
   null,
+);
+
+seccion('Parámetros de query: entrada inválida es 400, no 500 ni lista vacía');
+
+/**
+ * Estos dos devolvían **500**: el valor sin validar llegaba hasta la base.
+ * Se encontraron llamando la API, no leyendo el código, y por eso el smoke es
+ * el lugar donde tienen que quedar cubiertos.
+ */
+const sinTipo = await req('GET', '/catalogos');
+check(
+  'GET /catalogos sin tipo da 400 y no 500',
+  sinTipo.status === 400,
+  sinTipo,
+);
+
+const fechaBasura = await req(
+  'GET',
+  `/inteligencia-agronomica/correlacion/${cuartelId}?sensorId=${sensorId}&desde=basura&hasta=basura`,
+);
+check(
+  'una fecha mal formada da 400 y no 500',
+  fechaBasura.status === 400,
+  fechaBasura,
+);
+
+/**
+ * Estos devolvían **200 con una lista vacía**, que es peor: el cliente no puede
+ * distinguir un parámetro mal escrito de "no hay datos".
+ */
+const tipoInexistente = await req('GET', '/catalogos?tipo=basura');
+check(
+  'un tipo de catálogo inexistente da 400 y no una lista vacía',
+  tipoInexistente.status === 400,
+  tipoInexistente,
+);
+
+const moduloConTypo = await req('GET', '/ayuda/articulos?modulo=vendmia');
+check(
+  'un módulo de ayuda mal escrito da 400 y no una lista vacía',
+  moduloConTypo.status === 400,
+  moduloConTypo,
+);
+
+const sinFechas = await req(
+  'GET',
+  `/inteligencia-agronomica/correlacion/${cuartelId}?sensorId=${sensorId}`,
+);
+check(
+  'la correlación sin período da 400 y no "sin datos suficientes"',
+  sinFechas.status === 400,
+  sinFechas,
+);
+
+/**
+ * La regresión de fondo: `Boolean('false')` es `true`, y la conversión
+ * implícita del `ValidationPipe` corría antes del `@Transform` que existía para
+ * evitarlo. `?activo=false` devolvía los usuarios **activos**.
+ */
+const paraDesactivar = await req('POST', '/usuarios', {
+  nombre: 'Usuario Filtro Booleano',
+  email: `filtro.${RUN}@terravid.demo`,
+  password: 'Terravid123',
+  rolId: rolCapataz?.id,
+});
+await req('PATCH', `/usuarios/${paraDesactivar.body?.id}/desactivar`);
+
+const inactivos = await req('GET', '/usuarios?activo=false&pageSize=100');
+check(
+  '?activo=false trae los inactivos y no los activos',
+  inactivos.status === 200 &&
+    (inactivos.body?.data ?? []).length > 0 &&
+    (inactivos.body?.data ?? []).every((u) => u.activo === false),
+  inactivos.body?.data?.map((u) => ({ email: u.email, activo: u.activo })),
+);
+
+const activos = await req('GET', '/usuarios?activo=true&pageSize=100');
+check(
+  '?activo=true trae solo los activos',
+  activos.status === 200 &&
+    (activos.body?.data ?? []).length > 0 &&
+    (activos.body?.data ?? []).every((u) => u.activo === true),
+  null,
+);
+
+const boolBasura = await req('GET', '/usuarios?activo=basura');
+check(
+  'un booleano mal formado da 400 en vez de interpretarse como true',
+  boolBasura.status === 400,
+  boolBasura,
+);
+
+/**
+ * La tercera instancia del mismo problema, y la de efecto más directo sobre el
+ * buscador de HU-11: `Number('')` es `0`, así que el parámetro vacío --lo que
+ * manda un formulario con el campo sin completar-- filtraba por el año 0 y
+ * devolvía la lista vacía sin ningún error.
+ */
+const sinFiltroDeAnio = await req('GET', '/cuarteles/buscar');
+const anioVacio = await req('GET', '/cuarteles/buscar?anioImplantacion=');
+check(
+  'un año vacío no filtra, en vez de filtrar por el año 0',
+  anioVacio.status === 200 &&
+    anioVacio.body?.total === sinFiltroDeAnio.body?.total &&
+    anioVacio.body?.total > 0,
+  { vacio: anioVacio.body?.total, sinFiltro: sinFiltroDeAnio.body?.total },
+);
+
+const anioBasura = await req('GET', '/cuarteles/buscar?anioImplantacion=2020abc');
+check(
+  'un año con basura pegada da 400 en vez de tomar los primeros dígitos',
+  anioBasura.status === 400,
+  anioBasura,
+);
+
+// Y el filtro tiene que seguir filtrando: el primer cuartel se creó con año.
+const anioReal = cuartel.body?.anioImplantacion;
+const porAnio = await req(
+  'GET',
+  `/cuarteles/buscar?anioImplantacion=${anioReal}&pageSize=100`,
+);
+check(
+  'filtrar por un año real sigue devolviendo solo ese año',
+  porAnio.status === 200 &&
+    (porAnio.body?.data ?? []).length > 0 &&
+    (porAnio.body?.data ?? []).every((c) => c.anioImplantacion === anioReal),
+  { anio: anioReal, total: porAnio.body?.total },
+);
+
+// Y lo válido tiene que seguir pasando: un 400 de más rompe los selectores.
+const catalogoOk = await req('GET', '/catalogos?tipo=variedad');
+check(
+  'el caso válido sigue devolviendo el catálogo',
+  catalogoOk.status === 200 && Array.isArray(catalogoOk.body),
+  catalogoOk.status,
+);
+
+const insumosConInactivos = await req('GET', '/insumos?incluirInactivos=true');
+check(
+  'incluirInactivos=true sigue aceptándose',
+  insumosConInactivos.status === 200,
+  insumosConInactivos.status,
 );
 
 // ------------------------------------------------------------------ Resumen
