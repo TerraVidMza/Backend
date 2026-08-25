@@ -1,6 +1,5 @@
 import { Transform } from 'class-transformer';
 import {
-  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -10,6 +9,7 @@ import {
   Length,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+import { EsBooleanoDeQuery } from '../../../common/validators/booleano-de-query.validator';
 import { EstadoCuartel } from '../entities/estado-cuartel.enum';
 
 /** Campos por los que HU-11 permite ordenar. */
@@ -52,13 +52,7 @@ export class ListarCuartelesDto extends PaginationQueryDto {
   @IsInt()
   anioImplantacion?: number;
 
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value as unknown;
-  })
-  @IsBoolean()
+  @EsBooleanoDeQuery()
   activo?: boolean;
 
   @IsOptional()

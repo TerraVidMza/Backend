@@ -13,7 +13,7 @@ import {
 import { CatalogoItemService } from './catalogo-item.service';
 import { CreateCatalogoItemDto } from './dto/create-catalogo-item.dto';
 import { UpdateCatalogoItemDto } from './dto/update-catalogo-item.dto';
-import { CatalogoTipo } from './entities/catalogo-item.entity';
+import { ListarCatalogoDto } from './dto/listar-catalogo.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -33,13 +33,12 @@ export class CatalogoItemController {
   @Get()
   findByTipo(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('tipo') tipo: CatalogoTipo,
-    @Query('incluirInactivos') incluirInactivos?: string,
+    @Query() query: ListarCatalogoDto,
   ) {
     return this.catalogoItemService.findByTipo(
-      tipo,
+      query.tipo,
       user.empresaId,
-      incluirInactivos !== 'true',
+      !query.incluirInactivos,
     );
   }
 

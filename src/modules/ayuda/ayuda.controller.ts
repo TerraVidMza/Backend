@@ -14,7 +14,7 @@ import { TicketSoporteService } from './ticket-soporte.service';
 import { CreateArticuloDto } from './dto/create-articulo.dto';
 import { UpdateArticuloDto } from './dto/update-articulo.dto';
 import { CrearTicketDto } from './dto/crear-ticket.dto';
-import { ModuloAyuda, TipoArticulo } from './entities/articulo-ayuda.entity';
+import { ListarArticulosDto } from './dto/listar-articulos.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -35,11 +35,8 @@ export class AyudaController {
   // El manual y las FAQ son para todos los roles (HU-36).
   @AnyRole()
   @Get('articulos')
-  findArticulos(
-    @Query('tipo') tipo?: TipoArticulo,
-    @Query('modulo') modulo?: ModuloAyuda,
-  ) {
-    return this.articulosAyudaService.findAll(tipo, modulo);
+  findArticulos(@Query() query: ListarArticulosDto) {
+    return this.articulosAyudaService.findAll(query.tipo, query.modulo);
   }
 
   @Post('articulos')

@@ -1,12 +1,6 @@
-import { Transform } from 'class-transformer';
-import {
-  IsBoolean,
-  IsOptional,
-  IsString,
-  IsUUID,
-  Length,
-} from 'class-validator';
+import { IsOptional, IsString, IsUUID, Length } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto';
+import { EsBooleanoDeQuery } from '../../../common/validators/booleano-de-query.validator';
 
 /**
  * Filtros del listado de usuarios (HU-04). La empresa no se acepta como
@@ -25,12 +19,6 @@ export class ListarUsuariosDto extends PaginationQueryDto {
 
   // Los query params son strings: 'false' es truthy, así que sin este
   // Transform `?activo=false` filtraría por activos.
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value as unknown;
-  })
-  @IsBoolean()
+  @EsBooleanoDeQuery()
   activo?: boolean;
 }

@@ -12,6 +12,7 @@ import {
 import { FincasService } from './fincas.service';
 import { CreateFincaDto } from './dto/create-finca.dto';
 import { UpdateFincaDto } from './dto/update-finca.dto';
+import { ListarFincasDto } from './dto/listar-fincas.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
@@ -31,9 +32,9 @@ export class FincasController {
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
   findAll(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('search') search?: string,
+    @Query() query: ListarFincasDto,
   ) {
-    return this.fincasService.findAll(user.empresaId, search);
+    return this.fincasService.findAll(user.empresaId, query.search);
   }
 
   @Get(':id')

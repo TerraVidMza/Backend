@@ -12,6 +12,7 @@ import {
 import { InsumosService } from './insumos.service';
 import { CreateInsumoDto } from './dto/create-insumo.dto';
 import { UpdateInsumoDto } from './dto/update-insumo.dto';
+import { ListarConInactivosDto } from '../../common/dto/listar-con-inactivos.dto';
 import { SetCostoInsumoDto } from './dto/set-costo-insumo.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -32,12 +33,9 @@ export class InsumosController {
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
   findAll(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('incluirInactivos') incluirInactivos?: string,
+    @Query() query: ListarConInactivosDto,
   ) {
-    return this.insumosService.findAll(
-      user.empresaId,
-      incluirInactivos !== 'true',
-    );
+    return this.insumosService.findAll(user.empresaId, !query.incluirInactivos);
   }
 
   @Get(':id')
