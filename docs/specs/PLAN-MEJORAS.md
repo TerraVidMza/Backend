@@ -4,9 +4,9 @@ Resultado de auditar el código real de los 24 módulos del backend contra los c
 
 **Veredicto original (2026-08-24): ninguna de las 36 HU cumplía el 100% de sus criterios de aceptación.** 12 sustancialmente incompletas, 24 parciales. Los endpoints existían y respondían — lo que faltaba eran reglas de negocio, validaciones, aislamiento entre empresas y auditoría.
 
-**Estado hoy (2026-08-26): 35 completas, 1 parcial.** Cerradas las Fases 0 (10/10), 1 (14/14) y 2 (cimientos, criterios por bloque y tests), y resueltas **las ocho decisiones de producto** de la sección 6. Verificado con 88 tests unitarios y un smoke test de 172 casos end-to-end contra PostgreSQL real, desde una base recreada desde cero y sin deriva entre las entidades y el esquema.
+**Estado hoy (2026-08-25): las 36 HU completas.** Cerradas las Fases 0 (10/10), 1 (14/14) y 2 (cimientos, criterios por bloque y tests), y resueltas **las ocho decisiones de producto** de la sección 6. Verificado con 121 tests unitarios y un smoke test de 172 casos end-to-end contra PostgreSQL real, desde una base recreada desde cero y sin deriva entre las entidades y el esquema.
 
-Lo único abierto es **HU-35**: el push FCM está implementado, pero el envío real contra Firebase no se pudo verificar sin un service account ([D-015](../DECISIONS.md)). Todo lo demás del criterio —los tres productores de evento, la tabla de device tokens, el alta idempotente— sí está probado.
+HU-35 se cerró al cargar el service account del proyecto: `npm run push:diagnostico` confirma que **Firebase acepta las credenciales** ([D-015](../DECISIONS.md)). Ver la notificación en un teléfono depende de que Mobile registre su token, que es trabajo del cliente y no de esta HU.
 
 > **Importante:** la mayoría de los problemas **no eran de las HU individuales sino transversales**. Arreglar los 10 problemas sistémicos de la sección 2 cerró criterios de aceptación en casi las 36 HU a la vez. Ir HU por HU habría sido mucho más caro y habría dejado los agujeros de seguridad abiertos más tiempo.
 >
@@ -183,7 +183,7 @@ Todos son el mismo error de fondo — usar UTC donde el dominio es local— y **
 
 Corregido centralizando en `common/fechas/rango-fechas.ts` (`fechaLocal`, `hoyLocal`), y las comparaciones de vigencia pasaron a ser **texto contra texto** sobre columnas `date` —que no tienen hora ni huso— en vez de round-trips por `Date`. Con tests de regresión.
 
-**F2-7 — Tests (S10).** ✅ **Cerrado.** Hay **88 tests unitarios** (guards, DTOs, alcance multi-empresa, umbrales, paginación, rangos y fechas locales, bloqueo por intentos, lote parcialmente fallido y Pearson) y un **smoke test end-to-end de 172 casos** contra la API y PostgreSQL reales.
+**F2-7 — Tests (S10).** ✅ **Cerrado.** Hay **121 tests unitarios** (guards, DTOs, alcance multi-empresa, umbrales, paginación, rangos y fechas locales, bloqueo por intentos, lote parcialmente fallido, Pearson y el diagnóstico de push) y un **smoke test end-to-end de 172 casos** contra la API y PostgreSQL reales.
 
 Cubre: la escalada vía `PATCH /me`, la invalidación de token en logout, la política de contraseñas, el doble envío del mismo `local_uuid` con su 200, el límite de lote, el costo vigente a fecha vs. el costo actual, la máquina de estados del cuartel, el circuito completo de remitos, el rango físico y la ingesta por código, las bajas con dependencias y el costeo agregado.
 
@@ -231,10 +231,12 @@ El orden que se siguió, ya ejecutado:
 
 El plan de mejoras está cerrado. Lo que queda **no es deuda del backend**:
 
-1. **Verificar el push real** (HU-35): con el service account de un proyecto de Firebase y `PUSH_TRANSPORT=fcm`. Es lo único que impide marcar HU-35 como completa.
+1. ~~Verificar el push real.~~ ✅ **Hecho** ([D-015](../DECISIONS.md)). Con el service account cargado, `npm run push:diagnostico` confirma que Firebase acepta las credenciales. Queda probar la última milla contra un teléfono, que necesita Mobile: `npm run push:diagnostico -- <token>`.
 2. ~~Endurecer el despliegue.~~ ✅ **Hecho** ([D-017](../DECISIONS.md)). Al desplegar hay que correr `npm run db:rol-app` una vez por entorno y apuntar `DB_USERNAME` al rol nuevo; `npm run db:verificar-privilegios` lo comprueba y sale con código 1 si algo falta, así que conviene dejarlo como paso del pipeline.
 3. **Revisar las 6 vulnerabilidades moderadas** que arrastra `firebase-admin` en dependencias transitivas, cuando el SDK publique la corrección ([D-015](../DECISIONS.md)).
 4. **Los clientes:** Web, Mobile e IoTSensor, cada uno en su repo. Ahí falta el 100%.
+
+> **Los dos comandos de verificación son parte del despliegue, no herramientas de una vez.** `db:verificar-privilegios` y `push:diagnostico` salen con código 1 cuando la configuración no sirve, así que encadenarlos al pipeline convierte un error de credenciales en un despliegue fallido en vez de en una funcionalidad que calla y no anda.
 
 > Los umbrales de las reglas agronómicas (`reglas-agronomicas.ts`) están calibrados para vid en Mendoza bajo riego. Si el sistema se despliega en otra región hay que revisarlos — están juntos y comentados en un solo archivo para que esa revisión sea barata.
 

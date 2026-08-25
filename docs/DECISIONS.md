@@ -238,9 +238,19 @@ Detalles que vale la pena tener presentes:
 
 **Costo asumido:** `firebase-admin` arrastra `@google-cloud/storage` y `gaxios`, que hoy suman **6 vulnerabilidades moderadas** en dependencias transitivas que `npm audit fix` no resuelve sin `--force`. Se acepta a sabiendas por ser una dependencia de servidor sin exposición directa, y queda anotado para revisar cuando el SDK publique la corrección.
 
-**Verificación:** probada de punta a punta en modo `log`. **El envío real contra FCM no está verificado**: hace falta el service account de un proyecto de Firebase.
+**Verificación (2026-08-25):** ✅ **verificada contra Firebase real.** `npm run push:diagnostico` confirma que el proyecto acepta el service account.
 
-**Estado:** ✅ Vigente e implementado, pendiente de credenciales para verificar el envío real.
+El diagnóstico **intenta el envío en vez de leer la configuración**, con el mismo criterio que `db:verificar-privilegios`. Sin un token de dispositivo manda contra uno inválido a propósito, porque lo que se quiere distinguir es *credenciales rechazadas* de *token rechazado*: **si Firebase llegó a mirar el token, ya autenticó la petición**. Con credenciales malas el error aparece antes. Esa distinción es todo lo que se puede saber mientras no exista la app móvil, y es exactamente lo que hacía falta saber.
+
+La resolución de credenciales vive en `credenciales-firebase.ts` y la comparten `PushService` y el diagnóstico. Si cada uno leyera las variables por su cuenta, el diagnóstico podría dar verde sobre una configuración que la aplicación no acepta — la peor clase de herramienta de verificación.
+
+El camino que no se puede ejercitar en vivo —credenciales buenas y token rechazado— está cubierto por tests sobre la interpretación del error, con los códigos que devuelve Firebase en cada caso.
+
+**Un bug que solo apareció al enviar de verdad.** La desactivación de tokens muertos miraba `registration-token-not-registered` e `invalid-registration-token`, pero para un token mal formado **FCM devuelve `messaging/invalid-argument`**. Esos tokens nunca se apagaban: se acumulaban en la base y cada notificación gastaba una llamada por dispositivo fantasma. En modo `log` no hay respuesta que interpretar, así que era invisible hasta la primera verificación real.
+
+El arreglo no podía ser agregar el código a la lista: `invalid-argument` **también** aparece cuando el payload está mal armado, y desactivar ahí apagaría todos los dispositivos válidos de la base por un bug de una línea. El criterio quedó en `token-rechazado.ts`, que exige que el mensaje del error apunte al token, con tests para los dos sentidos del error.
+
+**Estado:** ✅ Vigente, implementado y verificado contra Firebase real. La entrega a un teléfono depende de que Mobile registre su token.
 
 ---
 
