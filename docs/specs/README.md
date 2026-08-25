@@ -13,7 +13,7 @@ Usar [`TEMPLATE.md`](TEMPLATE.md) como base para cualquier HU nueva o para reesc
 >
 > La única HU abierta es **HU-35**: el push FCM está implementado, pero **el envío real contra Firebase no se pudo verificar** porque hace falta un service account ([D-015](../DECISIONS.md)). El resto del criterio —los tres productores de evento, la tabla de device tokens, el alta idempotente— sí está probado.
 >
-> Lo demás que queda no es deuda del backend: verificar ese push, dejar de conectar la base con el superusuario `postgres` (defensa en profundidad — el log ya es inmutable por trigger) y construir los clientes.
+> Lo demás que queda no es deuda del backend: verificar ese push y construir los clientes. El endurecimiento de base ya está hecho — la aplicación corre con un rol sin privilegios de DDL ([D-017](../DECISIONS.md)), con verificación ejecutable.
 
 **Figma:** [TerraVid — Wireframes / Design System v1](https://www.figma.com/design/0ehP6Sf8WynahpnKUGIVpd/TerraVid---Wireframes---Design-System-v1). Las referencias de pantalla (`PAN-XX`) usan la numeración de la **matriz de trazabilidad** (PAN-01 a PAN-19), confirmada como la que coincide con los nombres reales de los frames — no la numeración más granular que aparece dentro del documento de Historias de Usuario (que llega hasta PAN-39 y no coincide con Figma). Ver [D-004](../DECISIONS.md).
 
