@@ -1,0 +1,8 @@
+# Estos archivos se ejecutan dentro de contenedores Linux o en la VM. Con
+# terminaciones CRLF —lo que hace Git en Windows por defecto— el shebang de un
+# script falla con "bad interpreter: /usr/bin/env bash^M", y el mensaje no da
+# ninguna pista de que el problema son los saltos de línea.
+*.sh            text eol=lf
+Dockerfile      text eol=lf
+deploy/Caddyfile text eol=lf
+deploy/*.yml    text eol=lf
