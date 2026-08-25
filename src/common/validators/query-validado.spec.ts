@@ -4,6 +4,7 @@ import { ListarCatalogoDto } from '../../modules/catalogo-item/dto/listar-catalo
 import { CorrelacionDto } from '../../modules/inteligencia-agronomica/dto/correlacion.dto';
 import { ListarArticulosDto } from '../../modules/ayuda/dto/listar-articulos.dto';
 import { ListarConInactivosDto } from '../dto/listar-con-inactivos.dto';
+import { ListarCuartelesDto } from '../../modules/cuarteles/dto/listar-cuarteles.dto';
 import { CatalogoTipo } from '../../modules/catalogo-item/entities/catalogo-item.entity';
 
 /**
@@ -169,4 +170,47 @@ describe('ListarConInactivosDto', () => {
       ).toContain('isBoolean');
     },
   );
+});
+
+describe('ListarCuartelesDto · anioImplantacion', () => {
+  /**
+   * La tercera instancia del mismo problema de orden, y la de consecuencia más
+   * directa: `?anioImplantacion=` es lo que manda el buscador de HU-11 cuando
+   * el campo queda sin completar.
+   *
+   * `Number('')` es `0`, la conversión implícita corría antes del `@Transform`
+   * que existía para tratar el vacío como ausente, y `@IsInt()` aceptaba el `0`
+   * porque es un entero válido. Resultado: la búsqueda filtraba por el año 0 y
+   * devolvía la lista vacía sin ningún error.
+   */
+  it('trata el parámetro vacío como ausente y no como el año 0', () => {
+    const dto = plainToInstance(
+      ListarCuartelesDto,
+      { anioImplantacion: '' },
+      { enableImplicitConversion: true },
+    );
+    expect(dto.anioImplantacion).toBeUndefined();
+  });
+
+  it('convierte un año válido', () => {
+    const dto = plainToInstance(
+      ListarCuartelesDto,
+      { anioImplantacion: '2020' },
+      { enableImplicitConversion: true },
+    );
+    expect(dto.anioImplantacion).toBe(2020);
+  });
+
+  it('rechaza un año que no es número', async () => {
+    expect(
+      await errores(ListarCuartelesDto, { anioImplantacion: 'basura' }),
+    ).toContain('isInt');
+  });
+
+  // `parseInt` habría devuelto 2020 y se habría comido el resto en silencio.
+  it('rechaza un año con basura pegada', async () => {
+    expect(
+      await errores(ListarCuartelesDto, { anioImplantacion: '2020abc' }),
+    ).toContain('isInt');
+  });
 });

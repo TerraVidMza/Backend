@@ -1811,6 +1811,43 @@ check(
   boolBasura,
 );
 
+/**
+ * La tercera instancia del mismo problema, y la de efecto más directo sobre el
+ * buscador de HU-11: `Number('')` es `0`, así que el parámetro vacío --lo que
+ * manda un formulario con el campo sin completar-- filtraba por el año 0 y
+ * devolvía la lista vacía sin ningún error.
+ */
+const sinFiltroDeAnio = await req('GET', '/cuarteles/buscar');
+const anioVacio = await req('GET', '/cuarteles/buscar?anioImplantacion=');
+check(
+  'un año vacío no filtra, en vez de filtrar por el año 0',
+  anioVacio.status === 200 &&
+    anioVacio.body?.total === sinFiltroDeAnio.body?.total &&
+    anioVacio.body?.total > 0,
+  { vacio: anioVacio.body?.total, sinFiltro: sinFiltroDeAnio.body?.total },
+);
+
+const anioBasura = await req('GET', '/cuarteles/buscar?anioImplantacion=2020abc');
+check(
+  'un año con basura pegada da 400 en vez de tomar los primeros dígitos',
+  anioBasura.status === 400,
+  anioBasura,
+);
+
+// Y el filtro tiene que seguir filtrando: el primer cuartel se creó con año.
+const anioReal = cuartel.body?.anioImplantacion;
+const porAnio = await req(
+  'GET',
+  `/cuarteles/buscar?anioImplantacion=${anioReal}&pageSize=100`,
+);
+check(
+  'filtrar por un año real sigue devolviendo solo ese año',
+  porAnio.status === 200 &&
+    (porAnio.body?.data ?? []).length > 0 &&
+    (porAnio.body?.data ?? []).every((c) => c.anioImplantacion === anioReal),
+  { anio: anioReal, total: porAnio.body?.total },
+);
+
 // Y lo válido tiene que seguir pasando: un 400 de más rompe los selectores.
 const catalogoOk = await req('GET', '/catalogos?tipo=variedad');
 check(
