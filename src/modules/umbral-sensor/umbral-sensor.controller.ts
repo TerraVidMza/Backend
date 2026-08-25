@@ -45,6 +45,14 @@ export class UmbralSensorController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     await this.alcance.verificarSensor(sensorId, user.empresaId);
-    return this.umbralSensorService.setUmbral(sensorId, dto, user.id);
+    const { umbral, aviso } = await this.umbralSensorService.setUmbral(
+      sensorId,
+      dto,
+      user.id,
+    );
+    // El aviso se agrega al umbral en vez de envolverlo: la respuesta anterior
+    // era el umbral plano, y anidarlo obligaría a tocar el cliente por un campo
+    // opcional. `aviso` es `null` cuando no hay nada que avisar (HU-21).
+    return { ...umbral, aviso };
   }
 }

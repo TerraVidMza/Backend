@@ -15,6 +15,10 @@ export class DashboardController {
   @AnyRole()
   @Get('indicadores')
   getIndicadores(@CurrentUser() user: AuthenticatedUser) {
-    return this.dashboardService.getIndicadoresClave(user.empresaId, user.rol);
+    return this.dashboardService.getIndicadoresClave(
+      user.empresaId,
+      user.rol,
+      user.id,
+    );
   }
 }

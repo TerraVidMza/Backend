@@ -200,3 +200,60 @@ Un cuartel en implantación puede estar `pendiente` de cosecha, y uno productivo
 **Consecuencia:** el catálogo `ESTADO_CUARTEL` **queda sin vincular a ninguna columna** hasta que alguna HU pida el ciclo de plantación. Se deja seedeado y no se borra para no perder el dato, pero hoy no lo consume nadie — está anotado en `estado-cuartel.enum.ts` para que no se confunda con el enum de vendimia.
 
 **Estado:** ✅ Vigente e implementado (F1-8).
+
+---
+
+## D-014 — La campaña es una entidad con rango explícito
+
+**Contexto:** la discrepancia `D-c`. El concepto de campaña o año agrícola no existía en el modelo y **cada indicador resolvía el corte por su cuenta**: el dashboard usaba año calendario hardcodeado, HU-31 delegaba los cuatro extremos al cliente y la baja de cuartel de HU-09 contaba todo el histórico sin acotar el período. Ya divergían entre sí.
+
+**Decisión:** entidad `campanias` con **rango explícito** (`fecha_desde`, `fecha_hasta`) por empresa, en vez de una clave `anio_agricola_inicio` en `configuracion`.
+
+Un mes de corte configurable es más simple, pero asume que todas las campañas duran lo mismo y empiezan el mismo día. La vendimia no funciona así: el productor cierra la campaña cuando termina de cosechar, y eso se corre semanas según el año y la variedad. Con un rango explícito, además, una campaña se puede **cerrar** antes de que su rango se agote, que es lo que evita que los indicadores sigan sumando al período viejo.
+
+**Las campañas de una empresa no pueden solaparse**, y eso lo garantiza una restricción `EXCLUDE USING gist` en la base, no solo el servicio: dos altas concurrentes pasan las dos validaciones antes de que cualquiera inserte. Sin esa garantía «la campaña actual» sería ambigua, que es justo el problema que la entidad viene a resolver.
+
+**Comportamiento sin campaña definida.** `getActual()` devuelve `null` y **cada consumidor decide**, porque la respuesta correcta no es la misma en todos lados:
+
+- La **baja de cuartel** cuenta todo el histórico. Negar una baja reversible es más barato que ocultar un cuartel con registros vivos.
+- El **dashboard** cae al año calendario, el comportamiento anterior, y expone `campaniaActual: null` para que la pantalla pueda avisar que el corte no está definido en vez de mostrar un número sin período.
+- La **comparación** exige campaña o par de fechas: no hay default razonable para «comparar contra qué».
+
+**Estado:** ✅ Vigente e implementado.
+
+---
+
+## D-015 — Push FCM con las credenciales fuera del repositorio
+
+**Contexto:** la discrepancia `D-e`. HU-35 pide notificación push además de la in-app, y no había ni integración, ni tabla de device tokens, ni registro en login.
+
+**Decisión:** integración real con Firebase Cloud Messaging, con el mismo patrón que ya usa `MailService`: `PUSH_TRANSPORT=log` escribe el envío en consola y `PUSH_TRANSPORT=fcm` usa el service account.
+
+Detalles que vale la pena tener presentes:
+
+- **Las credenciales salen de variables de entorno**, no de un `firebase-key.json` en el repo. Un service account commiteado es el accidente clásico, y da acceso al proyecto entero de Firebase.
+- **El push nunca tumba la operación que lo disparó.** La notificación in-app se persiste primero y es la fuente de verdad; el envío sale después y sin `await`, para que una latencia de Firebase no se sume al tiempo de respuesta de ingerir una lectura o aprobar un remito.
+- **La unicidad es del token, no del par usuario+token.** Un teléfono compartido entre dos capataces cambia de dueño, y sin esto seguiría recibiendo los avisos del anterior.
+- **Un token rechazado se desactiva, no se borra**, y solo ante los dos códigos que significan «token muerto». Un fallo de red o una cuota agotada son transitorios: desactivar por eso dejaría al dispositivo sin push para siempre.
+
+**Costo asumido:** `firebase-admin` arrastra `@google-cloud/storage` y `gaxios`, que hoy suman **6 vulnerabilidades moderadas** en dependencias transitivas que `npm audit fix` no resuelve sin `--force`. Se acepta a sabiendas por ser una dependencia de servidor sin exposición directa, y queda anotado para revisar cuando el SDK publique la corrección.
+
+**Verificación:** probada de punta a punta en modo `log`. **El envío real contra FCM no está verificado**: hace falta el service account de un proyecto de Firebase.
+
+**Estado:** ✅ Vigente e implementado, pendiente de credenciales para verificar el envío real.
+
+---
+
+## D-016 — El maestro de transportes queda fuera de alcance
+
+**Contexto:** la discrepancia `D-b`. HU-24 pide validar que el peso sea «menor o igual al límite máximo físico configurado en el maestro de transportes», un maestro que no existe en el modelo.
+
+**Decisión:** se **descopea el criterio** y se documenta el porqué, en vez de crear la entidad.
+
+El criterio mezcla dos conceptos. El pesaje de HU-24 es *el total de kilos cosechados por una cuadrilla al cierre del día* —la HU lo dice textualmente, y admite varios pesajes por cuartel y día—, mientras que la capacidad de un transporte acota *un viaje*. Una jornada que se despacha en dos camiones daría un falso error, y el propio criterio de «múltiples pesajes por cuartel en el mismo día» lo contradice.
+
+Lo que sí protege el dato ya está: el CHECK `kg_totales > 0` en la base (F2-1) y el rechazo de pesajes sobre cuarteles ya cosechados (F1-8).
+
+**Si más adelante se necesita**, el lugar correcto es el **remito** (HU-26/27), que sí representa un despacho concreto a la bodega y donde una patente y una capacidad tienen sentido.
+
+**Estado:** ✅ Vigente. Criterio descopeado de HU-24.

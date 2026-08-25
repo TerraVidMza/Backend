@@ -10,13 +10,15 @@
 | **Complejidad** | Baja |
 | **Precondiciones** | HU-05 completado (el usuario objetivo existe) |
 | **Pantallas (Figma)** | PAN-04: Panel de Control de Usuarios (Admin) — [archivo Figma](https://www.figma.com/design/0ehP6Sf8WynahpnKUGIVpd/TerraVid---Wireframes---Design-System-v1) |
-| **Estado** | 🟠 PARCIAL — falta la lista blanca de roles asignables |
+| **Estado** | 🟢 COMPLETA — criterios de aceptación cubiertos |
 
 > **Auditoría (2026-08-24):** sin bloqueo de auto-cambio de rol, sin lista blanca de roles asignables, sin auditoría del cambio. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
 > **Actualización (Fase 0):** el bloqueo de auto-cambio de rol ya está implementado. Siguen pendientes la lista blanca de roles asignables y la auditoría del cambio. El criterio sobre cuándo aplica el nuevo rol fue corregido según [D-006](../DECISIONS.md).
 >
 > **Cierre (2026-08-25):** el cambio de rol queda auditado (F2-3) y aplica de inmediato ([D-006](../DECISIONS.md)). **Pendiente:** `update()` acepta cualquier `rolId` existente, así que falta la **lista blanca de roles asignables** que pide el primer criterio.
+>
+> **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** `update()` valida el `rolId` contra la lista blanca de roles: uno inexistente da 404 en vez de reventar contra la FK. `PROPIETARIO` sigue siendo asignable aunque el selector de la HU liste solo tres roles — excluirlo dejaría a un Propietario único sin forma de delegar, porque nadie puede cambiarse el rol a sí mismo ni dar de baja al último Propietario.
 
 ## Descripción
 

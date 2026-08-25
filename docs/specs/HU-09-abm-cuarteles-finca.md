@@ -10,13 +10,15 @@
 | **Complejidad** | Media |
 | **Precondiciones** | HU-08 completado (finca activa existente) |
 | **Pantallas (Figma)** | PAN-08: Gestión de Cuarteles — [archivo Figma](https://www.figma.com/design/0ehP6Sf8WynahpnKUGIVpd/TerraVid---Wireframes---Design-System-v1) |
-| **Estado** | 🟠 PARCIAL — la baja no acota los registros a la campaña actual (D-c) |
+| **Estado** | 🟢 COMPLETA — criterios de aceptación cubiertos |
 
 > **Auditoría (2026-08-24):** la baja no verifica labores/pesajes activos, el campo estado nunca se setea, el año de implantación no valida rango. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
 > **Criterios (2026-08-25):** la baja se bloquea con **409 si el cuartel tiene labores o pesajes**, y se agregaron las validaciones de rango (nombre ≥2, año entre 1900 y el actual con validador dinámico, superficie >0 con 2 decimales).
 >
 > **Cierre (2026-08-25):** **Pendiente:** el criterio de baja habla de registros activos «en la campaña actual»; el chequeo cuenta labores y pesajes **sin acotar el período**, porque el concepto de campaña no existe en el modelo ([D-c](PLAN-MEJORAS.md)). Es más restrictivo que el criterio, no menos: bloquea bajas que la HU permitiría.
+>
+> **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** La baja cuenta labores y pesajes **de la campaña actual** ([D-014](../DECISIONS.md)), y el mensaje de 409 nombra la campaña. Sin campaña cargada se sigue contando todo el histórico: negar una baja reversible es más barato que ocultar un cuartel con registros vivos.
 
 ## Descripción
 

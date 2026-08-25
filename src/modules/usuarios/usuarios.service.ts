@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -11,6 +12,7 @@ import * as crypto from 'crypto';
 import { Usuario } from './entities/usuario.entity';
 import { UsuarioFinca } from './entities/usuario-finca.entity';
 import { Finca } from '../fincas/entities/finca.entity';
+import { Rol } from '../roles/entities/rol.entity';
 import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { UpdatePerfilDto } from './dto/update-perfil.dto';
@@ -45,6 +47,8 @@ export class UsuariosService {
     private readonly usuarioFincaRepository: Repository<UsuarioFinca>,
     @InjectRepository(Finca)
     private readonly fincaRepository: Repository<Finca>,
+    @InjectRepository(Rol)
+    private readonly rolRepository: Repository<Rol>,
     private readonly tokenRecuperacionService: TokenRecuperacionService,
     private readonly mailService: MailService,
   ) {}
@@ -196,12 +200,41 @@ export class UsuariosService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    if (dto.rolId && dto.rolId !== usuario.rolId && actor.id === id) {
-      throw new ForbiddenException('No puedes modificar tu propio rol.');
+    if (dto.rolId && dto.rolId !== usuario.rolId) {
+      if (actor.id === id) {
+        throw new ForbiddenException('No puedes modificar tu propio rol.');
+      }
+      await this.verificarRolAsignable(dto.rolId);
     }
 
     Object.assign(usuario, dto);
     return this.usuarioRepository.save(usuario);
+  }
+
+  /**
+   * Lista blanca de roles asignables (HU-06).
+   *
+   * Sin esto `update()` aceptaba cualquier UUID: uno inexistente reventaba
+   * contra la FK y uno de una fila de `roles` agregada a mano pasaba derecho.
+   *
+   * **Se incluye `PROPIETARIO`, aunque el selector de la HU liste solo Agrónomo,
+   * Capataz y Auditor.** Excluirlo dejaría al sistema sin forma de delegar por
+   * API: nadie puede cambiarse el rol a sí mismo (F0-9) y no se puede dar de
+   * baja al último Propietario, así que un Propietario único quedaría atrapado.
+   * La restricción del selector es de pantalla; la del backend, de integridad.
+   */
+  private async verificarRolAsignable(rolId: string): Promise<void> {
+    const rol = await this.rolRepository.findOne({ where: { id: rolId } });
+    if (!rol) {
+      throw new NotFoundException('El rol indicado no existe.');
+    }
+
+    const asignables = Object.values(RolNombre) as string[];
+    if (!asignables.includes(rol.nombreRol)) {
+      throw new BadRequestException(
+        `El rol "${rol.nombreRol}" no es asignable. Roles válidos: ${asignables.join(', ')}.`,
+      );
+    }
   }
 
   /** Actualización del perfil propio: solo el nombre (HU-04). */

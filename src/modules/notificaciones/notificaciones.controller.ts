@@ -1,14 +1,22 @@
 import {
+  Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 import { NotificacionesService } from './notificaciones.service';
 import { ListarNotificacionesDto } from './dto/listar-notificaciones.dto';
+import {
+  BajaDeviceTokenDto,
+  RegistrarDeviceTokenDto,
+} from './dto/device-token.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AnyRole } from '../../common/decorators/any-role.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -41,5 +49,31 @@ export class NotificacionesController {
   @Patch('leidas')
   marcarTodasLeidas(@CurrentUser() user: AuthenticatedUser) {
     return this.notificacionesService.marcarTodasLeidas(user.id);
+  }
+
+  /**
+   * Alta del dispositivo para push (HU-35). La app lo llama en cada arranque:
+   * el token de FCM rota, así que reenviarlo es lo normal, no un error.
+   */
+  @Post('device-token')
+  registrarDeviceToken(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: RegistrarDeviceTokenDto,
+  ) {
+    return this.notificacionesService.registrarDeviceToken(
+      user.id,
+      dto.token,
+      dto.plataforma,
+    );
+  }
+
+  /** Baja al cerrar sesión, para que el teléfono deje de recibir sus avisos. */
+  @Delete('device-token')
+  @HttpCode(204)
+  async bajaDeviceToken(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: BajaDeviceTokenDto,
+  ) {
+    await this.notificacionesService.bajaDeviceToken(user.id, dto.token);
   }
 }

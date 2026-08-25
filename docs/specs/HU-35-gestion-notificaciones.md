@@ -10,13 +10,17 @@
 | **Complejidad** | Media |
 | **Precondiciones** | HU-01 completado. Requiere HU-22 (alertas IoT), HU-26 (remitos), HU-27 (aprobación/rechazo). |
 | **Pantallas (Figma)** | ⚠️ Pendiente — no está en la matriz de trazabilidad. |
-| **Estado** | 🟠 PARCIAL — faltan el push FCM (D-e) y el aviso por error de sincronización |
+| **Estado** | 🟠 PARCIAL — el envío push real no se pudo verificar sin credenciales de Firebase |
 
 > **Auditoría (2026-08-24):** solo existe 1 de los 3 productores de evento, así que el Capataz nunca recibe notificaciones. Sin FCM, sin purga a 30 días y sin paginación. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
 > **Fase 2 (2026-08-24):** el listado viene **paginado, con filtro de no leídas y contador `noLeidas`** para el badge (F2-2), y un cron nocturno **purga las notificaciones de más de 30 días** (F2-5). Falta el push FCM ([D-e](PLAN-MEJORAS.md)).
 >
 > **Cierre (2026-08-25):** **Pendiente:** el **push FCM** ([D-e](PLAN-MEJORAS.md)) y el tercer productor de eventos: el **error de sincronización no genera notificación**, hoy solo se refleja como conteo en el dashboard. Las alertas IoT y los remitos sí notifican.
+>
+> **Decisiones pendientes (2026-08-26):** 🟡 **casi cerrada.** Los tres productores de evento ya existen: alertas IoT, remitos y —lo que faltaba— el **error de sincronización**, que ahora notifica al Capataz con un aviso por lote y no uno por registro. El push FCM está implementado ([D-015](../DECISIONS.md)) con tabla de device tokens, alta idempotente y baja al cerrar sesión.
+>
+> **Pendiente:** el envío real contra FCM **no está verificado**. Hace falta el service account de un proyecto de Firebase; con `PUSH_TRANSPORT=log` el flujo completo sí está probado.
 
 ## Descripción
 

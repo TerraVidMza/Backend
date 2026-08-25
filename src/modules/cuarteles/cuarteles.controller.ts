@@ -117,6 +117,6 @@ export class CuartelesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     await this.alcance.verificarCuartel(id, user.empresaId);
-    return this.cuartelesService.desactivar(id);
+    return this.cuartelesService.desactivar(id, user.empresaId);
   }
 }

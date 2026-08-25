@@ -10,13 +10,17 @@
 | **Complejidad** | Media |
 | **Precondiciones** | HU-01 completado. Depende de HU-15, HU-20, HU-28 para los datos a mostrar. |
 | **Pantallas (Figma)** | ⚠️ Pendiente — no está en la matriz de trazabilidad (la matriz no cubre el bloque "Dashboard, configuración, notificaciones y ayuda"). |
-| **Estado** | 🟠 PARCIAL — faltan el estado de cosecha global y los cuarteles asignados al Capataz |
+| **Estado** | 🟢 COMPLETA — criterios de aceptación cubiertos |
 
 > **Auditoría (2026-08-24):** el dashboard no diferencia por rol en absoluto: el Auditor recibe costos y kg cosechados, que la HU prohíbe. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
 > **Criterios (2026-08-25):** el dashboard agrega en **SQL** —materializaba en memoria todo el histórico de labores e insumos de la empresa— y el payload se enriqueció con costos por finca, las 3 alertas más recientes y el conteo de registros en error de sincronización.
 >
 > **Cierre (2026-08-25):** **Pendiente:** el **estado de cosecha global** (% de cuarteles por estado) y, en la rama del Capataz, acotar a «los cuarteles asignados a él»: `usuario_finca` solo enruta avisos y no define alcance de datos ([D-012](../DECISIONS.md)). El corte de campaña sigue siendo el año calendario ([D-c](PLAN-MEJORAS.md)).
+>
+> **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** El corte temporal lo da la campaña abierta ([D-014](../DECISIONS.md)) y el payload dice de qué campaña habla. Se agregó el **estado de cosecha global** (% de cuarteles por estado, con los estados vacíos en 0 para que la barra no cambie de forma según el día) y la **rama del Capataz**: pendientes de sincronización propios y cuarteles en cosecha de sus fincas asignadas.
+>
+> Esa asignación es un **filtro de vista**, no un límite de permisos: el alcance de datos sigue siendo por empresa ([D-012](../DECISIONS.md)). Sin asignaciones ve todas las fincas, igual que con los avisos.
 
 ## Descripción
 
