@@ -80,10 +80,32 @@ npm run db:verificar-privilegios
 
 > El rol que corre `db:rol-app` tiene que ser **el mismo** que corre las migraciones: los `ALTER DEFAULT PRIVILEGES` que deja puestos aplican a las tablas que cree ese rol, y son los que evitan que una migración futura deje a la aplicación sin permisos sobre una tabla nueva.
 
+### Push a móviles (Firebase)
+
+`PUSH_TRANSPORT=log` escribe el envío en consola y alcanza para desarrollo. Para mandar de verdad hacen falta las credenciales del service account (Firebase → ⚙️ Configuración del proyecto → **Cuentas de servicio** → *Generar nueva clave privada*), que van a `.env`:
+
+```bash
+PUSH_TRANSPORT=fcm
+FIREBASE_PROJECT_ID=<project_id del JSON>
+FIREBASE_CLIENT_EMAIL=<client_email del JSON>
+FIREBASE_PRIVATE_KEY='<private_key del JSON, en UNA línea, con los \n>'
+```
+
+> ⚠️ **El JSON del service account da acceso al proyecto entero de Firebase.** No va al repositorio —ni siquiera a `.env.example`, que sí está versionado—. Borralo después de copiar los tres valores.
+
+La clave privada es donde falla todo el mundo. Copiala **tal cual sale del JSON**, en una línea y con los `\n` literales. Entre comillas simples el código los convierte; entre comillas dobles los convierte dotenv. Lo que no funciona es pegarla en varias líneas reales: dotenv corta el valor en el primer salto.
+
+```bash
+npm run push:diagnostico              # valida las credenciales contra Firebase
+npm run push:diagnostico -- <token>   # además envía a un dispositivo real
+```
+
+Sin token, el diagnóstico manda contra uno inválido a propósito. Suena raro pero es la prueba que sirve: **si Firebase rechaza el token, es porque autenticó la petición** y llegó hasta mirar el destinatario. Con credenciales malas el error aparecería antes. Esa distinción es todo lo que se puede saber mientras la app móvil no exista.
+
 ### Pruebas
 
 ```bash
-npm test              # 88 tests unitarios
+npm test              # 121 tests unitarios
 npm run test:smoke    # 172 casos end-to-end contra la API y la base reales
 ```
 
@@ -131,13 +153,16 @@ Los 24 módulos del backend están construidos y exponen sus endpoints REST. El 
 
 Los componentes que aún no están construidos son los **clientes**: Frontend Web, App Mobile y firmware IoT, cada uno en su propio repo.
 
-En el backend, **35 de las 36 HU están completas**. El plan de mejoras está cerrado: los 10 problemas sistémicos resueltos y las 8 decisiones de producto tomadas.
+En el backend, **las 36 HU están completas**. El plan de mejoras está cerrado: los 10 problemas sistémicos resueltos y las 8 decisiones de producto tomadas.
 
-Queda abierto:
+Lo que queda son pasos de **cada despliegue**, no código pendiente:
 
-- **Verificar el push real de HU-35.** La integración con FCM está implementada ([D-015](docs/DECISIONS.md)) y probada con `PUSH_TRANSPORT=log`, pero **el envío contra Firebase no está verificado**: hace falta el service account de un proyecto real. Es lo único que impide marcar HU-35 como completa.
-- **Correr `npm run db:rol-app` al desplegar.** El rol acotado ya existe y está verificado ([D-017](docs/DECISIONS.md)), pero hay que crearlo una vez por entorno y apuntarle `DB_USERNAME`. No es código pendiente: es un paso de puesta en marcha.
-- **6 vulnerabilidades moderadas** en dependencias transitivas de `firebase-admin` que `npm audit fix` no resuelve sin `--force`. Asumidas a sabiendas; revisar cuando el SDK publique la corrección.
+- **`npm run db:rol-app`** crea el rol acotado y **`npm run db:verificar-privilegios`** comprueba que quedó bien ([D-017](docs/DECISIONS.md)).
+- **`npm run push:diagnostico`** comprueba que Firebase acepta el service account de ese entorno ([D-015](docs/DECISIONS.md)).
+
+Los dos salen con **código 1** si la configuración no sirve, así que conviene encadenarlos al pipeline: convierten un error de credenciales en un despliegue fallido, en vez de en una funcionalidad que calla y no anda.
+
+Aparte, una deuda de dependencias: **6 vulnerabilidades moderadas** en transitivas de `firebase-admin` que `npm audit fix` no resuelve sin `--force`. Asumidas a sabiendas; revisar cuando el SDK publique la corrección.
 
 El detalle por HU está en [`docs/specs/README.md`](docs/specs/README.md), y el cierre del plan en la sección 7 de [`docs/specs/PLAN-MEJORAS.md`](docs/specs/PLAN-MEJORAS.md).
 

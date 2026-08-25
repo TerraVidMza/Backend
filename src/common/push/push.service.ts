@@ -6,6 +6,12 @@ import { In, Repository } from 'typeorm';
 import { App, cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging, SendResponse } from 'firebase-admin/messaging';
 import { DeviceToken } from '../../modules/notificaciones/entities/device-token.entity';
+import {
+  modoFcm,
+  resolverCredenciales,
+  VARIABLES_FIREBASE,
+} from './credenciales-firebase';
+import { esTokenMuerto } from './token-rechazado';
 
 export interface MensajePush {
   usuarioId: string;
@@ -46,24 +52,24 @@ export class PushService implements OnModuleInit {
   }
 
   private modoLog(): boolean {
-    return (process.env.PUSH_TRANSPORT ?? 'log') !== 'fcm';
+    return !modoFcm();
   }
 
   /**
    * Inicializa el SDK una sola vez. Las credenciales salen de variables de
    * entorno y no de un archivo JSON en el repo: el service account es un
    * secreto, y un `firebase-key.json` commiteado es el accidente clásico.
+   *
+   * **No lanza si las credenciales faltan o están mal.** Un problema de push no
+   * puede impedir que la API levante; queda deshabilitado y avisado en el log.
+   * `npm run push:diagnostico` existe justamente porque este warning es fácil
+   * de pasar por alto en un arranque.
    */
   private inicializarFirebase(): void {
-    const projectId = process.env.FIREBASE_PROJECT_ID;
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
-    // La clave privada viaja en una sola línea con `\n` escapados, que es como
-    // sobrevive a un `.env` y a la mayoría de los gestores de secretos.
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-
-    if (!projectId || !clientEmail || !privateKey) {
+    const credenciales = resolverCredenciales();
+    if (!credenciales) {
       this.logger.warn(
-        'PUSH_TRANSPORT=fcm pero faltan FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL o FIREBASE_PRIVATE_KEY: el push queda deshabilitado.',
+        `PUSH_TRANSPORT=fcm pero faltan ${VARIABLES_FIREBASE.join(', ')}: el push queda deshabilitado.`,
       );
       return;
     }
@@ -71,14 +77,10 @@ export class PushService implements OnModuleInit {
     try {
       this.app = getApps().length
         ? getApp()
-        : initializeApp({
-            credential: cert({
-              projectId,
-              clientEmail,
-              privateKey,
-            }),
-          });
-      this.logger.log(`Firebase Cloud Messaging inicializado (${projectId}).`);
+        : initializeApp({ credential: cert(credenciales) });
+      this.logger.log(
+        `Firebase Cloud Messaging inicializado (${credenciales.projectId}).`,
+      );
     } catch (error) {
       this.logger.error(
         `No se pudo inicializar Firebase: ${(error as Error).message}`,
@@ -137,23 +139,19 @@ export class PushService implements OnModuleInit {
   }
 
   /**
-   * Apaga los tokens que FCM rechazó por inválidos o no registrados.
+   * Apaga los tokens que FCM rechazó como inválidos o no registrados.
    *
-   * Solo esos dos códigos: un fallo de red o una cuota agotada son transitorios
-   * y desactivar el dispositivo por eso lo dejaría sin push para siempre.
+   * El criterio vive en `esTokenMuerto` porque no es obvio: FCM devuelve
+   * `messaging/invalid-argument` tanto para un token mal formado como para un
+   * mensaje mal armado, y desactivar en el segundo caso apagaría todos los
+   * dispositivos de la base por un bug de payload.
    */
   private async desactivarTokensMuertos(
     dispositivos: DeviceToken[],
     respuestas: SendResponse[],
   ): Promise<void> {
     const muertos = dispositivos
-      .filter((_, i) => {
-        const codigo = respuestas[i]?.error?.code;
-        return (
-          codigo === 'messaging/registration-token-not-registered' ||
-          codigo === 'messaging/invalid-registration-token'
-        );
-      })
+      .filter((_, i) => esTokenMuerto(respuestas[i]?.error))
       .map((d) => d.id);
 
     if (muertos.length > 0) {

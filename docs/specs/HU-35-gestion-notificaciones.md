@@ -10,7 +10,7 @@
 | **Complejidad** | Media |
 | **Precondiciones** | HU-01 completado. Requiere HU-22 (alertas IoT), HU-26 (remitos), HU-27 (aprobación/rechazo). |
 | **Pantallas (Figma)** | ⚠️ Pendiente — no está en la matriz de trazabilidad. |
-| **Estado** | 🟠 PARCIAL — el envío push real no se pudo verificar sin credenciales de Firebase |
+| **Estado** | 🟢 COMPLETA — criterios de aceptación cubiertos |
 
 > **Auditoría (2026-08-24):** solo existe 1 de los 3 productores de evento, así que el Capataz nunca recibe notificaciones. Sin FCM, sin purga a 30 días y sin paginación. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
@@ -21,6 +21,12 @@
 > **Decisiones pendientes (2026-08-26):** 🟡 **casi cerrada.** Los tres productores de evento ya existen: alertas IoT, remitos y —lo que faltaba— el **error de sincronización**, que ahora notifica al Capataz con un aviso por lote y no uno por registro. El push FCM está implementado ([D-015](../DECISIONS.md)) con tabla de device tokens, alta idempotente y baja al cerrar sesión.
 >
 > **Pendiente:** el envío real contra FCM **no está verificado**. Hace falta el service account de un proyecto de Firebase; con `PUSH_TRANSPORT=log` el flujo completo sí está probado.
+>
+> **Verificado contra Firebase real (2026-08-25):** ✅ **cerrada.** Con el service account del proyecto cargado, `npm run push:diagnostico` confirma que Firebase **acepta las credenciales**: la petición se autentica y llega hasta validar el destinatario. Con eso el backend cumple su parte del criterio.
+>
+> Lo que resta es del cliente, no de esta HU: para ver la notificación en un teléfono hace falta que **Mobile** agregue Firebase al proyecto, pida permiso de notificaciones y registre su token en `POST /notificaciones/device-token`. El mismo diagnóstico acepta un token real para probar esa última milla: `npm run push:diagnostico -- <token>`.
+>
+> La verificación real destapó un bug que en modo `log` era invisible: los tokens mal formados **no se desactivaban**, porque FCM los rechaza con `messaging/invalid-argument` y ese código no estaba contemplado. Se acumulaban en la base y cada notificación gastaba una llamada por dispositivo fantasma. Corregido con cuidado —el mismo código aparece cuando el payload está mal, y desactivar ahí apagaría todos los dispositivos válidos— y con tests para los dos sentidos.
 
 ## Descripción
 

@@ -4,9 +4,9 @@ Resultado de auditar el código real de los 24 módulos del backend contra los c
 
 **Veredicto original (2026-08-24): ninguna de las 36 HU cumplía el 100% de sus criterios de aceptación.** 12 sustancialmente incompletas, 24 parciales. Los endpoints existían y respondían — lo que faltaba eran reglas de negocio, validaciones, aislamiento entre empresas y auditoría.
 
-**Estado hoy (2026-08-26): 35 completas, 1 parcial.** Cerradas las Fases 0 (10/10), 1 (14/14) y 2 (cimientos, criterios por bloque y tests), y resueltas **las ocho decisiones de producto** de la sección 6. Verificado con 88 tests unitarios y un smoke test de 172 casos end-to-end contra PostgreSQL real, desde una base recreada desde cero y sin deriva entre las entidades y el esquema.
+**Estado hoy (2026-08-25): las 36 HU completas.** Cerradas las Fases 0 (10/10), 1 (14/14) y 2 (cimientos, criterios por bloque y tests), y resueltas **las ocho decisiones de producto** de la sección 6. Verificado con 121 tests unitarios y un smoke test de 172 casos end-to-end contra PostgreSQL real, desde una base recreada desde cero y sin deriva entre las entidades y el esquema.
 
-Lo único abierto es **HU-35**: el push FCM está implementado, pero el envío real contra Firebase no se pudo verificar sin un service account ([D-015](../DECISIONS.md)). Todo lo demás del criterio —los tres productores de evento, la tabla de device tokens, el alta idempotente— sí está probado.
+HU-35 se cerró al cargar el service account del proyecto: `npm run push:diagnostico` confirma que **Firebase acepta las credenciales** ([D-015](../DECISIONS.md)). Ver la notificación en un teléfono depende de que Mobile registre su token, que es trabajo del cliente y no de esta HU.
 
 > **Importante:** la mayoría de los problemas **no eran de las HU individuales sino transversales**. Arreglar los 10 problemas sistémicos de la sección 2 cerró criterios de aceptación en casi las 36 HU a la vez. Ir HU por HU habría sido mucho más caro y habría dejado los agujeros de seguridad abiertos más tiempo.
 >
@@ -56,7 +56,7 @@ La columna **Motivo principal detectado** es el hallazgo original y se deja tal 
 | HU-32 Dashboard | 🔴 INCOMPLETA | **No diferencia por rol en absoluto** → el Auditor recibe costos (ver F0-5) | 🟢 Completa |
 | HU-33 Configuración | 🟠 PARCIAL | **`configuracion` no tiene `empresaId`** → global a la instancia. **`smtp_pass` en texto plano**. Sin claves seedeadas | 🟢 Completa |
 | HU-34 Tablas maestras | 🟠 PARCIAL | `update()` no revalida unicidad, sin auditoría, chequeo de referencias hardcodeado | 🟢 Completa |
-| HU-35 Notificaciones | 🔴 INCOMPLETA | Solo 1 de 3 productores de evento → **el Capataz nunca recibe notificaciones**. Sin FCM, sin purga, sin paginación | 🟠 Parcial — el envío push real no se pudo verificar sin credenciales de Firebase |
+| HU-35 Notificaciones | 🔴 INCOMPLETA | Solo 1 de 3 productores de evento → **el Capataz nunca recibe notificaciones**. Sin FCM, sin purga, sin paginación | 🟢 Completa |
 | HU-36 Centro de ayuda | 🟠 PARCIAL | El email funciona pero **nunca se envía** (claves SMTP no seedeadas). Tickets sin filtrar por empresa | 🟢 Completa |
 
 Leyenda: 🔴 INCOMPLETA (criterios centrales ausentes) · 🟠 PARCIAL (funciona pero incumple algún criterio) · 🟢 COMPLETA (criterios cubiertos)
@@ -69,16 +69,16 @@ Cada uno de estos rompe criterios de aceptación en **muchas HU a la vez**. Son 
 
 | # | Problema | HU afectadas |
 |---|---|---|
-| **S1** ✅ | ~~**Sin aislamiento multi-tenant.**~~ **Resuelto en Fase 0** (F0-4), salvo el residuo de catálogos globales (ver `D-h`). Descripción original: El JWT trae `empresaId` pero casi ningún service filtra por él. `usuarios`, `cuarteles`, `registro-labor`, `sensores`, `lecturas-iot`, `alertas-iot`, `umbral-sensor`, `inteligencia-agronomica`, `cuadrillas`, `pesaje-vendimia`, `remitos` y los tickets de ayuda son todos IDOR cross-tenant. Un Propietario de la empresa B puede **aprobar un remito de la empresa A**. `configuracion` no tiene `empresaId` en absoluto. | Casi todas |
+| **S1** ✅ | ~~**Sin aislamiento multi-tenant.**~~ **Resuelto en Fase 0** (F0-4), y el residuo de catálogos globales en `D-h`. Descripción original: El JWT trae `empresaId` pero casi ningún service filtra por él. `usuarios`, `cuarteles`, `registro-labor`, `sensores`, `lecturas-iot`, `alertas-iot`, `umbral-sensor`, `inteligencia-agronomica`, `cuadrillas`, `pesaje-vendimia`, `remitos` y los tickets de ayuda son todos IDOR cross-tenant. Un Propietario de la empresa B puede **aprobar un remito de la empresa A**. `configuracion` no tiene `empresaId` en absoluto. | Casi todas |
 | **S2** ✅ | ~~**RBAC permisivo por default.**~~ **Resuelto en Fase 0** (F0-8): el guard es fail-closed y los 30 handlers descubiertos quedaron cubiertos. Descripción original: `RolesGuard` devuelve `true` cuando el handler no tiene `@Roles` ([roles.guard.ts:21](../../src/common/guards/roles.guard.ts#L21)). Muchos GET quedan abiertos: el Auditor lee fincas, cuarteles, labores y **margen bruto**; todo `inteligencia-agronomica` no tiene ni un `@Roles`. | HU-07, 15, 17, 29-31 |
-| **S3** | **Auditoría casi inexistente.** `LogAuditoriaService.registrar()` se invoca en 3 lugares, todos en `auth`. Ningún otro módulo importa `LogAuditoriaModule`, y `datosAnteriores`/`datosNuevos` nunca se pueblan. Además `registrar()` no acepta un `EntityManager`, así que es estructuralmente imposible correrlo dentro de la transacción de la operación principal como pide HU-07. | HU-05, 06, 07, 08, 09, 14, 16, 18, 21, 23, 27, 33, 34 |
-| **S4** | **Sin paginación en ningún endpoint del repo.** Los listados devuelven arrays planos completos: `take: 200` fijo en auditoría, `take: 50` en notificaciones, sin límite en el resto. | HU-05, 07, 08, 09, 11, 17, 35 |
-| **S5** | **Sin migraciones.** El esquema depende de `synchronize`, desactivado en producción. **En producción no existen las tablas ni los constraints** — incluido el UNIQUE de `local_uuid` del que depende toda la idempotencia offline. Tampoco se pueden aplicar GRANTs/RLS para el append-only de HU-07 ni los CHECK/índices que piden varias HU. | HU-07, 14, 19, 24, y el despliegue entero |
-| **S6** | **Sin infraestructura asíncrona.** No hay `bullmq`, `redis` ni `@nestjs/schedule`. Todo corre inline: la evaluación de umbrales bloquea la respuesta de ingesta, no hay cron de consolidación nocturna (`LecturaIotHistorico` es una **tabla muerta** que nada escribe ni lee), no hay purga de notificaciones ni de tokens vencidos. | HU-03, 19, 22, 35 |
-| **S7** | **Sin envío de emails** (salvo tickets de soporte, que tampoco se envían por falta de configuración seedeada). El "recuperar contraseña" genera el token y **el controller lo descarta**. No hay email de bienvenida ni de alerta IoT ni de remito pendiente. | HU-03, 05, 22, 26, 36 |
-| **S8** | **Dinero que se pierde en silencio.** El mismo patrón en dos módulos: si no hay costo/tarifa vigente, se persiste `null` y el registro se marca **SINCRONIZADO**. Una labor cuesta $0 o un pesaje entra al remito con kilos y sin liquidación, sin ninguna señal de error. | HU-14, 16, 24, 25, 26 |
-| **S9** | **Versionado `valid_from` frágil, replicado 3 veces** (insumos, tipos de labor, cuadrillas): (a) `validFrom` lo manda el cliente sin validar → **retro-datado** que reescribe el costo vigente del pasado; (b) el desempate ordena solo por `validFrom DESC`, así que con dos registros del mismo día **el monto depende del optimizador de Postgres**. | HU-16, 23, 25 |
-| **S10** | **Casi cero tests.** Solo `app.controller.spec.ts` y el e2e "Hello World". Sin tests para idempotencia del sync, costo vigente a fecha, escalada de privilegios, bloqueo por intentos, ni Pearson. | Todas |
+| **S3** ✅ | ~~**Auditoría casi inexistente.**~~ **Resuelto en F2-3** (43 endpoints de 15 módulos) y cerrado del lado de la base con el trigger append-only de HU-07. Descripción original: `LogAuditoriaService.registrar()` se invoca en 3 lugares, todos en `auth`. Ningún otro módulo importa `LogAuditoriaModule`, y `datosAnteriores`/`datosNuevos` nunca se pueblan. Además `registrar()` no acepta un `EntityManager`, así que es estructuralmente imposible correrlo dentro de la transacción de la operación principal como pide HU-07. | HU-05, 06, 07, 08, 09, 14, 16, 18, 21, 23, 27, 33, 34 |
+| **S4** ✅ | ~~**Sin paginación en ningún endpoint del repo.**~~ **Resuelto en F2-2** con envelope y techo duro de 100 filas. Descripción original: los listados devuelven arrays planos completos: `take: 200` fijo en auditoría, `take: 50` en notificaciones, sin límite en el resto. | HU-05, 07, 08, 09, 11, 17, 35 |
+| **S5** ✅ | ~~**Sin migraciones.**~~ **Resuelto en F2-1.** Descripción original: el esquema depende de `synchronize`, desactivado en producción. **En producción no existen las tablas ni los constraints** — incluido el UNIQUE de `local_uuid` del que depende toda la idempotencia offline. Tampoco se pueden aplicar GRANTs/RLS para el append-only de HU-07 ni los CHECK/índices que piden varias HU. | HU-07, 14, 19, 24, y el despliegue entero |
+| **S6** ✅ | ~~**Sin infraestructura asíncrona.**~~ **Resuelto en F2-5** (`EventEmitter2` + `@nestjs/schedule`, sin Redis). Descripción original: todo corre inline: la evaluación de umbrales bloquea la respuesta de ingesta, no hay cron de consolidación nocturna (`LecturaIotHistorico` es una **tabla muerta** que nada escribe ni lee), no hay purga de notificaciones ni de tokens vencidos. | HU-03, 19, 22, 35 |
+| **S7** ✅ | ~~**Sin envío de emails.**~~ **Resuelto en F2-4** (`MailService` con SMTP por empresa y modo `log`). Descripción original: salvo tickets de soporte, que tampoco se envían por falta de configuración seedeada. El "recuperar contraseña" genera el token y **el controller lo descarta**. No hay email de bienvenida ni de alerta IoT ni de remito pendiente. | HU-03, 05, 22, 26, 36 |
+| **S8** ✅ | ~~**Dinero que se pierde en silencio.**~~ **Resuelto en F1-1/F1-3:** sin costo o tarifa vigente el registro se marca ERROR y no entra al costeo ni al remito. Descripción original: si no hay costo/tarifa vigente, se persiste `null` y el registro se marca **SINCRONIZADO**. Una labor cuesta $0 o un pesaje entra al remito con kilos y sin liquidación, sin ninguna señal de error. | HU-14, 16, 24, 25, 26 |
+| **S9** ✅ | ~~**Versionado `valid_from` frágil, replicado 3 veces**~~ (insumos, tipos de labor, cuadrillas). **Resuelto en F1-12:** validación de no-retroactividad, desempate por `createdAt DESC` y UNIQUE `(entidad_id, valid_from)`. Descripción original: (a) `validFrom` lo manda el cliente sin validar → **retro-datado** que reescribe el costo vigente del pasado; (b) el desempate ordena solo por `validFrom DESC`, así que con dos registros del mismo día **el monto depende del optimizador de Postgres**. | HU-16, 23, 25 |
+| **S10** ✅ | ~~**Casi cero tests.**~~ **Resuelto en F2-7:** 121 tests unitarios y un smoke de 172 casos end-to-end. Descripción original: solo `app.controller.spec.ts` y el e2e "Hello World". Sin tests para idempotencia del sync, costo vigente a fecha, escalada de privilegios, bloqueo por intentos, ni Pearson. | Todas |
 
 ---
 
@@ -86,9 +86,9 @@ Cada uno de estos rompe criterios de aceptación en **muchas HU a la vez**. Son 
 
 Estos son explotables hoy contra la instancia tal como está.
 
-> **Estado: 10 de 10 cerrados.** Verificado con `tsc`, `eslint`, `nest build` y 27 tests unitarios; **no** con una prueba end-to-end contra la base (Docker no estaba disponible en la máquina de desarrollo).
+> **Estado: 10 de 10 cerrados.** Al cerrar la fase la verificación fue solo `tsc`, `eslint`, `nest build` y 27 tests unitarios —Docker no estaba disponible en la máquina de desarrollo—; después quedó cubierta end-to-end por el smoke, que prueba la escalada de privilegios, el aislamiento entre empresas y las ramas por rol contra PostgreSQL real.
 >
-> **Queda un residuo de S1 que necesita decisión de modelo** (ver `D-h` en la sección 6): `catalogo_item`, `insumos`, `tipos_labor` y sus tablas de costos **no tienen `empresaId` ni forma de llegar a una empresa**, así que son globales a la instancia. Un Propietario que edita el costo de un insumo lo cambia para todas las empresas. Cerrarlo exige agregar la columna y decidir si los catálogos maestros son por empresa o compartidos.
+> ✅ **El residuo de S1 quedó cerrado** ([D-h](#6-decisiones-de-producto)): `catalogo_item`, `insumos` y `tipos_labor` no tenían `empresaId` ni forma de llegar a una empresa, así que eran globales a la instancia — un Propietario que editaba el costo de un insumo lo cambiaba para todas las empresas. Ahora tienen la columna, con unicidad por empresa, y las tablas de costos heredan el tenant por la FK.
 
 | # | Acción | Archivo |
 |---|---|---|
@@ -107,10 +107,10 @@ Estos son explotables hoy contra la instancia tal como está.
 
 ## 4. Fase 1 — Correctitud de datos y dinero
 
-> **Estado: 14 de 14 cerrados.** F1-10 se completó con los criterios por bloque y F1-9 con la liquidación de bodega ([D-010](../DECISIONS.md)). Verificado con `tsc`, `eslint`, `nest build` y 36 tests unitarios; **no** con una prueba end-to-end contra la base.
+> **Estado: 14 de 14 cerrados.** F1-10 se completó con los criterios por bloque y F1-9 con la liquidación de bodega ([D-010](../DECISIONS.md)). Verificado con `tsc`, `eslint`, `nest build`, los 121 tests unitarios y el smoke end-to-end contra PostgreSQL real.
 >
-> Quedan dos parciales:
-> - **F1-9** — se dejó de publicar el número falso (`margenBruto: null` + `margenBrutoDisponible: false`, y el campo pasó a llamarse `costoCosecha`, que es lo que realmente es). El margen real depende de modelar el ingreso, decidido en [D-005](../DECISIONS.md) y todavía sin implementar.
+> Los dos que quedaron parciales más tiempo:
+> - **F1-9** — ✅ **cerrado.** Primero se dejó de publicar el número falso (`margenBruto: null` + `margenBrutoDisponible: false`, y el campo pasó a llamarse `costoCosecha`, que es lo que realmente es). El margen real llegó con `liquidaciones_bodega` ([D-010](../DECISIONS.md)), aplicado **en los dos endpoints**: el costeo de HU-15 y la comparación de campañas de HU-31. Al implementar el segundo apareció el mismo patrón de la primera corrección incompleta: HU-31 seguía devolviendo `margenBruto: null` cuando HU-15 ya calculaba el margen.
 > - **F1-10** — ✅ **cerrado**. El umbral de Pearson subió a 7 pares con interpretación textual, y el bucketing por zona horaria se corrigió al implementar los criterios por bloque: la serie agrupa con `AT TIME ZONE` sobre la clave `zona_horaria`, que ahora sí se seedea.
 
 | # | Acción | Archivo |
@@ -123,7 +123,7 @@ Estos son explotables hoy contra la instancia tal como está.
 | **F1-6** | ✅ **Imposible borrar un umbral.** `umbral.umbralMinimo = dto.umbralMinimo ?? umbral.umbralMinimo ?? null` — el `??` conserva el valor anterior. Usar `'umbralMinimo' in dto`. | [umbral-sensor.service.ts:27](../../src/modules/umbral-sensor/umbral-sensor.service.ts#L27) |
 | **F1-7** | ✅ **Concurrencia y numeración de remitos.** (a) Dos requests concurrentes leen el mismo set de pesajes y **crean dos remitos**; el primero queda con totales de pesajes que ya no le pertenecen. Falta `SELECT … FOR UPDATE` sobre el cuartel + 409. (b) El número usa `count()+1`: colisión concurrente garantizada bajo carga (→500, no 409), no reinicia por año, y **reutiliza números** tras un borrado. Usar una `SEQUENCE`. | [remitos.service.ts:36](../../src/modules/remitos/remitos.service.ts#L36), [remitos.service.ts:145](../../src/modules/remitos/remitos.service.ts#L145) |
 | **F1-8** | ✅ **Implementar la máquina de estados del cuartel.** La columna `estado` existe pero **ningún código la escribe ni la lee**, y no está en los DTO. Bloquea HU-28 por completo, los colores de HU-10 y el chequeo de baja de HU-09. Transiciones: `pendiente → en_cosecha` (primer pesaje sincronizado) → `cosechado` (remito aprobado) → vuelta a `en_cosecha` (rechazo). Y rechazar pesajes sobre cuarteles cosechados. **Antes hay que reconciliar los valores**: la spec dice Pendiente/En cosecha/Cosechado, el seed carga Productivo/En implantación. | [cuartel.entity.ts:51](../../src/modules/cuarteles/entities/cuartel.entity.ts#L51), [seed.ts:79](../../src/database/seeds/seed.ts#L79) |
-| **F1-9** | 🟡 **El "margen bruto" no es un margen.** `margenBruto = Σ montoLiquidacion − costoTotal`, pero `montoLiquidacion` es lo que se **paga** a la cuadrilla: un costo, no un ingreso. El indicador es `costoCosecha − (costoLabores + costoInsumos)`: sin sentido económico y de signo arbitrario. **Requiere decisión de producto** (ver sección 6). Mientras tanto: renombrar a `costoCosecha` y devolver `margenBruto: null`, para no publicar un número falso. | [inteligencia-agronomica.service.ts:219](../../src/modules/inteligencia-agronomica/inteligencia-agronomica.service.ts#L219) |
+| **F1-9** | ✅ **El "margen bruto" no es un margen.** `margenBruto = Σ montoLiquidacion − costoTotal`, pero `montoLiquidacion` es lo que se **paga** a la cuadrilla: un costo, no un ingreso. El indicador era `costoCosecha − (costoLabores + costoInsumos)`: sin sentido económico y de signo arbitrario. Resuelto en dos pasos: renombrar a `costoCosecha` y dejar de publicar el número falso, y después modelar el ingreso con `liquidaciones_bodega` ([D-010](../DECISIONS.md)). Sigue en `null` cuando la liquidación no está cargada. | [inteligencia-agronomica.service.ts](../../src/modules/inteligencia-agronomica/inteligencia-agronomica.service.ts) |
 | **F1-10** | ✅ **Pearson.** Umbral subido a `n < 7` con interpretación textual y motivo (Fase 1). El **bucketing por zona horaria se cerró junto con los criterios por bloque**: la serie del sensor ahora agrupa con `AT TIME ZONE` usando la clave `zona_horaria` de la empresa, así que los pares se alinean contra las fechas locales de las labores en vez de contra UTC. | [inteligencia-agronomica.service.ts](../../src/modules/inteligencia-agronomica/inteligencia-agronomica.service.ts) |
 | **F1-11** | ✅ **Bloqueo permanente de cuenta.** `registrarIntentoFallido` nunca resetea el contador al vencer la ventana: pasados los 15 min, el siguiente fallo evalúa `6 >= 5` y re-bloquea. La cuenta queda inutilizable hasta un login exitoso, que es justo lo que no se puede hacer. | [usuarios.service.ts:90](../../src/modules/usuarios/usuarios.service.ts#L90) |
 | **F1-12** | ✅ **Endurecer el versionado `valid_from` (S9)** en los 3 módulos: validar que no sea retroactivo, desempatar por `createdAt DESC`, y agregar UNIQUE `(entidad_id, valid_from)`. | insumos, tipo-labor, cuadrillas |
@@ -134,7 +134,7 @@ Estos son explotables hoy contra la instancia tal como está.
 
 ## 5. Fase 2 — Cimientos y criterios faltantes
 
-> **Estado: los 6 cimientos (F2-1 a F2-6) cerrados, y los criterios por bloque cerrados salvo lo que se detalla abajo.** Verificado con `tsc`, `eslint`, `nest build`, **71 tests unitarios** y un **smoke test end-to-end de 133 casos contra PostgreSQL real** (`npm run test:smoke`).
+> **Estado: cerrada.** Los 6 cimientos (F2-1 a F2-6), los criterios por bloque y los tests (F2-7). Verificado con `tsc`, `eslint`, `nest build`, **121 tests unitarios** y un **smoke test end-to-end de 172 casos contra PostgreSQL real** (`npm run test:smoke`).
 
 **Cimientos (habilitan el resto):**
 
@@ -158,7 +158,7 @@ Estos son explotables hoy contra la instancia tal como está.
 
 **Criterios de aceptación por bloque**
 
-> **Estado: cerrados casi por completo.** Lo que queda está listado como "pendiente" en cada bloque y depende de decisiones de producto abiertas o de trabajo de despliegue.
+> **Estado: cerrados.** Los "pendiente" que quedaban en los bloques dependían de decisiones de producto, y las ocho se tomaron (sección 6).
 
 - **Auth.** ✅ Invalidación de token en logout con `jti` y tabla `token_revocado` —el logout solo escribía auditoría y el JWT seguía sirviendo sus 8 horas—; alta con **contraseña temporal** y correo de bienvenida de 48 h, con `debe_cambiar_password` para que el cliente fuerce el cambio; política de contraseñas server-side en un decorador único (`EsPasswordSegura`) aplicado a las tres puertas de entrada; listado de usuarios y log de auditoría con búsqueda, filtros y paginación (cerrado en F2-2/F2-3). Los códigos HTTP ya se habían corregido en Fase 0.
   > El tope de 72 caracteres no es cosmético: **bcrypt trunca en silencio a 72 bytes**, así que aceptar más largo da una falsa sensación de fortaleza.
@@ -169,8 +169,9 @@ Estos son explotables hoy contra la instancia tal como está.
 - **IoT.** ✅ Última lectura en el listado de sensores con un único `DISTINCT ON` —era el N+1 que HU-18 señalaba—; serie agregada por hora o día en la zona horaria de la empresa; sensor dado de baja rechaza lecturas (403); rango físico por variable con tabla `lecturas_anomalas` aparte; deduplicación de alertas por sensor, tipo y ventana configurable; correo de alerta; contrato de ingesta por `codigoSensor`, con el UUID aceptado por compatibilidad.
   > ✅ **Destinatarios por finca resueltos** con la tabla `usuario_finca` ([D-012](../DECISIONS.md)), usada solo para enrutar avisos: el alcance de datos sigue siendo por empresa.
 - **Vendimia.** ✅ El borrador de remito se acota a **una jornada** —antes arrastraba todo el histórico pendiente del cuartel—; `GET /remitos/:id` con cuartel, finca y detalle de pesajes; listado por estado sin `cuartelId` obligatorio; tabla de estado de cosecha por finca con rendimiento kg/ha, agregada en SQL; notificaciones al generar y al resolver un remito; unicidad de nombre de cuadrilla por finca y entre activas.
-- **Inteligencia.** 🟡 Parcial. ✅ **Bucketing por zona horaria corregido — cierra F1-10**; `costo/ha` y variaciones ya estaban en Fase 1; el margen bruto ya es real con la liquidación de bodega ([D-010](../DECISIONS.md)).
-  > **Pendiente:** la entidad `recomendaciones` con aplicar/descartar, el gate de 30 días con `diasFaltantes` y las reglas sobre lecturas reales. Depende de definir qué reglas agronómicas se aplican, que no está especificado.
+- **Inteligencia.** ✅ **Bucketing por zona horaria corregido — cierra F1-10**; `costo/ha` y variaciones ya estaban en Fase 1; el margen bruto es real con la liquidación de bodega ([D-010](../DECISIONS.md)); la comparación de campañas dejó de inferir el año de las fechas y usa la entidad `campanias` ([D-014](../DECISIONS.md)), con promedios IoT y distinción entre 0 y "sin datos". La entidad `recomendaciones` existe con aplicar/descartar, el gate de 30 días informa `diasFaltantes`, y las reglas corren sobre lecturas reales con un **catálogo mínimo explícito** de cuatro reglas, cada una con su `porQue` y su evidencia en `jsonb`.
+  > Un índice parcial único sobre `(cuartel_id, regla_id) WHERE estado = 'activa'` evita que la misma recomendación se duplique en cada evaluación, y que una ya descartada reaparezca.
+  > Los umbrales están juntos en `reglas-agronomicas.ts` porque son la parte del sistema que un agrónomo va a querer discutir.
 - **Dashboard.** ✅ `SUM` en SQL —materializaba en memoria todos los `RegistroLabor` y `DetalleInsumoLabor` históricos de la empresa contra un objetivo de P95 < 3 s—; payload enriquecido con costos por finca, las 3 alertas más recientes y el conteo de registros en error de sincronización; ramas por rol y purga a 30 días ya estaban cerradas.
 
 **Encontrado al verificar (no estaba en la auditoría original): tres bugs de fecha de la misma familia.**
@@ -183,11 +184,11 @@ Todos son el mismo error de fondo — usar UTC donde el dominio es local— y **
 
 Corregido centralizando en `common/fechas/rango-fechas.ts` (`fechaLocal`, `hoyLocal`), y las comparaciones de vigencia pasaron a ser **texto contra texto** sobre columnas `date` —que no tienen hora ni huso— en vez de round-trips por `Date`. Con tests de regresión.
 
-**F2-7 — Tests (S10).** ✅ **Cerrado.** Hay **88 tests unitarios** (guards, DTOs, alcance multi-empresa, umbrales, paginación, rangos y fechas locales, bloqueo por intentos, lote parcialmente fallido y Pearson) y un **smoke test end-to-end de 172 casos** contra la API y PostgreSQL reales.
+**F2-7 — Tests (S10).** ✅ **Cerrado.** Hay **121 tests unitarios** (guards, DTOs, alcance multi-empresa, umbrales, paginación, rangos y fechas locales, bloqueo por intentos, lote parcialmente fallido, Pearson y el diagnóstico de push) y un **smoke test end-to-end de 172 casos** contra la API y PostgreSQL reales.
 
-Cubre: la escalada vía `PATCH /me`, la invalidación de token en logout, la política de contraseñas, el doble envío del mismo `local_uuid` con su 200, el límite de lote, el costo vigente a fecha vs. el costo actual, la máquina de estados del cuartel, el circuito completo de remitos, el rango físico y la ingesta por código, las bajas con dependencias y el costeo agregado.
+Cubre: la escalada vía `PATCH /me`, la invalidación de token en logout, la política de contraseñas, el doble envío del mismo `local_uuid` con su 200, el límite de lote, el costo vigente a fecha vs. el costo actual, la máquina de estados del cuartel, el circuito completo de remitos, el rango físico y la ingesta por código, las bajas con dependencias, el costeo agregado, el bloqueo por intentos y su expiración, el lote parcialmente fallido, Pearson (r=1, r=−1, r=0, serie constante, n<7) y la interpretación de los errores de FCM.
 
-Falta: bloqueo por intentos y su expiración, lote parcialmente fallido, y Pearson (r=1, r=−1, r=0, serie constante, n<7).
+> El caso `r = 0` obligó a cambiar el dato de prueba: la serie alternante que parecía obvia daba 0.218. Quedó una parábola simétrica (`y = x²`), que da exactamente 0 y de paso deja escrito en el test que Pearson solo mide relación **lineal** — una correlación de 0 sobre una dependencia perfecta.
 
 ```bash
 docker compose up -d
@@ -198,9 +199,9 @@ npm run test:smoke
 
 ---
 
-## 6. Decisiones de producto pendientes
+## 6. Decisiones de producto
 
-No son bugs: son definiciones que faltan y que bloquean trabajo.
+No eran bugs: eran definiciones que faltaban y bloqueaban trabajo. **Las ocho están tomadas**, cada una registrada en [`DECISIONS.md`](../DECISIONS.md) con su contexto y sus alternativas descartadas. Dos se resolvieron corrigiendo la especificación en vez del código (`D-b`, `D-d`), porque el criterio escrito era el que estaba mal.
 
 | # | Decisión | Impacto |
 |---|---|---|
@@ -208,7 +209,7 @@ No son bugs: son definiciones que faltan y que bloquean trabajo.
 | **D-b** | ✅ **Resuelta: criterio descopeado** ([D-016](../DECISIONS.md)). El criterio mezclaba dos conceptos —el pesaje es el total de la jornada, no un viaje— y contradecía al criterio vecino, que admite varios pesajes por cuartel y día. Si más adelante hace falta, el lugar es el **remito**, que sí representa un despacho concreto. | HU-24 |
 | **D-c** | ✅ **Resuelta e implementada.** Entidad `campanias` con **rango explícito** por empresa y sin solapamientos, garantizado por un `EXCLUDE` en la base ([D-014](../DECISIONS.md)). Se eligió el rango sobre una clave `anio_agricola_inicio` porque la vendimia no termina el mismo día todos los años. Sin campaña cargada cada consumidor decide su comportamiento, y la respuesta no es la misma en todos: la baja de cuartel es conservadora, el dashboard cae al año calendario y lo informa. | HU-09, HU-31, HU-32 |
 | **D-d** | ✅ **Resuelta: se corrigió la especificación, no el código** ([D-006](../DECISIONS.md)). El rol se recarga de la base en cada request, así que aplica de inmediato; que un rol revocado siguiera vigente hasta el próximo login es peor postura de seguridad que lo que pedía la HU. | HU-06 |
-| **D-e** | ✅ **Resuelta: se implementó FCM completo** ([D-015](../DECISIONS.md)). Tabla `device_tokens`, alta idempotente, baja al cerrar sesión y desactivación de los tokens que FCM rechaza. Las credenciales salen de variables de entorno, nunca de un JSON en el repo. **`PUSH_TRANSPORT=log` está verificado; el envío real contra Firebase no**, porque hace falta un service account. | HU-35 |
+| **D-e** | ✅ **Resuelta: se implementó FCM completo y se verificó contra Firebase real** ([D-015](../DECISIONS.md)). Tabla `device_tokens`, alta idempotente, baja al cerrar sesión y desactivación de los tokens que FCM rechaza. Las credenciales salen de variables de entorno, nunca de un JSON en el repo. Con el service account cargado, `npm run push:diagnostico` confirma que Firebase autentica la petición. La verificación real destapó un bug invisible en modo `log`: los tokens mal formados **no se desactivaban**, porque FCM los rechaza con `messaging/invalid-argument`. | HU-35 |
 | **D-f** | ✅ **Resuelta e implementada** ([D-013](../DECISIONS.md)). No eran dos fuentes de verdad en conflicto sino **dos ciclos distintos**: el enum `EstadoCuartel` (`pendiente`/`en_cosecha`/`cosechado`) gobierna la vendimia y lo escribe solo el sistema; el catálogo `ESTADO_CUARTEL` (Productivo / En implantación) describe el ciclo de plantación y hoy no está vinculado a ninguna columna. | HU-09, HU-10, HU-28 |
 | **D-g** | ✅ **Resuelta en Fase 2: se tomó la alternativa intermedia.** `EventEmitter2` + `@nestjs/schedule`, sin Redis ni BullMQ. Cubre lo pendiente con un solo servicio de infraestructura (PostgreSQL). Se revisa cuando haga falta escalar a más de una instancia. | S6 |
 | **D-h** | ✅ **Resuelta e implementada.** `empresa_id` en `catalogo_item`, `insumos` y `tipos_labor`, con unicidad por empresa ([D-011](../DECISIONS.md)). Las tablas de costos heredan el tenant por la FK. La sincronización verifica que el tipo de labor y los insumos sean de la empresa. | S1, HU-16, HU-34 |
@@ -231,10 +232,12 @@ El orden que se siguió, ya ejecutado:
 
 El plan de mejoras está cerrado. Lo que queda **no es deuda del backend**:
 
-1. **Verificar el push real** (HU-35): con el service account de un proyecto de Firebase y `PUSH_TRANSPORT=fcm`. Es lo único que impide marcar HU-35 como completa.
+1. ~~Verificar el push real.~~ ✅ **Hecho** ([D-015](../DECISIONS.md)). Con el service account cargado, `npm run push:diagnostico` confirma que Firebase acepta las credenciales. Queda probar la última milla contra un teléfono, que necesita Mobile: `npm run push:diagnostico -- <token>`.
 2. ~~Endurecer el despliegue.~~ ✅ **Hecho** ([D-017](../DECISIONS.md)). Al desplegar hay que correr `npm run db:rol-app` una vez por entorno y apuntar `DB_USERNAME` al rol nuevo; `npm run db:verificar-privilegios` lo comprueba y sale con código 1 si algo falta, así que conviene dejarlo como paso del pipeline.
 3. **Revisar las 6 vulnerabilidades moderadas** que arrastra `firebase-admin` en dependencias transitivas, cuando el SDK publique la corrección ([D-015](../DECISIONS.md)).
 4. **Los clientes:** Web, Mobile e IoTSensor, cada uno en su repo. Ahí falta el 100%.
+
+> **Los dos comandos de verificación son parte del despliegue, no herramientas de una vez.** `db:verificar-privilegios` y `push:diagnostico` salen con código 1 cuando la configuración no sirve, así que encadenarlos al pipeline convierte un error de credenciales en un despliegue fallido en vez de en una funcionalidad que calla y no anda.
 
 > Los umbrales de las reglas agronómicas (`reglas-agronomicas.ts`) están calibrados para vid en Mendoza bajo riego. Si el sistema se despliega en otra región hay que revisarlos — están juntos y comentados en un solo archivo para que esa revisión sea barata.
 
