@@ -1,4 +1,11 @@
-import { Column, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn, UpdateDateColumn } from 'typeorm';
+import {
+  Column,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  UpdateDateColumn,
+} from 'typeorm';
 import { Sensor } from '../../sensores/entities/sensor.entity';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
@@ -14,10 +21,22 @@ export class UmbralSensor {
   @JoinColumn({ name: 'sensor_id' })
   sensor: Sensor;
 
-  @Column({ name: 'umbral_minimo', type: 'decimal', precision: 10, scale: 4, nullable: true })
+  @Column({
+    name: 'umbral_minimo',
+    type: 'decimal',
+    precision: 10,
+    scale: 4,
+    nullable: true,
+  })
   umbralMinimo: number | null;
 
-  @Column({ name: 'umbral_maximo', type: 'decimal', precision: 10, scale: 4, nullable: true })
+  @Column({
+    name: 'umbral_maximo',
+    type: 'decimal',
+    precision: 10,
+    scale: 4,
+    nullable: true,
+  })
   umbralMaximo: number | null;
 
   @Column({ name: 'configurado_por', type: 'uuid' })

@@ -1,9 +1,11 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   ArrayMinSize,
   IsArray,
   IsDateString,
   IsNumber,
+  IsOptional,
   IsUUID,
   Min,
   ValidateNested,
@@ -29,7 +31,17 @@ export class CreateRegistroLaborDto {
 
   @IsArray()
   @ArrayMinSize(0)
+  // Un insumo por línea; más de 20 en una misma labor es un error de carga.
+  @ArrayMaxSize(20)
   @ValidateNested({ each: true })
   @Type(() => DetalleInsumoDto)
   insumos: DetalleInsumoDto[];
+
+  /**
+   * Momento de creación en el dispositivo (HU-14). Opcional para no romper a
+   * los clientes que todavía no lo mandan; sin él se usa la hora del servidor.
+   */
+  @IsOptional()
+  @IsDateString()
+  createdAtLocal?: string;
 }

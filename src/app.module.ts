@@ -1,13 +1,21 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { EventEmitterModule } from '@nestjs/event-emitter';
+import { ScheduleModule } from '@nestjs/schedule';
+import { MailModule } from './common/mail/mail.module';
+import { TareasProgramadasModule } from './common/tareas/tareas-programadas.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import typeormConfig from './config/typeorm.config';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { AlcanceEmpresaModule } from './common/tenant/alcance-empresa.module';
+import { AuditoriaInterceptor } from './common/audit/auditoria.interceptor';
+import { RequestContextMiddleware } from './common/audit/request-context.middleware';
 
 import { RolesModule } from './modules/roles/roles.module';
 import { UsuariosModule } from './modules/usuarios/usuarios.module';
@@ -41,6 +49,18 @@ import { AyudaModule } from './modules/ayuda/ayuda.module';
       inject: [typeormConfig.KEY],
       useFactory: (config: ReturnType<typeof typeormConfig>) => config,
     }),
+    // Límite general por IP. Los endpoints sensibles de auth lo ajustan con
+    // `@Throttle` (HU-01, HU-03).
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 120 }]),
+    // Desacopla del camino de respuesta el trabajo que no le importa a quien
+    // hizo el request (evaluar umbrales, notificar). Es la alternativa sin
+    // Redis a BullMQ que documenta `D-g`: in-process, así que un reinicio
+    // pierde los eventos en vuelo — aceptable para esto, no para una cola real.
+    EventEmitterModule.forRoot(),
+    ScheduleModule.forRoot(),
+    AlcanceEmpresaModule,
+    MailModule,
+    TareasProgramadasModule,
     RolesModule,
     UsuariosModule,
     AuthModule,
@@ -70,8 +90,15 @@ import { AyudaModule } from './modules/ayuda/ayuda.module';
   providers: [
     AppService,
     { provide: APP_FILTER, useClass: HttpExceptionFilter },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Después de los guards: audita solo lo que pasó autenticación y permisos.
+    { provide: APP_INTERCEPTOR, useClass: AuditoriaInterceptor },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestContextMiddleware).forRoutes('*');
+  }
+}

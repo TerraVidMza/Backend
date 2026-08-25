@@ -7,12 +7,22 @@ import { RegistroLabor } from '../registro-labor/entities/registro-labor.entity'
 import { DetalleInsumoLabor } from '../registro-labor/entities/detalle-insumo-labor.entity';
 import { PesajeVendimia } from '../pesaje-vendimia/entities/pesaje-vendimia.entity';
 import { Remito } from '../remitos/entities/remito.entity';
+import { LogAuditoriaModule } from '../log-auditoria/log-auditoria.module';
 import { DashboardService } from './dashboard.service';
 import { DashboardController } from './dashboard.controller';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Finca, Cuartel, AlertaIot, RegistroLabor, DetalleInsumoLabor, PesajeVendimia, Remito]),
+    TypeOrmModule.forFeature([
+      Finca,
+      Cuartel,
+      AlertaIot,
+      RegistroLabor,
+      DetalleInsumoLabor,
+      PesajeVendimia,
+      Remito,
+    ]),
+    LogAuditoriaModule,
   ],
   providers: [DashboardService],
   controllers: [DashboardController],

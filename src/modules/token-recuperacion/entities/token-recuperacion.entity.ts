@@ -2,13 +2,19 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
+/**
+ * El token se busca siempre por su hash (el valor plano no se guarda), y ese
+ * lookup está en el camino crítico de HU-03.
+ */
 @Entity('token_recuperacion')
+@Index('idx_token_recuperacion_hash', ['tokenHash'])
 export class TokenRecuperacion {
   @PrimaryGeneratedColumn('uuid')
   id: string;

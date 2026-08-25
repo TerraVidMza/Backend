@@ -2,13 +2,20 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
+/**
+ * El listado de HU-35 es "las mías, no leídas primero, más recientes arriba";
+ * la purga nocturna barre por `created_at`.
+ */
 @Entity('notificaciones')
+@Index('idx_notificaciones_usuario', ['usuarioId', 'leida', 'createdAt'])
+@Index('idx_notificaciones_created_at', ['createdAt'])
 export class Notificacion {
   @PrimaryGeneratedColumn('uuid')
   id: string;

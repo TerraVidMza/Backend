@@ -1,8 +1,18 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+  Unique,
+} from 'typeorm';
 import { Cuadrilla } from './cuadrilla.entity';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
+/** Ver `CostoInsumo`: el UNIQUE hace determinista la tarifa vigente a fecha. */
 @Entity('tarifa_cuadrilla')
+@Unique('uq_tarifa_cuadrilla_vigencia', ['cuadrillaId', 'validFrom'])
 export class TarifaCuadrilla {
   @PrimaryGeneratedColumn('uuid')
   id: string;

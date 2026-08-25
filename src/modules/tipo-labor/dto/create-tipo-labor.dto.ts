@@ -1,4 +1,12 @@
-import { IsNumber, IsOptional, IsString, Length, Min } from 'class-validator';
+import {
+  IsEnum,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Length,
+  Min,
+} from 'class-validator';
+import { UnidadMedida } from '../../../common/enums/unidad-medida.enum';
 
 export class CreateTipoLaborDto {
   @IsString()
@@ -10,9 +18,12 @@ export class CreateTipoLaborDto {
   @Length(0, 300)
   descripcion?: string;
 
-  @IsString()
-  @Length(1, 20)
-  unidadMedida: string;
+  /**
+   * Conjunto cerrado (HU-16): como texto libre convivían "kg", "Kg" y
+   * "kilos" como unidades distintas, y toda agregación las separaba.
+   */
+  @IsEnum(UnidadMedida)
+  unidadMedida: UnidadMedida;
 
   @IsNumber()
   @Min(0)

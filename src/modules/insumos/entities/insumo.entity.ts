@@ -2,16 +2,44 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
+  JoinColumn,
+  ManyToOne,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
+import { Empresa } from '../../empresas/entities/empresa.entity';
 
+/**
+ * La unicidad del nombre es **entre activos** (HU-16): con un UNIQUE plano, dar
+ * de baja un registro dejaba su nombre bloqueado para siempre, aunque ya no
+ * apareciera en ningún listado. El índice parcial de PostgreSQL expresa eso
+ * exactamente.
+ */
 @Entity('insumos')
+@Index('uq_insumos_nombre_activo', ['empresaId', 'nombre'], {
+  unique: true,
+  where: '"activo" = true',
+})
 export class Insumo {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 100, unique: true })
+  /**
+   * Cada empresa mantiene su propio catálogo (D-h).
+   *
+   * Sin esta columna las tablas maestras eran globales a la instancia: un
+   * Propietario que corregía el costo de un insumo lo cambiaba **para todas las
+   * empresas**, y el ABM de HU-34 operaba sobre datos de terceros sin saberlo.
+   */
+  @Column({ name: 'empresa_id', type: 'uuid' })
+  empresaId: string;
+
+  @ManyToOne(() => Empresa)
+  @JoinColumn({ name: 'empresa_id' })
+  empresa: Empresa;
+
+  @Column({ type: 'varchar', length: 100 })
   nombre: string;
 
   @Column({ type: 'varchar', length: 300, nullable: true })

@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { ArticuloAyuda, ModuloAyuda, TipoArticulo } from './entities/articulo-ayuda.entity';
+import {
+  ArticuloAyuda,
+  ModuloAyuda,
+  TipoArticulo,
+} from './entities/articulo-ayuda.entity';
 import { CreateArticuloDto } from './dto/create-articulo.dto';
 import { UpdateArticuloDto } from './dto/update-articulo.dto';
 

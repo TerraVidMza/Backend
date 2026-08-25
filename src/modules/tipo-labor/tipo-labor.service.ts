@@ -6,6 +6,7 @@ import { CostoLabor } from './entities/costo-labor.entity';
 import { CreateTipoLaborDto } from './dto/create-tipo-labor.dto';
 import { UpdateTipoLaborDto } from './dto/update-tipo-labor.dto';
 import { SetCostoLaborDto } from './dto/set-costo-labor.dto';
+import { hoyLocal } from '../../common/fechas/rango-fechas';
 
 @Injectable()
 export class TipoLaborService {
@@ -16,15 +17,21 @@ export class TipoLaborService {
     private readonly costoLaborRepository: Repository<CostoLabor>,
   ) {}
 
-  findAll(soloActivos = true): Promise<TipoLabor[]> {
+  findAll(empresaId: string, soloActivos = true): Promise<TipoLabor[]> {
     return this.tipoLaborRepository.find({
-      where: soloActivos ? { activo: true } : {},
+      where: soloActivos ? { empresaId, activo: true } : { empresaId },
       order: { nombre: 'ASC' },
     });
   }
 
-  async findById(id: string): Promise<TipoLabor> {
-    const tipoLabor = await this.tipoLaborRepository.findOne({ where: { id } });
+  /**
+   * `empresaId` acota al tenant: el catalogo es por empresa (D-h). Devuelve 404
+   * para un tipo de labor de otra empresa, no 403.
+   */
+  async findById(id: string, empresaId: string): Promise<TipoLabor> {
+    const tipoLabor = await this.tipoLaborRepository.findOne({
+      where: { id, empresaId },
+    });
     if (!tipoLabor) {
       throw new NotFoundException('Tipo de labor no encontrado');
     }
@@ -34,11 +41,13 @@ export class TipoLaborService {
   async create(
     dto: CreateTipoLaborDto,
     createdById: string,
+    empresaId: string,
   ): Promise<TipoLabor> {
     const tipoLabor = this.tipoLaborRepository.create({
       nombre: dto.nombre,
       descripcion: dto.descripcion ?? null,
       unidadMedida: dto.unidadMedida,
+      empresaId,
       activo: true,
     });
     const guardado = await this.tipoLaborRepository.save(tipoLabor);
@@ -47,22 +56,27 @@ export class TipoLaborService {
       guardado.id,
       {
         costoUnitario: dto.costoUnitarioInicial,
-        validFrom: new Date().toISOString().slice(0, 10),
+        validFrom: hoyLocal(),
       },
       createdById,
+      empresaId,
     );
 
     return guardado;
   }
 
-  async update(id: string, dto: UpdateTipoLaborDto): Promise<TipoLabor> {
-    const tipoLabor = await this.findById(id);
+  async update(
+    id: string,
+    dto: UpdateTipoLaborDto,
+    empresaId: string,
+  ): Promise<TipoLabor> {
+    const tipoLabor = await this.findById(id, empresaId);
     Object.assign(tipoLabor, dto);
     return this.tipoLaborRepository.save(tipoLabor);
   }
 
-  async desactivar(id: string): Promise<TipoLabor> {
-    const tipoLabor = await this.findById(id);
+  async desactivar(id: string, empresaId: string): Promise<TipoLabor> {
+    const tipoLabor = await this.findById(id, empresaId);
     tipoLabor.activo = false;
     return this.tipoLaborRepository.save(tipoLabor);
   }
@@ -71,8 +85,11 @@ export class TipoLaborService {
     tipoLaborId: string,
     dto: SetCostoLaborDto,
     createdById: string,
+    empresaId: string,
   ): Promise<CostoLabor> {
-    await this.findById(tipoLaborId);
+    // El costo hereda el tenant del tipo de labor: verificar el padre alcanza y
+    // evita desnormalizar `empresa_id` en la tabla de costos.
+    await this.findById(tipoLaborId, empresaId);
     const costo = this.costoLaborRepository.create({
       tipoLaborId,
       costoUnitario: dto.costoUnitario,
@@ -84,18 +101,33 @@ export class TipoLaborService {
 
   async getCostoVigente(
     tipoLaborId: string,
-    fecha: Date = new Date(),
+    /**
+     * Día de aplicación en formato `YYYY-MM-DD`.
+     *
+     * Se recibe como texto y no como `Date` a propósito: `new Date('2026-08-24')`
+     * se parsea como medianoche **UTC**, y volver a convertirlo a fecha local
+     * retrocede un día en zonas negativas. La columna `valid_from` es `date`
+     * —sin hora ni huso—, así que la comparación correcta es texto contra texto.
+     */
+    fecha: string = hoyLocal(),
   ): Promise<CostoLabor | null> {
     return this.costoLaborRepository.findOne({
       where: {
         tipoLaborId,
-        validFrom: LessThanOrEqual(fecha.toISOString().slice(0, 10)),
+        validFrom: LessThanOrEqual(fecha.slice(0, 10)),
       },
-      order: { validFrom: 'DESC' },
+      // Desempate por createdAt: con dos registros del mismo valid_from el
+      // orden sin desempate lo decide el optimizador, y el costo aplicado
+      // pasaba a ser no determinista.
+      order: { validFrom: 'DESC', createdAt: 'DESC' },
     });
   }
 
-  async getHistorialCostos(tipoLaborId: string): Promise<CostoLabor[]> {
+  async getHistorialCostos(
+    tipoLaborId: string,
+    empresaId: string,
+  ): Promise<CostoLabor[]> {
+    await this.findById(tipoLaborId, empresaId);
     return this.costoLaborRepository.find({
       where: { tipoLaborId },
       order: { validFrom: 'DESC' },

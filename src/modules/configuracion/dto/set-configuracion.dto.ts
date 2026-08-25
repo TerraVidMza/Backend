@@ -1,9 +1,12 @@
-import { IsString, Length } from 'class-validator';
+import { IsIn, IsString } from 'class-validator';
+import {
+  CLAVES_CONFIGURACION,
+  type ClaveConfiguracion,
+} from '../configuracion.keys';
 
 export class SetConfiguracionDto {
-  @IsString()
-  @Length(1, 100)
-  clave: string;
+  @IsIn(CLAVES_CONFIGURACION as readonly string[])
+  clave: ClaveConfiguracion;
 
   @IsString()
   valor: string;

@@ -7,6 +7,7 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolNombre } from '../../common/enums/rol.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { Auditar } from '../../common/audit/auditar.decorator';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('configuracion')
@@ -15,19 +16,26 @@ export class ConfiguracionController {
 
   @Get()
   @Roles(RolNombre.PROPIETARIO)
-  findAll() {
-    return this.configuracionService.findAll();
+  findAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.configuracionService.findAll(user.empresaId);
   }
 
   @Get(':clave')
   @Roles(RolNombre.PROPIETARIO)
-  findByClave(@Param('clave') clave: string) {
-    return this.configuracionService.findByClave(clave);
+  findByClave(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('clave') clave: string,
+  ) {
+    return this.configuracionService.findByClave(clave, user.empresaId);
   }
 
   @Put()
+  @Auditar({ accion: 'ACTUALIZAR_CONFIGURACION', entidad: 'configuracion' })
   @Roles(RolNombre.PROPIETARIO)
-  set(@Body() dto: SetConfiguracionDto, @CurrentUser() user: AuthenticatedUser) {
-    return this.configuracionService.set(dto, user.id);
+  set(
+    @Body() dto: SetConfiguracionDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.configuracionService.set(dto, user.id, user.empresaId);
   }
 }

@@ -1,4 +1,11 @@
-import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryGeneratedColumn,
+} from 'typeorm';
 import { Cuartel } from '../../cuarteles/entities/cuartel.entity';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
@@ -47,10 +54,22 @@ export class Remito {
   @Column({ type: 'varchar', length: 20, default: EstadoRemito.BORRADOR })
   estado: EstadoRemito;
 
-  @Column({ name: 'total_kg', type: 'decimal', precision: 10, scale: 2, nullable: true })
+  @Column({
+    name: 'total_kg',
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+  })
   totalKg: number | null;
 
-  @Column({ name: 'total_liquidacion', type: 'decimal', precision: 12, scale: 2, nullable: true })
+  @Column({
+    name: 'total_liquidacion',
+    type: 'decimal',
+    precision: 12,
+    scale: 2,
+    nullable: true,
+  })
   totalLiquidacion: number | null;
 
   @Column({ name: 'motivo_rechazo', type: 'text', nullable: true })
