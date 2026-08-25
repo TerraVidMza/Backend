@@ -572,21 +572,37 @@ Etiquetar con el SHA del commit y no con `latest` es lo que hace que se sepa qu�
 
 Primero la base sola, sin la API: el esquema todavía no existe.
 
-En la VM:
-
-Si la rama con `deploy/` todavía no está en `main`, el `git clone` no la trae; en ese caso los archivos van con `gcloud compute scp --recurse deploy/ terravid:/opt/terravid/`.
-
-> **Copiando desde Windows, normalizá los saltos de línea.** Los archivos llegan con CRLF, y eso rompe el `Caddyfile` y el shebang de `backup-db.sh`. El `.gitattributes` del repositorio cubre a quien clona, no a quien copia:
-> ```bash
-> sed -i 's/
-$//' docker-compose.prod.yml Caddyfile backup-db.sh
-> chmod +x backup-db.sh
-> ```
+En la VM. **El repositorio es privado**, así que el `git clone` necesita credenciales. La forma correcta es una *deploy key* de solo lectura: acotada a este repositorio, y sin permiso de escritura —si la VM pudiera escribir, comprometer el servidor sería comprometer el repositorio—.
 
 ```bash
-sudo mkdir -p /opt/terravid && sudo chown "$USER" /opt/terravid
-git clone https://github.com/TerraVidMza/Backend.git /opt/terravid
-cd /opt/terravid/deploy
+# 1. Generar el par en la VM. La clave privada no sale de ahí.
+ssh-keygen -t ed25519 -f ~/.ssh/github_terravid -N "" -C "deploy key vm terravid"
+
+# 2. Que git la use para github.com, y solo para eso.
+cat >> ~/.ssh/config <<'CONF'
+
+Host github.com
+  User git
+  IdentityFile ~/.ssh/github_terravid
+  IdentitiesOnly yes
+CONF
+chmod 600 ~/.ssh/config
+
+# 3. Mostrar la PÚBLICA —esta no es secreta— y pegarla en
+#    github.com/TerraVidMza/Backend/settings/keys -> Add deploy key,
+#    DEJANDO "Allow write access" sin marcar.
+cat ~/.ssh/github_terravid.pub
+
+# 4. Comprobar. Tiene que responder "Hi TerraVidMza/Backend!".
+ssh -T git@github.com
+```
+
+Con la clave ya autorizada:
+
+```bash
+sudo mkdir -p /opt/backend && sudo chown -R "$USER:$USER" /opt/backend
+git clone --branch main git@github.com:TerraVidMza/Backend.git /opt/backend
+cd /opt/backend/deploy
 
 # Dos archivos, y la separación importa: `.env` lo lee Compose para
 # interpolar y no entra en ningún contenedor; `.env.app` es lo único que ve
@@ -598,6 +614,15 @@ chmod 600 .env .env.app
 
 docker compose -f docker-compose.prod.yml up -d db
 docker compose -f docker-compose.prod.yml logs db | tail -5
+```
+
+`/opt/backend` es un checkout de git y nada más. Los dos `.env` no están versionados, así que sobreviven a los `git pull`, y de ese layout depende que [A.11](#a11-desplegar-una-versión-nueva) sea un `git pull` y no una copia manual. Si la VM además sirve otra cosa —un build del frontend, por ejemplo— que viva en otro directorio.
+
+Clonando, los saltos de línea vienen bien: el `.gitattributes` del repositorio fuerza LF en el `Caddyfile`, el `docker-compose.prod.yml` y `backup-db.sh`, que se ejecutan dentro de contenedores Linux. **Copiar** los archivos en vez de clonarlos —con `gcloud compute scp`, útil si la rama todavía no está en `main`— no pasa por `.gitattributes`, y desde Windows llegan con CRLF: rompen el `Caddyfile` y el shebang del script con un `bad interpreter: ...^M` que no dice cuál es el problema. Ahí hay que normalizarlos a mano:
+
+```bash
+sed -i 's/\r$//' docker-compose.prod.yml Caddyfile backup-db.sh
+chmod +x backup-db.sh
 ```
 
 Ahora el túnel, **desde tu máquina**, en una terminal aparte:
@@ -635,7 +660,7 @@ La `DB_APP_PASSWORD` va a `DB_PASSWORD` del `.env.app` **de la VM**. La del supe
 En la VM:
 
 ```bash
-cd /opt/terravid/deploy
+cd /opt/backend/deploy
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml ps
 ```
@@ -686,16 +711,16 @@ gcloud storage buckets add-iam-policy-binding gs://terravid-backups \
 En la VM, el cron de las 7 UTC (4 de la mañana en Mendoza, después de las purgas de las 3):
 
 ```bash
-chmod +x /opt/terravid/deploy/backup-db.sh
+chmod +x /opt/backend/deploy/backup-db.sh
 
 # El script lee BUCKET_BACKUPS del entorno; el cron no hereda el .env.
 ( crontab -l 2>/dev/null; \
   echo 'BUCKET_BACKUPS=terravid-backups'; \
-  echo '0 7 * * * /opt/terravid/deploy/backup-db.sh >> /var/log/terravid-backup.log 2>&1' \
+  echo '0 7 * * * /opt/backend/deploy/backup-db.sh >> /var/log/terravid-backup.log 2>&1' \
 ) | crontab -
 
 # Probalo a mano antes de confiar en el cron.
-BUCKET_BACKUPS=terravid-backups /opt/terravid/deploy/backup-db.sh
+BUCKET_BACKUPS=terravid-backups /opt/backend/deploy/backup-db.sh
 ```
 
 Y **restaurá uno** en una base descartable. Un backup que nunca se restauró no es un backup:
@@ -713,7 +738,7 @@ docker exec -i terravid-db psql -U postgres -c 'DROP DATABASE prueba_restore'
 En tu máquina, publicar la imagen ([A.7](#a7-publicar-la-imagen-en-artifact-registry)). En la VM:
 
 ```bash
-cd /opt/terravid/deploy
+cd /opt/backend/deploy
 git pull                                  # por si cambió el compose
 nano .env                                 # actualizar API_IMAGE al tag nuevo
 docker compose -f docker-compose.prod.yml pull api
