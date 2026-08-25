@@ -12,6 +12,7 @@ import {
 import { TipoLaborService } from './tipo-labor.service';
 import { CreateTipoLaborDto } from './dto/create-tipo-labor.dto';
 import { UpdateTipoLaborDto } from './dto/update-tipo-labor.dto';
+import { ListarConInactivosDto } from '../../common/dto/listar-con-inactivos.dto';
 import { SetCostoLaborDto } from './dto/set-costo-labor.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -32,11 +33,11 @@ export class TipoLaborController {
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
   findAll(
     @CurrentUser() user: AuthenticatedUser,
-    @Query('incluirInactivos') incluirInactivos?: string,
+    @Query() query: ListarConInactivosDto,
   ) {
     return this.tipoLaborService.findAll(
       user.empresaId,
-      incluirInactivos !== 'true',
+      !query.incluirInactivos,
     );
   }
 

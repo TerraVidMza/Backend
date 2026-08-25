@@ -4,7 +4,7 @@ Resultado de auditar el código real de los 24 módulos del backend contra los c
 
 **Veredicto original (2026-08-24): ninguna de las 36 HU cumplía el 100% de sus criterios de aceptación.** 12 sustancialmente incompletas, 24 parciales. Los endpoints existían y respondían — lo que faltaba eran reglas de negocio, validaciones, aislamiento entre empresas y auditoría.
 
-**Estado hoy (2026-08-25): las 36 HU completas.** Cerradas las Fases 0 (10/10), 1 (14/14) y 2 (cimientos, criterios por bloque y tests), y resueltas **las ocho decisiones de producto** de la sección 6. Verificado con 121 tests unitarios y un smoke test de 172 casos end-to-end contra PostgreSQL real, desde una base recreada desde cero y sin deriva entre las entidades y el esquema.
+**Estado hoy (2026-08-25): las 36 HU completas.** Cerradas las Fases 0 (10/10), 1 (14/14) y 2 (cimientos, criterios por bloque y tests), y resueltas **las ocho decisiones de producto** de la sección 6. Verificado con 150 tests unitarios y un smoke test de 185 casos end-to-end contra PostgreSQL real, desde una base recreada desde cero y sin deriva entre las entidades y el esquema.
 
 HU-35 se cerró al cargar el service account del proyecto: `npm run push:diagnostico` confirma que **Firebase acepta las credenciales** ([D-015](../DECISIONS.md)). Ver la notificación en un teléfono depende de que Mobile registre su token, que es trabajo del cliente y no de esta HU.
 
@@ -12,7 +12,7 @@ HU-35 se cerró al cargar el service account del proyecto: `npm run push:diagnos
 >
 > Se cumplió: **los 10 problemas sistémicos están cerrados.** El último en caer fue S3 en su parte de base — el log de auditoría es ahora append-only por trigger, verificado contra PostgreSQL — y S10, con los tres huecos de test que faltaban.
 >
-> También quedó cerrado el endurecimiento de despliegue: la aplicación ya puede correr con un **rol acotado sin privilegios de DDL** ([D-017](../DECISIONS.md)), creado por `npm run db:rol-app` y comprobado por `npm run db:verificar-privilegios`. Con la API conectada así, el smoke test pasa 172/172.
+> También quedó cerrado el endurecimiento de despliegue: la aplicación ya puede correr con un **rol acotado sin privilegios de DDL** ([D-017](../DECISIONS.md)), creado por `npm run db:rol-app` y comprobado por `npm run db:verificar-privilegios`. Con la API conectada así, el smoke test pasa 185/185.
 
 ---
 
@@ -78,7 +78,7 @@ Cada uno de estos rompe criterios de aceptación en **muchas HU a la vez**. Son 
 | **S7** ✅ | ~~**Sin envío de emails.**~~ **Resuelto en F2-4** (`MailService` con SMTP por empresa y modo `log`). Descripción original: salvo tickets de soporte, que tampoco se envían por falta de configuración seedeada. El "recuperar contraseña" genera el token y **el controller lo descarta**. No hay email de bienvenida ni de alerta IoT ni de remito pendiente. | HU-03, 05, 22, 26, 36 |
 | **S8** ✅ | ~~**Dinero que se pierde en silencio.**~~ **Resuelto en F1-1/F1-3:** sin costo o tarifa vigente el registro se marca ERROR y no entra al costeo ni al remito. Descripción original: si no hay costo/tarifa vigente, se persiste `null` y el registro se marca **SINCRONIZADO**. Una labor cuesta $0 o un pesaje entra al remito con kilos y sin liquidación, sin ninguna señal de error. | HU-14, 16, 24, 25, 26 |
 | **S9** ✅ | ~~**Versionado `valid_from` frágil, replicado 3 veces**~~ (insumos, tipos de labor, cuadrillas). **Resuelto en F1-12:** validación de no-retroactividad, desempate por `createdAt DESC` y UNIQUE `(entidad_id, valid_from)`. Descripción original: (a) `validFrom` lo manda el cliente sin validar → **retro-datado** que reescribe el costo vigente del pasado; (b) el desempate ordena solo por `validFrom DESC`, así que con dos registros del mismo día **el monto depende del optimizador de Postgres**. | HU-16, 23, 25 |
-| **S10** ✅ | ~~**Casi cero tests.**~~ **Resuelto en F2-7:** 121 tests unitarios y un smoke de 172 casos end-to-end. Descripción original: solo `app.controller.spec.ts` y el e2e "Hello World". Sin tests para idempotencia del sync, costo vigente a fecha, escalada de privilegios, bloqueo por intentos, ni Pearson. | Todas |
+| **S10** ✅ | ~~**Casi cero tests.**~~ **Resuelto en F2-7:** 150 tests unitarios y un smoke de 185 casos end-to-end. Descripción original: solo `app.controller.spec.ts` y el e2e "Hello World". Sin tests para idempotencia del sync, costo vigente a fecha, escalada de privilegios, bloqueo por intentos, ni Pearson. | Todas |
 
 ---
 
@@ -107,7 +107,7 @@ Estos son explotables hoy contra la instancia tal como está.
 
 ## 4. Fase 1 — Correctitud de datos y dinero
 
-> **Estado: 14 de 14 cerrados.** F1-10 se completó con los criterios por bloque y F1-9 con la liquidación de bodega ([D-010](../DECISIONS.md)). Verificado con `tsc`, `eslint`, `nest build`, los 121 tests unitarios y el smoke end-to-end contra PostgreSQL real.
+> **Estado: 14 de 14 cerrados.** F1-10 se completó con los criterios por bloque y F1-9 con la liquidación de bodega ([D-010](../DECISIONS.md)). Verificado con `tsc`, `eslint`, `nest build`, los 150 tests unitarios y el smoke end-to-end contra PostgreSQL real.
 >
 > Los dos que quedaron parciales más tiempo:
 > - **F1-9** — ✅ **cerrado.** Primero se dejó de publicar el número falso (`margenBruto: null` + `margenBrutoDisponible: false`, y el campo pasó a llamarse `costoCosecha`, que es lo que realmente es). El margen real llegó con `liquidaciones_bodega` ([D-010](../DECISIONS.md)), aplicado **en los dos endpoints**: el costeo de HU-15 y la comparación de campañas de HU-31. Al implementar el segundo apareció el mismo patrón de la primera corrección incompleta: HU-31 seguía devolviendo `margenBruto: null` cuando HU-15 ya calculaba el margen.
@@ -134,7 +134,7 @@ Estos son explotables hoy contra la instancia tal como está.
 
 ## 5. Fase 2 — Cimientos y criterios faltantes
 
-> **Estado: cerrada.** Los 6 cimientos (F2-1 a F2-6), los criterios por bloque y los tests (F2-7). Verificado con `tsc`, `eslint`, `nest build`, **121 tests unitarios** y un **smoke test end-to-end de 172 casos contra PostgreSQL real** (`npm run test:smoke`).
+> **Estado: cerrada.** Los 6 cimientos (F2-1 a F2-6), los criterios por bloque y los tests (F2-7). Verificado con `tsc`, `eslint`, `nest build`, **150 tests unitarios** y un **smoke test end-to-end de 185 casos contra PostgreSQL real** (`npm run test:smoke`).
 
 **Cimientos (habilitan el resto):**
 
@@ -184,7 +184,7 @@ Todos son el mismo error de fondo — usar UTC donde el dominio es local— y **
 
 Corregido centralizando en `common/fechas/rango-fechas.ts` (`fechaLocal`, `hoyLocal`), y las comparaciones de vigencia pasaron a ser **texto contra texto** sobre columnas `date` —que no tienen hora ni huso— en vez de round-trips por `Date`. Con tests de regresión.
 
-**F2-7 — Tests (S10).** ✅ **Cerrado.** Hay **121 tests unitarios** (guards, DTOs, alcance multi-empresa, umbrales, paginación, rangos y fechas locales, bloqueo por intentos, lote parcialmente fallido, Pearson y el diagnóstico de push) y un **smoke test end-to-end de 172 casos** contra la API y PostgreSQL reales.
+**F2-7 — Tests (S10).** ✅ **Cerrado.** Hay **150 tests unitarios** (guards, DTOs, alcance multi-empresa, umbrales, paginación, rangos y fechas locales, bloqueo por intentos, lote parcialmente fallido, Pearson, el diagnóstico de push y los parámetros de query) y un **smoke test end-to-end de 185 casos** contra la API y PostgreSQL reales.
 
 Cubre: la escalada vía `PATCH /me`, la invalidación de token en logout, la política de contraseñas, el doble envío del mismo `local_uuid` con su 200, el límite de lote, el costo vigente a fecha vs. el costo actual, la máquina de estados del cuartel, el circuito completo de remitos, el rango físico y la ingesta por código, las bajas con dependencias, el costeo agregado, el bloqueo por intentos y su expiración, el lote parcialmente fallido, Pearson (r=1, r=−1, r=0, serie constante, n<7) y la interpretación de los errores de FCM.
 
@@ -230,7 +230,11 @@ El orden que se siguió, ya ejecutado:
 
 ### Qué sigue
 
-El plan de mejoras está cerrado. Lo que queda **no es deuda del backend**:
+El plan de mejoras está cerrado, y con una salvedad que conviene dejar escrita: **cerrado no significa sin defectos.** Auditar el frontend para el [plan de adaptación del Web](https://github.com/TerraVidMza/Web/blob/develop/docs/PLAN-ADAPTACION-BACKEND.md) destapó **nueve parámetros de query sin validar** en seis controllers de este repo — dos devolvían 500 a una entrada inválida del cliente y tres tenían un filtro que respondía lo contrario de lo que se le pedía. Están corregidos, con los 400 correspondientes cubiertos por tests unitarios y por el smoke.
+
+La lección es sobre el método, no sobre esos nueve: **ninguno de los tres modos de falla era visible leyendo el código.** El `@Transform` de los booleanos se lee correcto y lo derrotaba el `enableImplicitConversion` del `ValidationPipe`; los 500 hacían falta ejecutarlos. Es la misma familia que F1-6 y que el bug de FCM de [D-015](../DECISIONS.md): defectos que solo aparecen corriendo el sistema. Vale para lo que venga: la próxima auditoría de este repo tiene que llamar la API, no leerla.
+
+Salvo eso, lo que queda **no es deuda del backend**:
 
 1. ~~Verificar el push real.~~ ✅ **Hecho** ([D-015](../DECISIONS.md)). Con el service account cargado, `npm run push:diagnostico` confirma que Firebase acepta las credenciales. Queda probar la última milla contra un teléfono, que necesita Mobile: `npm run push:diagnostico -- <token>`.
 2. ~~Endurecer el despliegue.~~ ✅ **Hecho** ([D-017](../DECISIONS.md)). Al desplegar hay que correr `npm run db:rol-app` una vez por entorno y apuntar `DB_USERNAME` al rol nuevo; `npm run db:verificar-privilegios` lo comprueba y sale con código 1 si algo falta, así que conviene dejarlo como paso del pipeline.
