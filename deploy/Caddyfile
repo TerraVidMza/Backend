@@ -1,0 +1,50 @@
+# Reverse proxy con TLS automático delante de la API.
+#
+# Caddy pide el certificado a Let's Encrypt en el primer arranque y lo renueva
+# solo. Para que el desafío HTTP-01 funcione, antes de levantar el servicio el
+# dominio tiene que resolver a la IP de la VM y los puertos 80 y 443 estar
+# abiertos.
+#
+# {$DOMINIO} y {$EMAIL_ACME} salen del entorno del contenedor, que Compose
+# llena desde .env.produccion.
+{
+	email {$EMAIL_ACME}
+
+	# Descomentar para probar el armado sin gastar el límite de emisión de
+	# Let's Encrypt (5 certificados por dominio por semana). El certificado
+	# del entorno de pruebas no lo valida ningún cliente: el navegador y los
+	# ESP32 lo van a rechazar, es esperado.
+	# acme_ca https://acme-staging-v02.api.letsencrypt.org/directory
+}
+
+{$DOMINIO} {
+	# `api` es el nombre del servicio en docker-compose.prod.yml; el puerto
+	# 8080 es el que expone el Dockerfile.
+	reverse_proxy api:8080
+
+	encode zstd gzip
+
+	header {
+		# La API la consumen el frontend web, la app mobile y los nodos ESP32.
+		# HSTS aplica solo a los clientes que hablan por navegador; para los
+		# otros dos es inocuo.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		# Nginx y Caddy anuncian su versión por defecto. No es una defensa,
+		# pero tampoco hay motivo para publicarla.
+		-Server
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 10MiB
+			roll_keep 5
+		}
+		# Las respuestas 4xx del rate limiting y de los 401 son ruido esperado
+		# en una API pública; el nivel INFO alcanza para verlas sin que el log
+		# crezca por cada request exitoso.
+		level INFO
+	}
+}

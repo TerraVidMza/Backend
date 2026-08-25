@@ -12,9 +12,13 @@ yarn-error.log*
 lerna-debug.log*
 
 # env
+# El patrón cubre .env.produccion y .env.desarrollo, que son los nombres que
+# manda crear docs/DESPLIEGUE.md: con solo `.env` quedaban rastreables, o sea
+# a un `git add .` de publicar los secretos de producción.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # OS
 .DS_Store
