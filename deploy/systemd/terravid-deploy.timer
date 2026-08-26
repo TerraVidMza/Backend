@@ -1,0 +1,19 @@
+[Unit]
+Description=TerraVid: buscar una version nueva cada dos minutos
+Documentation=https://github.com/TerraVidMza/Backend/blob/main/docs/DESPLIEGUE.md
+
+[Timer]
+# Al arrancar la maquina, con margen para que Docker termine de levantar los
+# contenedores antes de que el script se ponga a inspeccionarlos.
+OnBootSec=3min
+
+# Dos minutos DESPUES DE QUE TERMINA la corrida anterior, no cada dos minutos
+# de reloj: asi un despliegue lento nunca se pisa con el siguiente tic.
+OnUnitInactiveSec=2min
+
+# Deja que systemd agrupe este disparo con otros y no despierte la CPU sola
+# para esto. En una maquina de 0,25 vCPU compartida, ayuda.
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target
