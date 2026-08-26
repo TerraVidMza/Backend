@@ -37,6 +37,8 @@ export interface MensajePush {
 export class PushService implements OnModuleInit {
   private readonly logger = new Logger(PushService.name);
   private app: App | null = null;
+  /** Para no repetir el aviso de "push deshabilitado" en cada envío. */
+  private avisoDeshabilitado = false;
 
   constructor(
     @InjectRepository(DeviceToken)
@@ -108,7 +110,18 @@ export class PushService implements OnModuleInit {
         );
         return dispositivos.length;
       }
-      if (!this.app) return 0;
+      if (!this.app) {
+        // Una sola vez: si el push quedó deshabilitado, cada alerta y cada
+        // remito pasan por acá, y repetir el aviso solo llenaría el disco de
+        // la VM. El detalle de por qué está en el warning de `onModuleInit`.
+        if (!this.avisoDeshabilitado) {
+          this.avisoDeshabilitado = true;
+          this.logger.warn(
+            `Push deshabilitado: no se envía "${mensaje.titulo}" a ${mensaje.usuarioId}, ni lo que siga.`,
+          );
+        }
+        return 0;
+      }
 
       const respuesta = await getMessaging(this.app).sendEachForMulticast({
         tokens: dispositivos.map((d) => d.token),
@@ -129,6 +142,30 @@ export class PushService implements OnModuleInit {
           .filter((_, i) => respuesta.responses[i]?.success)
           .map((d) => d.id),
       );
+
+      this.logger.log(
+        `Push "${mensaje.titulo}" a ${mensaje.usuarioId}: ` +
+          `${respuesta.successCount}/${dispositivos.length} entregados.`,
+      );
+
+      // Los fallos que no son tokens muertos —credenciales de otro proyecto,
+      // cuota agotada, payload inválido— no dejan rastro en ningún otro lado:
+      // `enviar` devuelve un número que el llamador registra como éxito
+      // parcial. Los códigos van deduplicados porque un problema de
+      // configuración falla igual en todos los dispositivos a la vez.
+      if (respuesta.failureCount > 0) {
+        const motivos = [
+          ...new Set(
+            respuesta.responses
+              .filter((r) => !r.success)
+              .map((r) => r.error?.code ?? 'sin código'),
+          ),
+        ];
+        this.logger.warn(
+          `${respuesta.failureCount} envío(s) push fallaron: ${motivos.join(', ')}`,
+        );
+      }
+
       return respuesta.successCount;
     } catch (error) {
       this.logger.error(
