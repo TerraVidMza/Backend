@@ -37,14 +37,25 @@ concurrency:
 env:
   IMAGEN: us-central1-docker.pkg.dev/terravid/terravid/api
 
+# Todas las acciones estan en mayores que corren en node24. Las anteriores
+# (checkout@v4, auth@v2, los docker/*@v3 y v6) declaraban node20, que GitHub
+# dejo de soportar: seguian funcionando porque el runner las forzaba a node24,
+# pero avisando en cada corrida. No es un cambio cosmetico: cuando el runner
+# deje de forzarlas, dejan de arrancar.
+#
+# Al subir se verifico que sigan existiendo los parametros que se usan acá.
+# `auth@v3` dice «remove old parameters» en sus notas, y de eso depende el
+# `access_token` de mas abajo: sigue estando. `setup-node@v5` empezo a cachear
+# solo cuando package.json tiene `packageManager`, campo que este repositorio
+# no usa, y el `cache: npm` de abajo es explicito de todas formas.
 jobs:
   verificar:
     name: Tipos, lint y tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           # La misma mayor que usa el Dockerfile (node:24-slim).
           node-version: '24'
@@ -68,7 +79,7 @@ jobs:
     needs: verificar
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Version corta del commit
         id: version
@@ -76,7 +87,7 @@ jobs:
 
       - name: Autenticar contra Google Cloud
         id: auth
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           project_id: terravid
           workload_identity_provider: projects/286067019564/locations/global/workloadIdentityPools/github/providers/terravidmza
@@ -86,16 +97,16 @@ jobs:
           # no puede tocar la VM, la base, ni ningun otro recurso del proyecto.
           token_format: access_token
 
-      - uses: docker/login-action@v3
+      - uses: docker/login-action@v4
         with:
           registry: us-central1-docker.pkg.dev
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@v4
 
       - name: Construir y publicar
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
