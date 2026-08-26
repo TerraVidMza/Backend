@@ -178,6 +178,18 @@ La clave IoT que se genera acá es la que va a los nodos ESP32 en el header `X-A
 
 Si se activan mails reales (`MAIL_TRANSPORT=smtp`) y push real (`PUSH_TRANSPORT=fcm`), agregá `SMTP_PASS` y `FIREBASE_PRIVATE_KEY`.
 
+> **El correo tiene otra trampa, y es peor porque no deja rastro.** `MailService.resolverSmtp()` le da prioridad a la configuración de la empresa guardada en la tabla `configuracion` sobre las variables de entorno —es la base del multi-tenant: cada empresa puede tener su propio SMTP—. El seed sembraba ahí `smtp_from = TerraVid <no-reply@terravid.demo>`, un dominio inexistente, y ese valor **pisa a `MAIL_FROM`**. El resultado es el peor modo de falla posible: el relay acepta el mensaje en el protocolo SMTP, lo descarta después por remitente no autorizado, y la aplicación reporta éxito —`MailService` solo registra algo si hay excepción o si falta el host—. No llega ningún correo y los logs están limpios.
+>
+> Después de configurar SMTP, verificá que la base no esté pisando el remitente:
+>
+> ```bash
+> docker exec terravid-db psql -U postgres -d terravid -c "select clave, valor from configuracion where clave like 'smtp%'"
+> ```
+>
+> `smtp_from` tiene que estar **vacía** para que gane `MAIL_FROM`, o contener una dirección verificada de verdad en el proveedor. Si tiene un dominio ficticio: `update configuracion set valor = '' where clave = 'smtp_from'`. No hace falta reiniciar —la consulta se hace en cada envío—.
+>
+> El seed ya la siembra vacía; la comprobación queda para entornos creados antes de esa corrección, y para cuando alguien la edite desde la pantalla de HU-33.
+
 > **La clave de Firebase tiene una trampa.** `credenciales-firebase.ts` hace `.replace(/\\n/g, '\n')` sobre el valor, así que el secreto se guarda con los saltos **escapados como texto** (`-----BEGIN PRIVATE KEY-----\nMII...`), igual que en el `.env`, y no con saltos de línea reales. Guardado con saltos reales, la firma del token de FCM falla con un error de clave inválida que no dice nada útil. Ver [D-015](DECISIONS.md).
 
 ---
@@ -758,6 +770,7 @@ Volver atrás es poner el tag anterior en `API_IMAGE` y repetir las dos últimas
 | Memoria | 166 MB medidos sobre 1 GB, pero una consulta sin paginar sobre `lecturas_iot_historico` puede cambiar eso | `docker stats --no-stream` |
 | Disco | 30 GB entre el sistema, las imágenes y la base | `df -h` y `docker system df` |
 | El cron de las 3 AM | Es la razón de usar una VM: confirmá que efectivamente corre | `docker compose logs api \| grep -i purga` |
+| Entrega real de los correos | La app reporta éxito aunque el proveedor descarte el mensaje | Los logs del proveedor (en Brevo, *Transactional → Logs*), no los de la app |
 | Vencimiento del certificado | Caddy renueva solo, pero si el DNS cambia deja de poder | El mail de `EMAIL_ACME` |
 
 ## A.13 Cuándo dejar este camino

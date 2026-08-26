@@ -175,10 +175,17 @@ async function seed() {
     zona_horaria: 'America/Argentina/Mendoza',
     support_email: 'soporte@terravid.demo',
     // El SMTP real se carga desde la pantalla de configuración (HU-33) o por
-    // variables de entorno. No se siembran vacías: `MailService` interpreta la
-    // cadena vacía como "sin configurar" y no debe pisar el valor del entorno.
+    // variables de entorno.
+    //
+    // `smtp_from` se siembra **vacía a propósito**, y la fila existe igual para
+    // que HU-33 tenga qué editar. `MailService.resolverSmtp` da prioridad a la
+    // configuración de la empresa sobre el entorno (`from = f || from`), así que
+    // un valor sembrado acá **pisa** a `MAIL_FROM` en producción. Tenía
+    // `no-reply@terravid.demo`, un dominio inexistente: el relay aceptaba el
+    // mensaje en el protocolo y lo descartaba después, así que la app reportaba
+    // éxito y no llegaba ningún correo. La cadena vacía no pisa nada.
     smtp_port: '587',
-    smtp_from: 'TerraVid <no-reply@terravid.demo>',
+    smtp_from: '',
   };
 
   for (const [clave, valor] of Object.entries(configuracionPorDefecto)) {
