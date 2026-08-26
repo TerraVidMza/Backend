@@ -18,6 +18,8 @@
 >
 > **Cierre (2026-08-25):** **Pendiente:** el criterio de baja habla de registros activos «en la campaña actual»; el chequeo cuenta labores y pesajes **sin acotar el período**, porque el concepto de campaña no existe en el modelo ([D-c](PLAN-MEJORAS.md)). Es más restrictivo que el criterio, no menos: bloquea bajas que la HU permitiría.
 >
+> **Alcance del Auditor (2026-08-26):** las cuatro lecturas de `/cuarteles` las hace también el Auditor, por la misma razón que en [HU-08](HU-08-abm-fincas.md): el historial de [HU-17](HU-17-historial-labores-cuartel.md) se pide por `cuartelId`. El cuartel no lleva dato económico, y crear, editar y dar de baja siguen cerrados para él. Ver [D-021](../DECISIONS.md#d-021--el-auditor-lee-fincas-y-cuarteles-los-costos-se-filtran-del-payload).
+>
 > **Decisiones pendientes (2026-08-26):** ✅ **cerrada.** La baja cuenta labores y pesajes **de la campaña actual** ([D-014](../DECISIONS.md)), y el mensaje de 409 nombra la campaña. Sin campaña cargada se sigue contando todo el histórico: negar una baja reversible es más barato que ocultar un cuartel con registros vivos.
 
 ## Descripción
