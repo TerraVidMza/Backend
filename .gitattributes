@@ -6,3 +6,11 @@
 Dockerfile      text eol=lf
 deploy/Caddyfile text eol=lf
 deploy/*.yml    text eol=lf
+
+# Las unidades de systemd son peores todavía: con CRLF, el retorno de carro
+# queda dentro del valor de `ExecStart` y systemd informa que no encuentra el
+# archivo, aunque la ruta se vea bien.
+deploy/systemd/* text eol=lf
+
+# Los `run:` de un workflow son scripts de shell que corren en Linux.
+.github/workflows/*.yml text eol=lf

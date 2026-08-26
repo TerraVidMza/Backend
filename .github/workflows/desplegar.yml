@@ -1,0 +1,125 @@
+# Construye la imagen de produccion y la publica en Artifact Registry.
+#
+# Este workflow NO toca la VM. La VM busca la imagen por su cuenta cada dos
+# minutos (`terravid-deploy.timer`), aplica las migraciones y verifica que la
+# API responda antes de dar el despliegue por bueno. El motivo esta explicado
+# en deploy/actualizar.sh: migrar necesita la contrasena del superusuario de
+# Postgres, que no debe salir de la VM.
+#
+# Consecuencia practica: cuando este workflow termina en verde, la imagen esta
+# publicada, no desplegada. El despliegue se mira en la VM:
+#
+#     journalctl -u terravid-deploy -f
+name: Desplegar
+
+on:
+  push:
+    branches: [main]
+  # Para republicar sin tener que hacer un commit vacio.
+  workflow_dispatch:
+
+# Sin claves de cuenta de servicio: GitHub firma un token OIDC y Google lo
+# canjea por credenciales de corta duracion (Workload Identity Federation).
+# `id-token: write` es lo que habilita ese token; un archivo JSON de credencial
+# guardado como secreto es el accidente clasico y aca no hace falta ninguno.
+permissions:
+  contents: read
+  id-token: write
+
+# Dos merges seguidos a main no deben publicar en paralelo: la etiqueta `main`
+# es movil y el orden de llegada decidiria que version queda. Sin
+# cancel-in-progress, porque abandonar un push a mitad de camino puede dejar
+# capas a medio subir.
+concurrency:
+  group: desplegar-produccion
+  cancel-in-progress: false
+
+env:
+  IMAGEN: us-central1-docker.pkg.dev/terravid/terravid/api
+
+jobs:
+  verificar:
+    name: Tipos, lint y tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # La misma mayor que usa el Dockerfile (node:24-slim).
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Compilacion de tipos
+        run: npx tsc --noEmit
+
+      - name: Lint
+        # Sin `--fix`, a diferencia de `npm run lint`: en CI hay que fallar, no
+        # arreglar en un arbol de trabajo que se descarta al terminar el job.
+        run: npx eslint "{src,test}/**/*.ts"
+
+      - name: Tests
+        run: npm test
+
+  publicar:
+    name: Construir y publicar la imagen
+    needs: verificar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version corta del commit
+        id: version
+        run: echo "corta=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Autenticar contra Google Cloud
+        id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: terravid
+          workload_identity_provider: projects/286067019564/locations/global/workloadIdentityPools/github/providers/terravidmza
+          service_account: despliegue-github@terravid.iam.gserviceaccount.com
+          # El token sirve para entrar al registro con docker login. La cuenta
+          # solo tiene permiso de escritura sobre este repositorio de imagenes:
+          # no puede tocar la VM, la base, ni ningun otro recurso del proyecto.
+          token_format: access_token
+
+      - uses: docker/login-action@v3
+        with:
+          registry: us-central1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Construir y publicar
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          # `main` es movil y es la que sigue la VM. La del commit es inmutable
+          # y sirve para saber que hay corriendo y para volver a una version
+          # concreta.
+          tags: |
+            ${{ env.IMAGEN }}:main
+            ${{ env.IMAGEN }}:${{ steps.version.outputs.corta }}
+          # El cache de capas es lo que hace que un cambio de codigo no vuelva a
+          # bajar todo el arbol de dependencias: `npm ci` se reusa mientras
+          # package-lock.json no cambie.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          # Buildx agrega por defecto un manifiesto de procedencia, que en
+          # Artifact Registry aparece como una version extra sin etiqueta y
+          # ocupa lugar. El nivel gratuito son 0,5 GB en total.
+          provenance: false
+
+      - name: Que se publico
+        run: |
+          echo "Imagen publicada:"
+          echo "  ${IMAGEN}:main"
+          echo "  ${IMAGEN}:${{ steps.version.outputs.corta }}"
+          echo
+          echo "La VM la va a tomar en los proximos 2 minutos."
+          echo "Para verlo:  journalctl -u terravid-deploy -f"

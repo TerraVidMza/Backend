@@ -1,0 +1,25 @@
+[Unit]
+Description=TerraVid: desplegar la version de main que este publicada
+Documentation=https://github.com/TerraVidMza/Backend/blob/main/docs/DESPLIEGUE.md
+# El script habla con el demonio de Docker; sin esto puede correr antes de que
+# exista el socket y fallar en cada arranque de la maquina.
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/backend/deploy/actualizar.sh
+
+# La e2-micro tiene 0,25 vCPU de linea base. Un despliegue —bajar la imagen,
+# arrancar contenedores— no debe competir con la API que esta atendiendo.
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+
+# Bajar una imagen nueva en un enlace lento mas migrar mas verificar salud:
+# 15 minutos es holgado. Sin limite, un cuelgue bloquearia el timer para
+# siempre, porque systemd no arranca una unidad que ya esta corriendo.
+TimeoutStartSec=15min
+
+[Install]
+WantedBy=multi-user.target
