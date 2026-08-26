@@ -763,8 +763,12 @@ docker exec -i terravid-db psql -U postgres -c 'DROP DATABASE prueba_restore'
 
 Un merge a `main` llega a producción sin que nadie toque la VM. Son dos mitades que no se conocen entre sí:
 
-1. **GitHub Actions** ([`desplegar.yml`](../.github/workflows/desplegar.yml)) corre tipos, lint y tests, construye la imagen y la publica con dos etiquetas: `main`, que es móvil, y el SHA corto del commit, que es inmutable.
-2. **La VM** busca la etiqueta `main` cada dos minutos ([`actualizar.sh`](../deploy/actualizar.sh)), y si cambió: trae el repositorio, migra, reaplica los privilegios del rol acotado, levanta la imagen y **verifica que la API responda**. Si no responde, vuelve a la anterior.
+1. **GitHub Actions** ([`desplegar.yml`](../.github/workflows/desplegar.yml)) corre tipos, lint y tests, construye la imagen y la publica con dos etiquetas: el SHA corto del commit, que es inmutable, y `main`, que es móvil.
+2. **La VM** mira `origin/main` cada dos minutos ([`actualizar.sh`](../deploy/actualizar.sh)) y busca **la imagen de ese commit exacto**, por su etiqueta de SHA. Si existe: trae el repositorio, migra, reaplica los privilegios del rol acotado, levanta la imagen y **verifica que la API responda**. Si no responde, vuelve a la anterior. Si la imagen todavía no está publicada, no hace nada y espera al próximo tic.
+
+> **Por qué el SHA y no `main`.** Siguiendo la etiqueta móvil, cada merge disparaba **dos** despliegues: el `git fetch` ve el commit al instante, pero la imagen tarda lo que tardan los tests y el build. El primero aplicaba el código nuevo con la imagen vieja y el segundo, tres minutos después, corregía —dos recreaciones del contenedor y una ventana en la que el compose y la imagen no eran del mismo commit—. Con la etiqueta del SHA no hay estados intermedios: o está la imagen de este commit y se despliega entero, o no está y se espera.
+>
+> Un merge que no toca la aplicación —este workflow, el runbook— produce un digest idéntico, porque `.github/` y `docs/` no entran al contexto de build. Artifact Registry le agrega la etiqueta nueva al manifiesto que ya existe, y el despliegue actualiza el checkout **sin recrear el contenedor**: producción no se corta.
 
 ### Por qué la VM busca y el CI no empuja
 
@@ -901,6 +905,7 @@ sudo /opt/backend/deploy/actualizar.sh
 | Entrega real de los correos | La app reporta éxito aunque el proveedor descarte el mensaje | Los logs del proveedor (en Brevo, *Transactional → Logs*), no los de la app |
 | Vencimiento del certificado | Caddy renueva solo, pero si el DNS cambia deja de poder | El mail de `EMAIL_ACME` |
 | **Despliegues que fallaron** | El script revierte y deja de reintentar, así que la falla es silenciosa: producción sigue viva en la versión anterior y nadie se entera | Que el archivo no exista: `ls /var/lib/terravid/imagen-fallida` |
+| **Imágenes que nunca llegaron** | Si el workflow falla, la VM se queda esperando la imagen de ese commit y los merges dejan de llegar sin ningún error en la VM | Que el archivo no exista: `ls /var/lib/terravid/esperando-imagen`. Si está, el SHA que contiene es el commit cuyo build no terminó |
 | El timer de despliegue | Si se detuvo, los merges a `main` dejan de llegar sin ningún error visible | `systemctl list-timers terravid-deploy.timer` |
 | Tamaño del registro de imágenes | El nivel gratuito son 0,5 GB. La política de limpieza conserva las 5 más recientes | `gcloud artifacts repositories describe terravid --location=us-central1` |
 
