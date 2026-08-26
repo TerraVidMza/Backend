@@ -901,13 +901,30 @@ sudo /opt/backend/deploy/actualizar.sh
 | **Egreso mensual** | 1 GB gratis son ~33 MB/día. Es el límite que se cruza primero si el dashboard devuelve series largas de lecturas. | Facturación → Informes, filtrando por *Network Egress* |
 | Memoria | 166 MB medidos sobre 1 GB, pero una consulta sin paginar sobre `lecturas_iot_historico` puede cambiar eso | `docker stats --no-stream` |
 | Disco | 30 GB entre el sistema, las imágenes y la base | `df -h` y `docker system df` |
-| El cron de las 3 AM | Es la razón de usar una VM: confirmá que efectivamente corre | `docker compose logs api \| grep -i purga` |
+| El cron de las 3 AM | Es la razón de usar una VM: confirmá que efectivamente corre | Ver la nota de abajo. `grep -i purga` **no alcanza** |
+| **`CORS_ORIGIN` sin definir** | `main.ts` cae a `origin: true`, y junto al `credentials: true` de al lado eso significa que **cualquier sitio puede hacer requests autenticados** | `grep CORS_ORIGIN .env.app` — si no está, hay que ponerlo |
 | Entrega real de los correos | La app reporta éxito aunque el proveedor descarte el mensaje | Los logs del proveedor (en Brevo, *Transactional → Logs*), no los de la app |
 | Vencimiento del certificado | Caddy renueva solo, pero si el DNS cambia deja de poder | El mail de `EMAIL_ACME` |
 | **Despliegues que fallaron** | El script revierte y deja de reintentar, así que la falla es silenciosa: producción sigue viva en la versión anterior y nadie se entera | Que el archivo no exista: `ls /var/lib/terravid/imagen-fallida` |
 | **Imágenes que nunca llegaron** | Si el workflow falla, la VM se queda esperando la imagen de ese commit y los merges dejan de llegar sin ningún error en la VM | Que el archivo no exista: `ls /var/lib/terravid/esperando-imagen`. Si está, el SHA que contiene es el commit cuyo build no terminó |
 | El timer de despliegue | Si se detuvo, los merges a `main` dejan de llegar sin ningún error visible | `systemctl list-timers terravid-deploy.timer` |
 | Tamaño del registro de imágenes | El nivel gratuito son 0,5 GB. La política de limpieza conserva las 5 más recientes | `gcloud artifacts repositories describe terravid --location=us-central1` |
+
+### Confirmar el cron de las 3 AM
+
+Esta tabla decía «`docker compose logs api | grep -i purga`». **Eso no sirve**, por dos razones que se suman:
+
+1. Las tres purgas loguean dentro de un `if (borradas > 0)` ([`tareas-programadas.service.ts`](../src/common/tareas/tareas-programadas.service.ts)). Con la base casi vacía corren y no dicen nada. **Cero coincidencias no significa que no corrió.**
+2. Los logs son `json-file` por contenedor, y cada despliegue que cambia la imagen crea un contenedor nuevo. Desde que hay entrega continua eso pasa en cada merge que toca la aplicación, así que el log de anoche puede no existir más.
+
+Lo que sí funciona es mirar el efecto en la base, que no depende de los logs:
+
+```bash
+docker exec terravid-db psql -U postgres -d terravid -tAc \
+  "select count(*) from token_recuperacion where expires_at < now()"
+```
+
+Si devuelve un número mayor que cero, la purga de esta noche tiene trabajo: mañana tiene que devolver `0`, y esa vez sí va a haber quedado la línea en el log. Si devuelve `0` de entrada, no hay nada que observar —y entonces el cron no se puede confirmar por acá hasta que la aplicación tenga uso real—.
 
 ## A.13 Cuándo dejar este camino
 
