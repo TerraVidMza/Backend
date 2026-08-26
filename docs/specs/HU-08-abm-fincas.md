@@ -15,6 +15,8 @@
 > **Auditoría (2026-08-24):** la baja no verifica cuarteles activos (deja cuarteles huérfanos), sin contador de cuarteles en el listado, sin auditoría. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
 > **Criterios (2026-08-25):** la baja se bloquea con **409 si la finca tiene cuarteles activos** —antes quedaban activos colgando de una finca invisible— y el listado trae el contador de cuarteles activos, resuelto con una sola consulta agrupada.
+>
+> **Alcance del Auditor (2026-08-26):** `GET /fincas` y `GET /fincas/:id` los lee también el Auditor. No es actor de esta HU: los necesita para llegar al cuartel cuyo historial le concede [HU-17](HU-17-historial-labores-cuartel.md). El alta, la edición y la baja siguen siendo del Propietario. Ver [D-021](../DECISIONS.md#d-021--el-auditor-lee-fincas-y-cuarteles-los-costos-se-filtran-del-payload).
 
 ## Descripción
 

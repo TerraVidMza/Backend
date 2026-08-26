@@ -339,3 +339,33 @@ El rol de aplicación **no** puede crear ni borrar tablas, no puede tocar la tab
 **Verificación:** corrido de punta a punta contra producción. El script autenticó contra el registro, bajó `:main`, aplicó migraciones **desde el contenedor** (`No migrations are pending`, las cuatro ya estaban), reaplicó los privilegios del rol acotado, recreó la API y verificó con un 401. Desde afuera, `GET /api` → 401 y `http://` → 308. Una segunda corrida informó `sin cambios` sin tocar nada.
 
 **Estado:** ✅ Vigente. Pendiente que el timer dispare por su cuenta y el primer merge que atraviese el pipeline completo.
+
+---
+
+## D-020 — Las preferencias de presentación salen de la configuración del sistema
+
+**Contexto:** `moneda`, `unidades` y `zona_horaria` deciden cómo la interfaz formatea importes, cantidades y fechas en **todas** las pantallas, y `nombre_organizacion` es el rótulo de la empresa. Los cuatro viven en la tabla `configuracion`, cuyo único lector era `GET /configuracion`, restringido al Propietario por [HU-33](specs/HU-33-configuracion-general-sistema.md). La consecuencia la encontró el Web al implementar su contexto de formato ([W-004](https://github.com/TerraVidMza/Web/blob/develop/docs/DECISIONS.md)): un Capataz, un Agrónomo o un Auditor veían los importes con el formato por defecto del navegador, no con el que configuró su empresa.
+
+**Decisión:** se agrega `GET /configuracion/preferencias`, con `@AnyRole()`, que devuelve únicamente las claves de `CLAVES_PREFERENCIAS` —las cuatro de arriba—. `GET /configuracion`, `GET /configuracion/:clave` y `PUT /configuracion` siguen siendo del Propietario, sin cambios.
+
+**Por qué no alcanzaba con abrir `GET /configuracion`.** Ese endpoint enmascara `smtp_pass` y nada más: `smtp_host`, `smtp_port`, `smtp_user` y `smtp_from` viajan en claro. Dárselo a todos los roles repartiría media credencial de correo saliente a cualquier usuario autenticado. La lista blanca invierte el riesgo: agregar una clave nueva a la tabla es privado por omisión, y hace falta un cambio deliberado para publicarla. Un test fija el invariante —ninguna clave de `CLAVES_PREFERENCIAS` puede ser secreta ni empezar con `smtp_`— porque el error que importa es que la lista crezca sin que nadie lo note.
+
+**Qué deja de ser cierto de HU-33.** El criterio «el Propietario es el único con acceso a `/configuracion`» sigue valiendo para la pantalla de configuración y para todo lo que se puede escribir. Deja de valer, literalmente, para el prefijo de la ruta: hay un `GET` colgando de él que lee cualquier rol. La ruta se declara **antes** de `:clave`, que si no la capturaría.
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-021 — El Auditor lee fincas y cuarteles; los costos se filtran del payload
+
+**Contexto:** [HU-17](specs/HU-17-historial-labores-cuartel.md) le concede al Auditor el historial de operaciones **por cuartel**, y `GET /registro-labor/cuartel/:cuartelId` lo incluía en sus `@Roles`. Pero los listados de fincas ([HU-08](specs/HU-08-abm-fincas.md)) y de cuarteles ([HU-09](specs/HU-09-abm-cuarteles-finca.md), [HU-11](specs/HU-11-busqueda-fincas-cuarteles.md)) lo excluían a propósito, con un comentario que decía que su alcance se acotaba «al log de auditoría y al historial de operaciones por cuartel». El comentario se contradecía a sí mismo: sin listado no hay `cuartelId`, y su única historia de negocio era inalcanzable salvo pegando un UUID a mano. Es [W-011](https://github.com/TerraVidMza/Web/blob/develop/docs/DECISIONS.md) del plan de adaptación del Web.
+
+**Decisión, primera mitad:** las lecturas de fincas y cuarteles —listar, ver una, buscar y las variedades del filtro— suman `RolNombre.AUDITOR`. Ninguna de las dos entidades lleva dato económico: nombre, ubicación, hectáreas, variedad, sistema de conducción, estado y coordenadas. Crear, editar y dar de baja siguen cerrados para él, y eso ahora está cubierto por tests que leen los `@Roles` de cada handler.
+
+**Decisión, segunda mitad:** el historial deja de devolverle el costo. `GET /registro-labor/costeo` y `GET /registro-labor/cuartel/:id/margen-bruto` ya lo excluían por `@Roles`, rotulados en el código como «dato económico», y [HU-15](specs/HU-15-consulta-margen-bruto.md) los declara de Propietario o Agrónomo. Pero el historial traía `costoUnitarioAlSync` en la labor **y en cada insumo**, de donde el costo total del cuartel se reconstruye a mano: el dato que dos endpoints le cerraban salía por un tercero. Ahora, cuando el que pregunta es Auditor, esos dos campos viajan en `null`.
+
+**Por qué filtrar el payload y no cerrar el endpoint.** El historial es lo que HU-17 le concede; lo que sobra es una columna, no el recurso. Y el filtro va en el servicio, no en la interfaz: ocultar la columna en la pantalla sería cosmético, el número seguiría estando en la respuesta.
+
+**Lo que esto interpreta.** HU-17 dice que el Auditor «puede ver todos los registros con los mismos filtros disponibles que el Propietario/Agrónomo». La frase habla de **qué filas** ve, no de qué columnas, y HU-15 le niega el alcance económico; se resolvió a favor de la lectura consistente con los otros tres endpoints. Si la intención del producto era la contraria —que el Auditor audite también el costo—, se revierte cambiando el cuerpo de `sinAlcanceEconomico` en `registro-labor.controller.ts` y el test que lo fija.
+
+**Estado:** ✅ Vigente.

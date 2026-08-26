@@ -17,6 +17,8 @@
 > **Fase 2 (2026-08-24):** las claves `nombre_organizacion`, `moneda`, `unidades`, `zona_horaria`, `support_email` y `smtp_*` **ya se seedean** (F2-4): antes ninguna existía, y por eso el correo de soporte nunca salía. El SMTP por empresa lo consume `MailService`. Los cambios de configuración quedan auditados.
 >
 > **Criterios (2026-08-25):** la clave `zona_horaria` ya se consume: gobierna el agrupamiento diario y horario de las series de sensores (HU-20) y la alineación de los pares de correlación (HU-29). Se valida contra `pg_timezone_names` antes de usarla, para que un valor mal cargado caiga al default en vez de romper la consulta.
+>
+> **Preferencias para todos los roles (2026-08-26):** cuatro de estas claves —`nombre_organizacion`, `moneda`, `unidades` y `zona_horaria`— no son configuración de administración: son las que la interfaz necesita para formatear lo que muestra en **todas** las pantallas. Se agregó `GET /configuracion/preferencias`, que las devuelve a cualquier rol autenticado. El criterio «el Propietario es el único con acceso a `/configuracion`» sigue valiendo para la pantalla y para todo lo escribible, y deja de valer para el prefijo de la ruta. Ver [D-020](../DECISIONS.md#d-020--las-preferencias-de-presentación-salen-de-la-configuración-del-sistema).
 
 ## Descripción
 
