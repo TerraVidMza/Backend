@@ -90,6 +90,7 @@ main() {
   digest_antes=$(docker image inspect \
     --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' "$imagen" 2>/dev/null || echo "")
 
+  autenticar_registro "${imagen%%/*}" || error "sigo igual; el pull va a decir si alcanzaba"
   $compose pull --quiet api
 
   local id_despues digest_despues
@@ -155,15 +156,24 @@ main() {
   fi
 
   # ---- 4. levantar --------------------------------------------------------
-  # Sin nombre de servicio: si el compose cambió algo de db o caddy, también se
-  # aplica. Compose solo recrea lo que efectivamente cambió.
-  log "levantando"
-  $compose up -d
+  # Solo `api`, salvo que el compose haya cambiado de verdad. Un `up -d` de
+  # todo evalúa también db y caddy, y cualquier deriva en el hash de
+  # configuración de esos servicios los recrearía: un despliegue de la API no
+  # tiene por qué reiniciar Postgres ni cortar TLS.
+  local cambiados
+  cambiados=$(git -C "$REPO" diff --name-only "$git_antes" "$git_despues")
+
+  if grep -qx "deploy/$COMPOSE_FILE" <<<"$cambiados"; then
+    log "el compose cambió: levantando todos los servicios"
+    $compose up -d
+  else
+    log "levantando la API"
+    $compose up -d api
+  fi
 
   # El Caddyfile va montado, así que cambiarlo no recrea el contenedor. Caddy
   # recarga en caliente sin cortar conexiones.
-  if git -C "$REPO" diff --name-only "$git_antes" "$git_despues" |
-    grep -qx 'deploy/Caddyfile'; then
+  if grep -qx 'deploy/Caddyfile' <<<"$cambiados"; then
     log "el Caddyfile cambió: recargando Caddy"
     docker exec terravid-caddy caddy reload --config /etc/caddy/Caddyfile
   fi
@@ -203,6 +213,29 @@ main() {
     error "el rollback tampoco responde. Hace falta intervenir a mano."
   fi
   return 1
+}
+
+# Docker no sabe entrar a Artifact Registry por sí solo, y el helper de gcloud no
+# sirve acá: root no tiene configuración de docker, y depender de que alguien haya
+# corrido `gcloud auth configure-docker` como root convierte el despliegue en algo
+# que se rompe según cómo se instaló la máquina.
+#
+# El servidor de metadatos no depende de nada de eso. Devuelve un token de la
+# cuenta de servicio de la propia VM —la misma que ya tiene permiso de lectura
+# sobre el repositorio de imágenes—, dura una hora, y se pide de nuevo en cada
+# corrida. Sin gcloud, sin claves y sin un paso manual de instalación.
+autenticar_registro() {
+  local host="$1" token
+  token=$(curl -s --max-time 10 -H 'Metadata-Flavor: Google' \
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token" |
+    sed -n 's/.*"access_token" *: *"\([^"]*\)".*/\1/p')
+
+  if [ -z "$token" ]; then
+    error "el servidor de metadatos no devolvió un token para $host"
+    return 1
+  fi
+
+  printf '%s' "$token" | docker login -u oauth2accesstoken --password-stdin "https://$host" >/dev/null
 }
 
 # 401 (sin token) o 200 cuentan como viva. Hasta 90 segundos: en una e2-micro

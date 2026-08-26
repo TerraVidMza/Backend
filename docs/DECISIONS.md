@@ -315,3 +315,27 @@ El rol de aplicación **no** puede crear ni borrar tablas, no puede tocar la tab
 **Verificación:** la imagen del [`Dockerfile`](../Dockerfile) se construyó y se corrió contra la base local: arranca, conecta y `GET /api` responde 401 —el `JwtAuthGuard` global activo y la ruta raíz no pública, que es el comportamiento esperado—.
 
 **Estado:** ✅ Vigente. Pendiente la primera corrida real del runbook.
+
+---
+
+## D-019 — La VM busca la imagen; el CI no empuja el despliegue
+
+**Contexto:** cada despliegue a la VM eran unas quince operaciones a mano —publicar la imagen, editar `API_IMAGE`, `pull`, `up -d`, y si había migraciones abrir un túnel SSH desde una máquina de desarrollo y correrlas desde un checkout con devDependencies instaladas—. Un proceso así no se ejecuta igual dos veces, y el paso que más fácil se olvida es `db:rol-app`, cuya omisión deja a la API sin permiso para leer las tablas que la migración acaba de crear.
+
+**Decisión:** entrega continua en dos mitades que no se conocen entre sí. GitHub Actions verifica, construye y publica la imagen con dos etiquetas (`main`, móvil; el SHA corto, inmutable). La VM, con un timer de systemd cada dos minutos, busca `main` y si cambió despliega: trae el repositorio, migra, reaplica privilegios, levanta y verifica que la API responda antes de dar el despliegue por bueno.
+
+**Por qué el CI no empuja.** Migrar necesita la contraseña del superusuario de Postgres, que vive únicamente en el `.env` de la VM —mantenerla fuera del alcance de la aplicación es todo el punto de [D-017](#d-017--la-aplicación-y-las-migraciones-usan-roles-distintos)—. Un pipeline que empujara tendría que conocerla, o tendría que entrar por SSH a leerla, con lo cual la lógica de despliegue termina en la VM igual. Con el modelo de tirón, la cuenta de servicio de GitHub no tiene más permiso que escribir en el repositorio de imágenes: no alcanza la VM, ni la base, ni ningún otro recurso, y el 22 no se abre a internet. Se paga con latencia: el despliegue tarda lo que falte para el próximo tic.
+
+**Esto deroga el párrafo de migraciones de [D-018](#d-018--producción-en-cloud-run-no-en-un-vps-con-nginx-y-pm2).** Ahí decía que `migration:run` no podía correr desde el contenedor desplegado porque el DataSource de la CLI apuntaba a `src/**/*.entity.ts` vía `ts-node`. Ya no: los globs se derivan de `__dirname` y la extensión de si el archivo en ejecución termina en `.ts` o `.js`, así que el mismo archivo sirve compilado, y `typeorm` ya era dependencia de runtime. `dotenv` pasó a serlo también —cuatro archivos de `src/` lo importan y los cuatro terminan en `dist/`, donde era código muerto que explotaba al primer intento de usarlo—.
+
+**D-017 se mantiene**, y conviene ser preciso sobre cómo. El contenedor que atiende requests sigue conociendo solo a `terravid_app`. Las credenciales de DDL van a un contenedor aparte y efímero, creado para migrar y borrado al terminar, y no salen de la máquina donde ya viven. Lo que la aplicación y la migración comparten es la imagen, no el entorno.
+
+**Verificación por salida real, no por configuración.** El despliegue no se da por bueno porque los comandos devolvieran cero: se entra por Caddy con el nombre real resuelto a loopback y se espera un 401 de `/api`, que es la señal de que Nest levantó y el guard global está activo. Si en 90 segundos no responde, vuelve a la imagen anterior y anota el digest que falló para no reintentarlo cada dos minutos —sin eso, una versión rota en `main` dejaría a producción oscilando entre arrancar y morir—. **Las migraciones no se revierten:** el rollback restituye el código, no el esquema.
+
+**Autenticación sin claves.** GitHub firma un token OIDC y Google lo canjea por credenciales de minutos (Workload Identity Federation), acotado por `attribute-condition` a la organización y por `principalSet` a este repositorio. No hay ningún JSON de cuenta de servicio guardado como secreto. En la VM, el `docker login` contra Artifact Registry sale del servidor de metadatos y no del helper de gcloud: depender de que alguien haya corrido `gcloud auth configure-docker`, y como qué usuario, hace que el despliegue se rompa según cómo se instaló la máquina.
+
+**Consecuencia operativa:** `/opt/backend` pasa a ser de `root`. Lo administra el despliegue y no una persona, y así se evita el «dubious ownership» de git —bajo `sudo` git compara contra `SUDO_UID` y no se queja, pero systemd no define esa variable—. También hay que poner una política de limpieza en Artifact Registry: el nivel gratuito son 0,5 GB y una imagen por merge los llena.
+
+**Verificación:** corrido de punta a punta contra producción. El script autenticó contra el registro, bajó `:main`, aplicó migraciones **desde el contenedor** (`No migrations are pending`, las cuatro ya estaban), reaplicó los privilegios del rol acotado, recreó la API y verificó con un 401. Desde afuera, `GET /api` → 401 y `http://` → 308. Una segunda corrida informó `sin cambios` sin tocar nada.
+
+**Estado:** ✅ Vigente. Pendiente que el timer dispare por su cuenta y el primer merge que atraviese el pipeline completo.
