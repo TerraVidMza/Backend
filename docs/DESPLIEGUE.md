@@ -44,11 +44,17 @@ Las tres purgas nocturnas de [`tareas-programadas.service.ts`](../src/common/tar
 
 **Configuración:** `--min-instances=1 --max-instances=1`. Hay exactamente una instancia y el cron se comporta igual que en desarrollo. Ver [§10](#10-cuando-haga-falta-escalar) para el camino de salida.
 
-### 2.3. Las migraciones necesitan `src/` y ts-node
+### 2.3. Las migraciones corren desde la imagen, pero con otras credenciales
 
-El DataSource de la CLI ([`data-source.ts`](../src/config/data-source.ts)) apunta a `src/**/*.entity.ts` y se invoca vía `ts-node`. La imagen de producción solo lleva `dist/` y las dependencias de runtime, así que `migration:run` no puede correr desde el contenedor desplegado.
+Esto **era** una restricción y dejó de serlo. Conviene saber por qué, porque es lo que hace posible el despliegue automático del [apéndice](#a11-entrega-continua).
 
-**Configuración:** las migraciones se corren desde una máquina de desarrollo a través del Cloud SQL Auth Proxy ([§5](#5-migrar-el-esquema-y-crear-el-rol-acotado)). Esto además *refuerza* [D-017](DECISIONS.md): las credenciales con permiso de DDL nunca llegan a Cloud Run, que solo conoce el rol acotado `terravid_app`.
+Los globs del DataSource de la CLI ([`data-source.ts`](../src/config/data-source.ts)) apuntaban a `src/**/*.entity.ts` escritos a mano, así que solo se lo podía invocar vía `ts-node` sobre el código fuente. La imagen de producción lleva `dist/` y `npm ci --omit=dev`: ni `src/`, ni ts-node. Migrar exigía un checkout completo con las devDependencies instaladas.
+
+Ahora los globs se derivan de `__dirname`, y la extensión de si el archivo que se está ejecutando termina en `.ts` o `.js`. El mismo archivo sirve en los dos modos, y `migration:run` corre desde el contenedor desplegado. `typeorm` ya era dependencia de runtime —la aplicación lo usa—, así que su CLI viene en la imagen sin agregar nada.
+
+**Configuración:** en Cloud Run, las migraciones se siguen corriendo desde una máquina de desarrollo a través del Cloud SQL Auth Proxy ([§5](#5-migrar-el-esquema-y-crear-el-rol-acotado)), porque el contenedor es efímero y no hay dónde guardar la credencial de DDL.
+
+**Lo que no cambió es [D-017](DECISIONS.md).** El contenedor que atiende requests sigue conociendo únicamente el rol acotado `terravid_app`. Las credenciales de DDL van a un contenedor **aparte y efímero** que se crea para migrar y se borra al terminar, y en el camino de la VM nunca salen de la máquina donde ya viven. Lo que se comparte es la imagen, no el entorno.
 
 ### Lo que ya está correcto
 
@@ -537,6 +543,8 @@ Dos cosas sobre DuckDNS a tener presentes. Es un servicio gratuito mantenido por
 
 ## A.7 Publicar la imagen en Artifact Registry
 
+Esto es el arranque a mano. Una vez montada la [entrega continua](#a11-entrega-continua) lo hace GitHub Actions en cada merge a `main`, y esta sección queda como el camino de respaldo.
+
 Se construye en tu máquina y no en la VM: con 0,25 vCPU de línea base, `npm ci` más `tsc` tardan muchísimo y pueden quedarse sin memoria.
 
 ```bash
@@ -564,6 +572,8 @@ gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
 
 Se configura para el usuario que corre `docker`. Con `sudo docker` el helper que se lee es el de `root`, así que habría que configurarlo ahí también; más simple es no usar `sudo` —el `usermod -aG docker` de [A.5](#a5-preparar-el-sistema) ya lo permite— y reconectarse por SSH para que el grupo tome efecto.
 
+> **El despliegue automático no usa este helper**, justamente porque depender de que alguien lo haya corrido —y como qué usuario— hace que el deploy se rompa según cómo se instaló la máquina. [`actualizar.sh`](../deploy/actualizar.sh) le pide el token al servidor de metadatos de la VM y hace `docker login` con eso: es la misma cuenta de servicio que ya tiene el rol de lectura, no necesita gcloud instalado, y se renueva en cada corrida. El helper sigue haciendo falta solo para los `pull` a mano.
+
 Cada vez que se publica una versión, desde la raíz del repositorio:
 
 ```bash
@@ -572,7 +582,11 @@ IMAGEN="${REGION}-docker.pkg.dev/${PROJECT}/terravid/api:${TAG}"
 
 # `--platform linux/amd64` explícito: la VM es x86, y si algún día se construye
 # desde una máquina ARM la imagen no arrancaría allá.
-docker build --platform linux/amd64 -t "$IMAGEN" .
+#
+# `--provenance=false`: por defecto buildx adjunta un manifiesto de procedencia
+# que en Artifact Registry aparece como una versión extra sin etiqueta y ocupa
+# lugar. El nivel gratuito son 0,5 GB en total.
+docker build --platform linux/amd64 --provenance=false -t "$IMAGEN" .
 docker push "$IMAGEN"
 
 echo "API_IMAGE=$IMAGEN"   # este valor va al .env.produccion de la VM
@@ -745,22 +759,136 @@ docker exec -i terravid-db psql -U postgres -d prueba_restore -c '\dt' | head
 docker exec -i terravid-db psql -U postgres -c 'DROP DATABASE prueba_restore'
 ```
 
-## A.11 Desplegar una versión nueva
+## A.11 Entrega continua
 
-En tu máquina, publicar la imagen ([A.7](#a7-publicar-la-imagen-en-artifact-registry)). En la VM:
+Un merge a `main` llega a producción sin que nadie toque la VM. Son dos mitades que no se conocen entre sí:
+
+1. **GitHub Actions** ([`desplegar.yml`](../.github/workflows/desplegar.yml)) corre tipos, lint y tests, construye la imagen y la publica con dos etiquetas: `main`, que es móvil, y el SHA corto del commit, que es inmutable.
+2. **La VM** busca la etiqueta `main` cada dos minutos ([`actualizar.sh`](../deploy/actualizar.sh)), y si cambió: trae el repositorio, migra, reaplica los privilegios del rol acotado, levanta la imagen y **verifica que la API responda**. Si no responde, vuelve a la anterior.
+
+### Por qué la VM busca y el CI no empuja
+
+Migrar necesita la contraseña del superusuario de Postgres, y esa contraseña vive solo en el `.env` de la VM: mantenerla fuera del alcance de la aplicación es todo el punto de la separación en dos archivos ([D-017](DECISIONS.md)). Un pipeline que empujara el despliegue tendría que conocerla, o tendría que entrar por SSH a leerla —y entonces la lógica termina en la VM de todos modos—.
+
+Así, la cuenta de servicio de GitHub no tiene más permiso que escribir en el repositorio de imágenes. No puede tocar la VM, ni la base, ni ningún otro recurso del proyecto, y no hay que abrir el 22 a internet. El costo es que el despliegue no es instantáneo.
+
+### Instalación, una sola vez
+
+Primero los dos permisos de IAM. Son los que le permiten a GitHub publicar imágenes que se despliegan solas en producción, así que conviene leerlos antes de pegarlos:
+
+```bash
+PROY=terravid
+NUM=$(gcloud projects describe $PROY --format='value(projectNumber)')
+SA="despliegue-github@${PROY}.iam.gserviceaccount.com"
+
+# 1. La cuenta puede escribir en el repositorio de imágenes, y en nada más.
+gcloud artifacts repositories add-iam-policy-binding terravid \
+  --location=us-central1 \
+  --member="serviceAccount:${SA}" \
+  --role=roles/artifactregistry.writer
+
+# 2. Solo este repositorio de GitHub puede hacerse pasar por esa cuenta.
+#    El `attribute.repository/` del final es lo que lo acota: sin eso,
+#    cualquier repositorio del mundo con un workflow podría pedir el token.
+gcloud iam service-accounts add-iam-policy-binding "$SA" \
+  --role=roles/iam.workloadIdentityUser \
+  --member="principalSet://iam.googleapis.com/projects/${NUM}/locations/global/workloadIdentityPools/github/attribute.repository/TerraVidMza/Backend"
+```
+
+La identidad federada en sí (el *pool* `github` y el proveedor `terravidmza`) se crea una vez con:
+
+```bash
+gcloud iam workload-identity-pools create github --location=global --display-name="GitHub"
+
+gcloud iam workload-identity-pools providers create-oidc terravidmza \
+  --location=global --workload-identity-pool=github \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository,attribute.repository_owner=assertion.repository_owner" \
+  --attribute-condition="assertion.repository_owner == 'TerraVidMza'"
+```
+
+**No hay ningún secreto que configurar en GitHub.** GitHub firma un token OIDC, Google lo canjea por credenciales que duran minutos, y no queda ninguna clave guardada en ningún lado. Un JSON de cuenta de servicio en los secretos del repositorio sería el accidente clásico y acá no hace falta.
+
+Después, en la VM. El servicio corre como `root` y necesita su propia credencial de git: la deploy key de [A.8](#a8-migrar-el-esquema-y-crear-el-rol-acotado) es del usuario, y `root` no la ve.
+
+```bash
+sudo mkdir -p /etc/terravid && sudo chmod 700 /etc/terravid
+sudo cp ~/.ssh/github_terravid /etc/terravid/deploy-key
+sudo chmod 600 /etc/terravid/deploy-key && sudo chown root:root /etc/terravid/deploy-key
+
+# Los known_hosts de Ubuntu vienen hasheados, así que `grep github.com` no
+# encuentra nada y deja el archivo vacío: el fetch falla con «Host key
+# verification failed» sin decir por qué. `ssh-keygen -F` sí los encuentra.
+ssh-keygen -F github.com -f ~/.ssh/known_hosts | grep -v '^#' | sudo tee /etc/terravid/known_hosts
+sudo chmod 644 /etc/terravid/known_hosts
+
+# Comprobá que las huellas coincidan con las que publica GitHub en
+# docs.github.com/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+sudo ssh-keygen -l -f /etc/terravid/known_hosts
+```
+
+El checkout pasa a ser del servicio. Es lo que corresponde —lo administra el despliegue, no una persona— y además evita el «dubious ownership» de git: bajo `sudo` git compara contra `SUDO_UID` y no se queja, pero systemd no define esa variable y ahí sí falla.
+
+```bash
+sudo chown -R root:root /opt/backend
+sudo git -C /opt/backend config core.sshCommand \
+  "ssh -i /etc/terravid/deploy-key -o IdentitiesOnly=yes -o UserKnownHostsFile=/etc/terravid/known_hosts"
+
+# Que la etiqueta que sigue la VM sea la móvil, no un SHA fijo.
+sudo sed -i 's|^API_IMAGE=.*|API_IMAGE=us-central1-docker.pkg.dev/terravid/terravid/api:main|' \
+  /opt/backend/deploy/.env
+
+sudo install -m 644 /opt/backend/deploy/systemd/terravid-deploy.service /etc/systemd/system/
+sudo install -m 644 /opt/backend/deploy/systemd/terravid-deploy.timer   /etc/systemd/system/
+sudo systemctl daemon-reload
+
+# Probalo una vez a mano antes de dejarlo solo.
+sudo systemctl start terravid-deploy && sudo journalctl -u terravid-deploy -n 40 --no-pager
+sudo systemctl enable --now terravid-deploy.timer
+```
+
+Verificá que `git fetch` funcione **como root puro**, no bajo tu `sudo`, que es lo que va a hacer systemd:
+
+```bash
+sudo env -u SUDO_UID -u SUDO_USER -u SUDO_GID git -C /opt/backend fetch origin main
+```
+
+### Desplegar
+
+Mergear a `main`. Cuando el workflow termina en verde la imagen está **publicada, no desplegada**: el despliegue se mira en la VM.
+
+```bash
+journalctl -u terravid-deploy -f          # en vivo
+systemctl list-timers terravid-deploy.timer
+sudo systemctl start terravid-deploy      # sin esperar el próximo tic
+```
+
+Una corrida sin novedades dice `sin cambios (<sha>)` y no toca nada.
+
+### Volver atrás
+
+Lo intenta solo: si la API no responde en 90 segundos, vuelve a la imagen anterior y anota el digest que falló en `/var/lib/terravid/imagen-fallida` para no reintentarlo cada dos minutos. Sin eso, una versión rota en `main` dejaría a producción oscilando entre arrancar y morir.
+
+**Las migraciones no se revierten.** Van hacia adelante siempre; el rollback restituye el código, no el esquema. Si la versión nueva trajo migraciones, el esquema queda adelantado respecto del código que volvió, y eso hay que resolverlo a mano. El script lo dice en el log cuando revierte.
+
+A mano, a una versión concreta:
 
 ```bash
 cd /opt/backend/deploy
-git pull                                  # por si cambió el compose
-nano .env                                 # actualizar API_IMAGE al tag nuevo
-docker compose -f docker-compose.prod.yml pull api
-docker compose -f docker-compose.prod.yml up -d api
-docker image prune -f                     # el disco son 30 GB
+sudo docker compose -f docker-compose.prod.yml down api
+sudo API_IMAGE=us-central1-docker.pkg.dev/terravid/terravid/api:<sha> \
+  docker compose -f docker-compose.prod.yml up -d api
 ```
 
-Si el deploy trae migraciones, corrélas **antes** de levantar la imagen nueva, por el túnel de [A.8](#a8-migrar-el-esquema-y-crear-el-rol-acotado). Y si la migración creó tablas, `db:rol-app` otra vez.
+Eso dura hasta el próximo tic del timer, que va a volver a traer `main`. Para quedarse ahí, o se corrige `main`, o se para el timer con `sudo systemctl stop terravid-deploy.timer`.
 
-Volver atrás es poner el tag anterior en `API_IMAGE` y repetir las dos últimas líneas.
+### Despliegue a mano
+
+Sigue funcionando y es el camino si el automático está detenido: publicar la imagen ([A.7](#a7-publicar-la-imagen-en-artifact-registry)) y correr el script, que hace todo lo demás.
+
+```bash
+sudo /opt/backend/deploy/actualizar.sh
+```
 
 ## A.12 Qué vigilar
 
@@ -772,6 +900,9 @@ Volver atrás es poner el tag anterior en `API_IMAGE` y repetir las dos últimas
 | El cron de las 3 AM | Es la razón de usar una VM: confirmá que efectivamente corre | `docker compose logs api \| grep -i purga` |
 | Entrega real de los correos | La app reporta éxito aunque el proveedor descarte el mensaje | Los logs del proveedor (en Brevo, *Transactional → Logs*), no los de la app |
 | Vencimiento del certificado | Caddy renueva solo, pero si el DNS cambia deja de poder | El mail de `EMAIL_ACME` |
+| **Despliegues que fallaron** | El script revierte y deja de reintentar, así que la falla es silenciosa: producción sigue viva en la versión anterior y nadie se entera | Que el archivo no exista: `ls /var/lib/terravid/imagen-fallida` |
+| El timer de despliegue | Si se detuvo, los merges a `main` dejan de llegar sin ningún error visible | `systemctl list-timers terravid-deploy.timer` |
+| Tamaño del registro de imágenes | El nivel gratuito son 0,5 GB. La política de limpieza conserva las 5 más recientes | `gcloud artifacts repositories describe terravid --location=us-central1` |
 
 ## A.13 Cuándo dejar este camino
 
@@ -781,4 +912,6 @@ Tres señales de que la VM dejó de alcanzar:
 2. **Los nodos IoT empiezan a publicar en serio** y los 150 ms de latencia o la falta de alta disponibilidad se notan.
 3. **Hace falta que la API no se caiga**, aunque sea un rato. Una VM en una zona no da eso.
 
-El camino de salida es el cuerpo de este documento, que ya está escrito: la imagen es la misma, el `.env.app` tiene las mismas variables, y las migraciones ya se corren por un túnel. Cambia dónde vive el contenedor.
+El camino de salida es el cuerpo de este documento, que ya está escrito: la imagen es la misma y el `.env.app` tiene las mismas variables. Cambia dónde vive el contenedor.
+
+Lo que **no** se lleva es la mitad de la entrega continua que corre en la VM: el `actualizar.sh` da por sentado que hay una máquina persistente con Docker, un checkout de git y los `.env` en disco. En Cloud Run el despliegue lo empuja el CI (`gcloud run deploy`) y las migraciones vuelven a correrse desde una máquina de desarrollo por el proxy, porque no hay dónde guardar la credencial de DDL. La mitad de GitHub Actions —tests, build, publicar la imagen— se reusa tal cual.
