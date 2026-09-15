@@ -156,10 +156,10 @@ jobs:
           # termina, aunque la API este arriba.
           npm run start:prod > /tmp/api.log 2>&1 &
           for _ in $(seq 1 30); do
-            codigo=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api || echo 000)
-            # 401 es la respuesta correcta sin token: la API levanto y el guard
-            # global esta exigiendo autenticacion.
-            if [ "$codigo" = 401 ]; then echo "API arriba"; exit 0; fi
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/salud || echo 000)
+            # `/api/salud` consulta la base antes de contestar, asi que un 200
+            # dice que la API puede servir y no solo que el proceso arranco.
+            if [ "$codigo" = 200 ]; then echo "API arriba"; exit 0; fi
             sleep 2
           done
           echo "la API no respondio en 60s"; exit 1

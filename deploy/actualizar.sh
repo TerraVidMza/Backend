@@ -303,13 +303,22 @@ autenticar_registro() {
   printf '%s' "$token" | docker login -u oauth2accesstoken --password-stdin "https://$host" >/dev/null
 }
 
-# 401 (sin token) o 200 cuentan como viva. Hasta 90 segundos: en una e2-micro
-# con 0,25 vCPU de línea base el arranque de Nest no es inmediato.
+# Pega contra `/api/salud`, que consulta la base antes de contestar: un 200 ahí
+# significa que la aplicación puede servir, no solo que el proceso arrancó.
+#
+# Antes esto miraba `/api` y aceptaba el 401 del guard, que se produce **antes**
+# de tocar nada: una API que arrancó y perdió la base pasaba la verificación
+# igual, y el despliegue se daba por bueno. El 401 se sigue aceptando para que
+# un rollback a una imagen anterior a `/api/salud` no quede sin forma de
+# verificarse.
+#
+# Hasta 90 segundos: en una e2-micro con 0,25 vCPU de línea base el arranque de
+# Nest no es inmediato.
 verificar_salud() {
   local dominio="$1" codigo
   for _ in $(seq 1 45); do
     codigo=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 \
-      --resolve "${dominio}:443:127.0.0.1" "https://${dominio}/api" 2>/dev/null || echo 000)
+      --resolve "${dominio}:443:127.0.0.1" "https://${dominio}/api/salud" 2>/dev/null || echo 000)
     case "$codigo" in
     401 | 200)
       log "responde ($codigo)"

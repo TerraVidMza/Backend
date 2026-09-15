@@ -1,0 +1,117 @@
+/**
+ * Validación de las variables de entorno al arrancar.
+ *
+ * Sin esto, una variable faltante no se nota hasta que alguien ejerce el camino
+ * que la usa, y el error que llega no la nombra: sin `JWT_SECRET` el fallo
+ * aparece dentro de passport-jwt, y sin `IOT_API_KEY` la ingesta devuelve 401 a
+ * todos los nodos sin decir por qué. Los dos casos son un despliegue que
+ * arrancó "bien" y está roto.
+ *
+ * Se valida a mano y no con un esquema de Joi o zod para no sumar una
+ * dependencia por doce variables, y porque varias reglas de acá son condicionales
+ * (`PUSH_TRANSPORT=fcm` exige tres credenciales más) y quedan más claras escritas.
+ */
+
+/** Falla al arrancar si el entorno no alcanza para levantar la aplicación. */
+export function validarEntorno(
+  entorno: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const faltantes: string[] = [];
+  const invalidas: string[] = [];
+
+  const enProduccion = entorno.NODE_ENV === 'production';
+
+  const requerida = (clave: string): string | undefined => {
+    const valor = entorno[clave];
+    if (!valor || valor.trim() === '') {
+      faltantes.push(clave);
+      return undefined;
+    }
+    return valor;
+  };
+
+  // --- base de datos -------------------------------------------------------
+  requerida('DB_HOST');
+  requerida('DB_USERNAME');
+  requerida('DB_PASSWORD');
+  requerida('DB_DATABASE');
+
+  const puerto = entorno.DB_PORT;
+  if (puerto && Number.isNaN(Number.parseInt(puerto, 10))) {
+    invalidas.push(`DB_PORT="${puerto}" no es un número`);
+  }
+
+  // `synchronize` deduce el esquema de las entidades: un renombre de columna se
+  // traduce a DROP + ADD y borra los datos sin avisar (D-007). En desarrollo es
+  // una herramienta; en producción es una pérdida de datos esperando.
+  if (enProduccion && entorno.DB_SYNCHRONIZE === 'true') {
+    invalidas.push(
+      'DB_SYNCHRONIZE=true en producción: el esquema lo gobiernan las migraciones (D-007)',
+    );
+  }
+
+  // --- autenticación -------------------------------------------------------
+  const secreto = requerida('JWT_SECRET');
+  if (secreto && enProduccion && secreto.length < 32) {
+    invalidas.push(
+      `JWT_SECRET tiene ${secreto.length} caracteres: en producción se esperan al menos 32`,
+    );
+  }
+
+  // Sin clave, `ApiKeyGuard` cierra la ingesta —es fail-closed a propósito— y
+  // todos los nodos reciben 401. Es correcto, pero es un síntoma difícil de
+  // diagnosticar desde el firmware; mejor no arrancar.
+  requerida('IOT_API_KEY');
+
+  const rondas = entorno.BCRYPT_SALT_ROUNDS;
+  if (rondas && Number.isNaN(Number.parseInt(rondas, 10))) {
+    invalidas.push(`BCRYPT_SALT_ROUNDS="${rondas}" no es un número`);
+  }
+
+  // --- CORS ----------------------------------------------------------------
+  // En producción no hay valor por defecto razonable: ver el fallback cerrado
+  // de `main.ts`.
+  if (enProduccion && !entorno.CORS_ORIGIN) {
+    faltantes.push('CORS_ORIGIN');
+  }
+
+  // --- transportes opcionales ----------------------------------------------
+  const push = entorno.PUSH_TRANSPORT ?? 'log';
+  if (!['log', 'fcm'].includes(push)) {
+    invalidas.push(`PUSH_TRANSPORT="${push}" no es 'log' ni 'fcm'`);
+  }
+  if (push === 'fcm') {
+    for (const clave of [
+      'FIREBASE_PROJECT_ID',
+      'FIREBASE_CLIENT_EMAIL',
+      'FIREBASE_PRIVATE_KEY',
+    ]) {
+      requerida(clave);
+    }
+  }
+
+  const mail = entorno.MAIL_TRANSPORT ?? 'log';
+  if (!['log', 'smtp'].includes(mail)) {
+    invalidas.push(`MAIL_TRANSPORT="${mail}" no es 'log' ni 'smtp'`);
+  }
+  if (mail === 'smtp') {
+    for (const clave of ['SMTP_HOST', 'SMTP_PORT', 'MAIL_FROM']) {
+      requerida(clave);
+    }
+  }
+
+  if (faltantes.length === 0 && invalidas.length === 0) {
+    return entorno;
+  }
+
+  const partes = ['La configuración del entorno no permite arrancar:'];
+  if (faltantes.length > 0) {
+    partes.push(`  Faltan: ${faltantes.join(', ')}`);
+  }
+  for (const problema of invalidas) {
+    partes.push(`  ${problema}`);
+  }
+  partes.push('  Ver .env.example para el detalle de cada una.');
+
+  throw new Error(partes.join('\n'));
+}

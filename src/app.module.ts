@@ -11,6 +11,7 @@ import { TareasProgramadasModule } from './common/tareas/tareas-programadas.modu
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import typeormConfig from './config/typeorm.config';
+import { validarEntorno } from './config/validar-entorno';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -46,7 +47,14 @@ import { CampaniasModule } from './modules/campanias/campanias.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true, load: [typeormConfig] }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      load: [typeormConfig],
+      // Corta el arranque nombrando la variable que falta. Sin esto el fallo
+      // llega cuando alguien ejerce el camino que la usa, con un error que no
+      // la menciona.
+      validate: validarEntorno,
+    }),
     TypeOrmModule.forRootAsync({
       inject: [typeormConfig.KEY],
       useFactory: (config: ReturnType<typeof typeormConfig>) => config,
