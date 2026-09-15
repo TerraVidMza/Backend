@@ -156,7 +156,12 @@ npm run db:verificar-privilegios
 # 4. Datos iniciales (roles de usuario, catálogos).
 #    El seed levanta un contexto Nest completo: AuthModule exige JWT_SECRET
 #    y JWT_REFRESH_SECRET aunque el seed solo inserte filas.
-npm run seed
+#
+#    SEED_PROPIETARIO_PASSWORD es obligatoria con NODE_ENV=production: sin
+#    ella el seed no arranca. La contraseña de desarrollo está publicada en
+#    el README, y esta es la cuenta que puede crear todas las demás. El
+#    Propietario entra obligado a cambiarla en el primer acceso.
+SEED_PROPIETARIO_EMAIL='<correo del dueño>' SEED_PROPIETARIO_PASSWORD='<contraseña generada>' npm run seed
 
 cp .env.desarrollo .env                   # volver a desarrollo
 ```
@@ -674,12 +679,73 @@ npm run db:verificar-privilegios
 # JWT_SECRET y JWT_REFRESH_SECRET aunque solo vaya a insertar filas. Sin
 # ellas falla con "JwtStrategy requires a secret or key", que no sugiere
 # que lo que falta sea una variable de entorno.
+# SEED_PROPIETARIO_PASSWORD es obligatoria con NODE_ENV=production: sin ella
+# el seed no arranca. La de desarrollo está publicada en el README, y esta es
+# la cuenta que puede crear todas las demás. Entra obligada a cambiarla.
+SEED_PROPIETARIO_EMAIL='<correo del dueño>' \
+SEED_PROPIETARIO_PASSWORD='<contraseña generada>' \
 npm run seed
 
 cp .env.desarrollo .env
 ```
 
 La `DB_APP_PASSWORD` va a `DB_PASSWORD` del `.env.app` **de la VM**. La del superusuario `postgres` se queda en el gestor de contraseñas del equipo y no vuelve a usarse hasta la próxima migración.
+
+## A.8 bis Rotar la contraseña del Propietario ya creado
+
+**Solo hace falta en un entorno que se sembró antes de septiembre de 2026.** Hasta
+entonces el seed creaba el Propietario con `propietario@terravid.demo` y una
+contraseña que está escrita en el README, también en producción. Es la única
+cuenta que puede crear las demás: si el entorno se sembró así, esa cuenta es la
+llave del sistema con una contraseña pública.
+
+Para saber si aplica:
+
+```bash
+docker compose -f docker-compose.prod.yml exec db   psql -U postgres -d terravid -c   "SELECT email, activo, debe_cambiar_password FROM usuarios WHERE email = 'propietario@terravid.demo';"
+```
+
+Si devuelve una fila con `activo = t`, hay que rotarla:
+
+```bash
+cd /opt/backend/deploy
+
+# La contraseña no se pasa en la línea de comandos: `-e VAR` sin valor la toma
+# del entorno del shell, así que un `ps` de otro usuario no la ve.
+export ROTAR_EMAIL='propietario@terravid.demo'
+export ROTAR_PASSWORD='<generada, no reutilizada>'
+
+docker compose -f docker-compose.prod.yml run --rm -T   -e ROTAR_EMAIL -e ROTAR_PASSWORD   api npm run --silent db:rotar-password:dist
+
+unset ROTAR_PASSWORD
+```
+
+El script deja la cuenta obligada a cambiar la contraseña en el primer acceso,
+y de paso limpia el contador de intentos fallidos y el bloqueo.
+
+**No se puede hacer con un `UPDATE` a mano:** la columna guarda un hash de
+bcrypt con el costo que fija `BCRYPT_SALT_ROUNDS`. Escribir la contraseña en
+claro dejaría la cuenta inaccesible, y legible para cualquiera con `SELECT`
+sobre la tabla.
+
+**Lo que esto no corta son las sesiones ya abiertas.** El JWT emitido no depende
+de la contraseña, y `token_revocado` se llena por `jti` en el logout, así que no
+hay forma de enumerar los tokens vivos de un usuario. Duran 8 horas. Si hace
+falta cortarlas ya, hay que rotar `JWT_SECRET` en Secret Manager y reiniciar la
+API, lo que invalida las sesiones de **todos** los usuarios.
+
+Si la cuenta demo no se usa, la alternativa es desactivarla:
+
+```sql
+UPDATE usuarios SET activo = false WHERE email = 'propietario@terravid.demo';
+```
+
+> Antes de desactivarla, asegurate de que exista otro Propietario activo: es el
+> único rol que puede dar de alta usuarios, y sin ninguno el sistema queda sin
+> forma de administrarse.
+
+---
+
 
 ## A.9 Levantar todo y verificar
 
