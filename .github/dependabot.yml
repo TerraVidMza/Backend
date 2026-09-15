@@ -4,6 +4,30 @@
 # vez la migracion forzada de node20 a node24 en las acciones, que seguian
 # funcionando solo porque el runner las forzaba. Enterarse por un PR es mejor
 # que enterarse cuando dejan de arrancar.
+#
+# ---------------------------------------------------------------------------
+# Por que hay tantas restricciones abajo
+#
+# La primera version de este archivo dejo el CI completamente rojo. Dos errores,
+# los dos corregidos aca:
+#
+# 1. El grupo de desarrollo tenia `dependency-type: development` con patron `*`,
+#    y se llevo `@nestjs/testing`, `@nestjs/cli` y `@nestjs/schematics` a un PR
+#    distinto del resto de `@nestjs/*`. Resultado: los paquetes de produccion
+#    subieron a Nest 12 y los de desarrollo quedaron en 11. **Ningun PR era
+#    consistente por si solo**, asi que ninguno podia pasar el CI ni siquiera en
+#    teoria: `npm ci` fallaba antes de compilar nada.
+#
+# 2. No habia ninguna politica sobre versiones mayores. Dependabot propuso Nest
+#    12 y TypeScript 7, y las dos son inviables hoy por paquetes de terceros que
+#    todavia no las soportan:
+#      - `@nestjs/throttler` (el rate limiting global de HU-01 y HU-03) declara
+#        peer hasta `@nestjs/common@^11` y no publico nada desde 2025-12;
+#      - `ts-jest` declara `typescript >=4.3 <7`, y `typescript-eslint` `<6.1.0`.
+#
+# Una version mayor de framework o de toolchain no es una actualizacion de
+# rutina: hay que mirar si el ecosistema alrededor la acompaña. Eso se decide,
+# no se mergea.
 version: 2
 
 updates:
@@ -13,22 +37,71 @@ updates:
       interval: weekly
       day: monday
     open-pull-requests-limit: 5
-    # Un PR por grupo y no uno por paquete: Nest publica sus doce paquetes
-    # juntos, y revisarlos de a uno es ruido que termina en que no se revisa
-    # ninguno.
+
+    ignore:
+      # Nest y la toolchain de TypeScript arrastran un ecosistema de paquetes
+      # acoplados por peer dependencies. Sus mayores se hacen a mano, mirando
+      # primero si throttler, ts-jest y typescript-eslint acompañan.
+      - dependency-name: '@nestjs/*'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typeorm'
+        update-types: ['version-update:semver-major']
+
+    # Un PR por grupo y no uno por paquete: Nest publica sus paquetes juntos, y
+    # revisarlos de a uno es ruido que termina en que no se revisa ninguno.
+    #
+    # El orden importa menos que las exclusiones: lo que garantiza que un grupo
+    # sea coherente es que ningun otro se lleve una parte. Por eso el grupo de
+    # desarrollo excluye explicitamente lo que ya tiene grupo propio.
     groups:
       nestjs:
+        # Sin `dependency-type`: `@nestjs/testing`, `@nestjs/cli` y
+        # `@nestjs/schematics` son devDependencies y **tienen que viajar con el
+        # resto del framework**. Separarlos fue exactamente lo que rompio el CI.
         patterns:
           - '@nestjs/*'
+
       typeorm-y-base:
         patterns:
-          - typeorm
-          - pg
+          - 'typeorm'
+          - 'pg'
           - '@types/pg'
+
+      toolchain-typescript:
+        # TypeScript, el runner de tests y el linter se mueven juntos por sus
+        # peer dependencies: ts-jest y typescript-eslint acotan que version de
+        # TypeScript es instalable.
+        patterns:
+          - 'typescript'
+          - 'ts-jest'
+          - 'ts-node'
+          - 'ts-loader'
+          - 'typescript-eslint'
+          - 'eslint'
+          - '@eslint/*'
+          - 'eslint-*'
+          - 'jest'
+          - '@types/jest'
+
       herramientas-de-desarrollo:
         dependency-type: development
         patterns:
           - '*'
+        exclude-patterns:
+          - '@nestjs/*'
+          - 'typescript'
+          - 'ts-jest'
+          - 'ts-node'
+          - 'ts-loader'
+          - 'typescript-eslint'
+          - 'eslint'
+          - '@eslint/*'
+          - 'eslint-*'
+          - 'jest'
+          - '@types/jest'
+
     commit-message:
       prefix: 'chore(deps)'
       prefix-development: 'chore(deps-dev)'

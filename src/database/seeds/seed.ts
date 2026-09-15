@@ -62,13 +62,15 @@ async function seed() {
 
   console.log('Sembrando usuario Propietario demo...');
   const emailDemo = 'propietario@terravid.demo';
-  let usuario = await usuarioRepo.findOne({ where: { email: emailDemo } });
-  if (!usuario) {
+  const usuarioExistente = await usuarioRepo.findOne({
+    where: { email: emailDemo },
+  });
+  if (!usuarioExistente) {
     const passwordHash = await bcrypt.hash(
       'Terravid123!',
       parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '12', 10),
     );
-    usuario = await usuarioRepo.save(
+    await usuarioRepo.save(
       usuarioRepo.create({
         nombre: 'Propietario Demo',
         email: emailDemo,
