@@ -36,7 +36,9 @@
     "db:verificar-privilegios:dist": "node dist/database/roles/verificar-privilegios.js",
     "openapi:generar": "npm run build && node dist/config/generar-openapi.js",
     "prepare": "husky || exit 0",
-    "test:cov:e2e": "jest --config ./test/jest-e2e.json --coverage"
+    "test:cov:e2e": "jest --config ./test/jest-e2e.json --coverage",
+    "db:rotar-password": "ts-node -r tsconfig-paths/register src/database/scripts/rotar-password.ts",
+    "db:rotar-password:dist": "node dist/database/scripts/rotar-password.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

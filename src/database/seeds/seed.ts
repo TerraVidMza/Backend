@@ -18,6 +18,7 @@ import {
 import { Configuracion } from '../../modules/configuracion/entities/configuracion.entity';
 import { Campania } from '../../modules/campanias/entities/campania.entity';
 import { RolNombre } from '../../common/enums/rol.enum';
+import { credencialesDelPropietario } from './credenciales-propietario';
 
 async function seed() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -60,26 +61,35 @@ async function seed() {
     );
   }
 
-  console.log('Sembrando usuario Propietario demo...');
-  const emailDemo = 'propietario@terravid.demo';
+  const { email, password, forzarCambio } = credencialesDelPropietario();
+  console.log(`Sembrando usuario Propietario (${email})...`);
   const usuarioExistente = await usuarioRepo.findOne({
-    where: { email: emailDemo },
+    where: { email },
   });
   if (!usuarioExistente) {
     const passwordHash = await bcrypt.hash(
-      'Terravid123!',
+      password,
       parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '12', 10),
     );
     await usuarioRepo.save(
       usuarioRepo.create({
-        nombre: 'Propietario Demo',
-        email: emailDemo,
+        nombre: 'Propietario',
+        email,
         passwordHash,
         empresaId: empresa.id,
         rolId: roles[RolNombre.PROPIETARIO].id,
         activo: true,
+        // En producción entra con la obligación de cambiarla: la contraseña de
+        // arranque la conoce quien haya corrido el seed y quien haya visto la
+        // variable de entorno.
+        debeCambiarPassword: forzarCambio,
       }),
     );
+  } else {
+    // El seed es idempotente y no toca lo que ya existe: cambiarle la
+    // contraseña a un usuario en uso desde un script de datos iniciales sería
+    // una sorpresa desagradable. Para rotarla está `npm run db:rotar-password`.
+    console.log('  (ya existía; no se modifica)');
   }
 
   console.log('Sembrando catálogos maestros...');
@@ -224,9 +234,16 @@ async function seed() {
     );
   }
 
-  console.log(
-    'Seed completado. Usuario demo: propietario@terravid.demo / Terravid123!',
-  );
+  // La contraseña solo se repite cuando es la de demostración, que ya está
+  // publicada. En producción sale del entorno de quien corre el seed y no
+  // tiene por qué quedar escrita en el log del despliegue.
+  if (forzarCambio) {
+    console.log(`Seed completado. Propietario: ${email}`);
+    console.log('Entra con la contraseña de SEED_PROPIETARIO_PASSWORD, y el');
+    console.log('sistema le va a exigir cambiarla en el primer acceso.');
+  } else {
+    console.log(`Seed completado. Usuario demo: ${email} / ${password}`);
+  }
   await app.close();
 }
 
