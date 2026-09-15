@@ -369,3 +369,24 @@ El rol de aplicación **no** puede crear ni borrar tablas, no puede tocar la tab
 **Lo que esto interpreta.** HU-17 dice que el Auditor «puede ver todos los registros con los mismos filtros disponibles que el Propietario/Agrónomo». La frase habla de **qué filas** ve, no de qué columnas, y HU-15 le niega el alcance económico; se resolvió a favor de la lectura consistente con los otros tres endpoints. Si la intención del producto era la contraria —que el Auditor audite también el costo—, se revierte cambiando el cuerpo de `sinAlcanceEconomico` en `registro-labor.controller.ts` y el test que lo fija.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-022 — El backend se queda en NestJS 11 hasta que el ecosistema acompañe
+
+**Contexto:** Dependabot propuso el salto a **NestJS 12** y a **TypeScript 7**, y los dos PR se mergearon sin que el CI estuviera en verde —los *required checks* todavía no están configurados en el repositorio—. El resultado fue que `npm ci` dejó de resolver el árbol de dependencias y **todas** las corridas del workflow pasaron a fallar antes de compilar nada, incluidas las de `main`.
+
+Al revisarlo aparecieron dos bloqueos que no dependen de este código:
+
+- **`@nestjs/throttler` no soporta Nest 12.** Su última versión (6.5.0, publicada en diciembre de 2025) declara `peer @nestjs/common: ^7 || ^8 || ^9 || ^10 || ^11`, y no hay `next` ni prerelease. No es un paquete accesorio: es el `ThrottlerGuard` global, y es lo que sostiene los límites de intentos de [HU-01](specs/HU-01-iniciar-sesion.md) y el tope de 3 solicitudes por hora de [HU-03](specs/HU-03-recuperar-contrasena.md). Instalarlo igual exige `--legacy-peer-deps`, que es pedirle a npm que ignore una incompatibilidad declarada por el autor.
+- **TypeScript 7 no es instalable con la toolchain de tests y lint.** `ts-jest` declara `typescript >=4.3 <7` y `typescript-eslint` `>=4.8.4 <6.1.0`. Son dos bloqueos independientes, así que no alcanza con esperar a uno.
+
+**Decisión:** volver a **NestJS 11** y a **TypeScript 5.9**, y dejar las versiones mayores de `@nestjs/*`, `typescript` y `typeorm` fuera del alcance de Dependabot (`ignore` con `version-update:semver-major` en [`.github/dependabot.yml`](../.github/dependabot.yml)). Se conservan **ESLint 10** —`typescript-eslint@8.70` lo soporta explícitamente— y el resto de las actualizaciones menores.
+
+Una versión mayor de framework o de toolchain no es una actualización de rutina: hay que mirar si los paquetes acoplados por *peer dependencies* la acompañan. Eso se decide y se prueba; no se mergea porque un bot lo propuso.
+
+**Qué falló de la configuración anterior de Dependabot.** El grupo de desarrollo tenía `dependency-type: development` con patrón `*`, y se llevó `@nestjs/testing`, `@nestjs/cli` y `@nestjs/schematics` a un PR distinto del resto de `@nestjs/*`. Los de producción subieron a 12 y los de desarrollo quedaron en 11: **ningún PR era consistente por sí solo**, así que ninguno podía pasar el CI ni siquiera en teoría. El grupo `nestjs` ahora no declara `dependency-type` —para que los tres viajen con el framework— y el grupo de desarrollo los excluye explícitamente.
+
+**Cuándo se revisa.** Cuando `@nestjs/throttler` publique una versión con peer `^12`. Si esa versión tardara mucho, la alternativa es reemplazar el rate limiting por una implementación propia, que es trabajo real y hay que decidirlo aparte: hoy son cuatro líneas de configuración y un decorador por endpoint.
+
+**Estado:** ✅ Vigente.
