@@ -18,6 +18,8 @@ export function validarEntorno(
 ): Record<string, string | undefined> {
   const faltantes: string[] = [];
   const invalidas: string[] = [];
+  /** No impiden arrancar: se avisan y la aplicación sigue. */
+  const advertencias: string[] = [];
 
   const enProduccion = entorno.NODE_ENV === 'production';
 
@@ -69,10 +71,21 @@ export function validarEntorno(
   }
 
   // --- CORS ----------------------------------------------------------------
-  // En producción no hay valor por defecto razonable: ver el fallback cerrado
-  // de `main.ts`.
+  // Advertencia, **no** error. Esto tumbó un despliegue: se exigía como
+  // obligatoria en producción, pero `DESPLIEGUE.md` A.12 documenta que hoy no
+  // está definida ahí a propósito, porque todavía no hay frontend. La API no
+  // arrancó, Caddy devolvió 502 y el despliegue se fue a rollback.
+  //
+  // El riesgo real ya lo cubre `main.ts`, que sin esta variable cierra el CORS
+  // en producción en vez de abrirlo. Una variable que no hace falta para servir
+  // no puede impedir arrancar: convierte una configuración incompleta en una
+  // caída.
   if (enProduccion && !entorno.CORS_ORIGIN) {
-    faltantes.push('CORS_ORIGIN');
+    advertencias.push(
+      'CORS_ORIGIN no está definida: ningún navegador va a poder consumir la ' +
+        'API. Es lo correcto mientras no haya frontend; cuando lo haya, hay ' +
+        'que definirla.',
+    );
   }
 
   // --- transportes opcionales ----------------------------------------------
@@ -98,6 +111,12 @@ export function validarEntorno(
     for (const clave of ['SMTP_HOST', 'SMTP_PORT', 'MAIL_FROM']) {
       requerida(clave);
     }
+  }
+
+  for (const advertencia of advertencias) {
+    // `console` y no el Logger de Nest: esto corre dentro de `ConfigModule`,
+    // antes de que exista la aplicación.
+    console.warn(`[entorno] ${advertencia}`);
   }
 
   if (faltantes.length === 0 && invalidas.length === 0) {

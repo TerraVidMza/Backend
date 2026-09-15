@@ -69,12 +69,25 @@ describe('validarEntorno', () => {
       ).toThrow('JWT_SECRET');
     });
 
-    it('exige CORS_ORIGIN', () => {
-      // Sin esto el fallback de main.ts queda cerrado y el frontend deja de
-      // funcionar sin explicación. Mejor no arrancar.
-      expect(() =>
-        validarEntorno({ ...produccion, CORS_ORIGIN: undefined }),
-      ).toThrow('CORS_ORIGIN');
+    it('avisa por CORS_ORIGIN pero NO impide arrancar', () => {
+      // Exigirla tumbó un despliegue: DESPLIEGUE.md A.12 documenta que hoy no
+      // está definida en producción a propósito, porque no hay frontend. La API
+      // no arrancó y Caddy devolvió 502. El riesgo lo cubre main.ts, que sin la
+      // variable cierra el CORS en vez de abrirlo; una variable que no hace
+      // falta para servir no puede impedir arrancar.
+      const avisos = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      try {
+        expect(() =>
+          validarEntorno({ ...produccion, CORS_ORIGIN: undefined }),
+        ).not.toThrow();
+
+        expect(avisos).toHaveBeenCalledWith(
+          expect.stringContaining('CORS_ORIGIN'),
+        );
+      } finally {
+        avisos.mockRestore();
+      }
     });
   });
 
