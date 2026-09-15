@@ -50,5 +50,8 @@ tmp/
 # Contrato generado: se regenera con `npm run openapi:generar`.
 openapi.json
 
-# Cobertura de los tests de integracion.
-coverage-e2e
+# Cobertura de los tests de integracion. Sin ancla inicial, a diferencia de
+# `/coverage`: una configuracion de Jest mal apuntada deja el reporte colgando
+# de otro directorio, y asi no termina versionado por accidente.
+coverage-e2e/
+coverage/
