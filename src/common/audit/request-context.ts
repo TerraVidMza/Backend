@@ -4,6 +4,16 @@ export interface ContextoRequest {
   ip: string | null;
   usuarioId: string | null;
   userAgent: string | null;
+  /**
+   * Identificador de la request, para poder seguir una operación entera en el
+   * log.
+   *
+   * Sin esto, en la VM conviven las líneas de todos los requests en curso y no
+   * hay forma de saber cuáles pertenecen a la misma operación: un error dice
+   * qué pasó pero no qué lo precedió. Es el dato que falta cuando hay que
+   * reconstruir un incidente y lo único que queda es `journalctl`.
+   */
+  requestId: string;
 }
 
 /**
@@ -22,4 +32,9 @@ export function contextoActual(): ContextoRequest | undefined {
 
 export function ipActual(): string | null {
   return almacenContexto.getStore()?.ip ?? null;
+}
+
+/** Id de la request en curso, o `null` fuera de una (cron, arranque, tests). */
+export function requestIdActual(): string | null {
+  return almacenContexto.getStore()?.requestId ?? null;
 }
