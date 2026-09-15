@@ -42,10 +42,19 @@ npm run start:dev
 
 La API queda expuesta en `http://localhost:3000/api`.
 
-Usuario demo creado por el seed:
+Usuario demo creado por el seed, **solo fuera de producción**:
 
 - **email:** `propietario@terravid.demo`
 - **password:** `Terravid123!`
+
+> ⚠️ Esas credenciales están publicadas acá, así que no sirven para un entorno
+> real. Con `NODE_ENV=production` el seed **no arranca** sin
+> `SEED_PROPIETARIO_PASSWORD`, y el Propietario que crea entra obligado a
+> cambiarla. Para rotar la contraseña de una cuenta ya creada:
+>
+> ```bash
+> ROTAR_EMAIL='propietario@terravid.demo' > ROTAR_PASSWORD='<generada>' npm run db:rotar-password
+> ```
 
 ### Migraciones
 
