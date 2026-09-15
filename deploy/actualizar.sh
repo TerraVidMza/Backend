@@ -303,32 +303,52 @@ autenticar_registro() {
   printf '%s' "$token" | docker login -u oauth2accesstoken --password-stdin "https://$host" >/dev/null
 }
 
-# Pega contra `/api/salud`, que consulta la base antes de contestar: un 200 ahí
-# significa que la aplicación puede servir, no solo que el proceso arrancó.
+# Comprueba que la API pueda servir, no solo que el proceso haya arrancado.
 #
-# Antes esto miraba `/api` y aceptaba el 401 del guard, que se produce **antes**
-# de tocar nada: una API que arrancó y perdió la base pasaba la verificación
-# igual, y el despliegue se daba por bueno. El 401 se sigue aceptando para que
-# un rollback a una imagen anterior a `/api/salud` no quede sin forma de
-# verificarse.
+# `/api/salud` consulta la base antes de contestar, asi que un 200 ahi dice que
+# la aplicacion sirve. Antes esto miraba `/api` y aceptaba el 401 del guard, que
+# se produce **antes** de tocar nada: una API que arranco y perdio Postgres
+# pasaba la verificacion igual.
 #
-# Hasta 90 segundos: en una e2-micro con 0,25 vCPU de línea base el arranque de
+# El 404 es el caso que importa y que costo un incidente: una imagen anterior a
+# `/api/salud` no tiene esa ruta, asi que responde 404 y no 401. Al hacer
+# rollback a una de esas, la verificacion daba por muerta una API que estaba
+# perfectamente viva, y el script terminaba en "hace falta intervenir a mano"
+# con produccion funcionando. Por eso, ante un 404 se reintenta contra `/api`:
+# si ahi contesta 401 o 200, es una imagen vieja sana.
+#
+# Hasta 90 segundos: en una e2-micro con 0,25 vCPU de linea base el arranque de
 # Nest no es inmediato.
 verificar_salud() {
   local dominio="$1" codigo
   for _ in $(seq 1 45); do
-    codigo=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 \
-      --resolve "${dominio}:443:127.0.0.1" "https://${dominio}/api/salud" 2>/dev/null || echo 000)
+    codigo=$(probar "$dominio" /api/salud)
     case "$codigo" in
-    401 | 200)
+    200)
       log "responde ($codigo)"
       return 0
+      ;;
+    404)
+      # Imagen anterior a /api/salud: se verifica como se verificaba entonces.
+      codigo=$(probar "$dominio" /api)
+      case "$codigo" in
+      401 | 200)
+        log "responde ($codigo en /api; imagen sin /api/salud)"
+        return 0
+        ;;
+      esac
       ;;
     esac
     sleep 2
   done
-  error "última respuesta: ${codigo:-sin respuesta}"
+  error "ultima respuesta: ${codigo:-sin respuesta}"
   return 1
+}
+
+# Entra por Caddy con el nombre real resuelto a loopback: asi el certificado
+# coincide y se ejerce el mismo camino que usa un cliente.
+probar() {
+  curl -sk -o /dev/null -w '%{http_code}' --max-time 5     --resolve "${1}:443:127.0.0.1" "https://${1}${2}" 2>/dev/null || echo 000
 }
 
 main "$@"
