@@ -144,7 +144,12 @@ export class UsuariosService {
       await this.enviarBienvenida(usuario);
     }
 
-    return usuario;
+    // `save()` sobre una entidad recién armada con `.create()` no trae la
+    // relación `rol` cargada (solo `rolId`): el `UsuarioSchema` del Web exige
+    // `rol` en toda respuesta de usuario, así que el alta pasaba el 201 pero
+    // el frontend rechazaba la respuesta como "no entendida" — con el usuario
+    // ya creado, lo que hacía que el segundo intento fallara por duplicado.
+    return (await this.findById(usuario.id, empresaId))!;
   }
 
   /**

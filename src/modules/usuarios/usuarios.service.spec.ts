@@ -28,10 +28,17 @@ describe('UsuariosService', () => {
   let mailService: { enviar: jest.Mock };
 
   beforeEach(async () => {
+    // `create()` ahora relee con `findById` tras el `save()` (para traer la
+    // relación `rol`, ver el fix del bug de Zod en el Web): el mock de
+    // `findOne` tiene que devolver lo último guardado, no siempre `null`.
+    let ultimoGuardado: Partial<Usuario> | null = null;
     usuarioRepo = {
-      findOne: jest.fn(() => Promise.resolve(null)),
+      findOne: jest.fn(() => Promise.resolve(ultimoGuardado)),
       create: jest.fn((dto: Partial<Usuario>) => dto),
-      save: jest.fn((usuario: Partial<Usuario>) => Promise.resolve(usuario)),
+      save: jest.fn((usuario: Partial<Usuario>) => {
+        ultimoGuardado = usuario;
+        return Promise.resolve(usuario);
+      }),
       update: jest.fn(() => Promise.resolve()),
     };
     rolRepo = { findOne: jest.fn() };
