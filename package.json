@@ -55,7 +55,7 @@
     "class-validator": "^0.15.1",
     "compression": "^1.8.2",
     "dotenv": "^17.4.2",
-    "firebase-admin": "^14.3.0",
+    "firebase-admin": "^14.4.0",
     "helmet": "^8.3.0",
     "nodemailer": "^9.0.5",
     "passport": "^0.7.0",
