@@ -1,6 +1,8 @@
 # Plan de buenas prácticas — TerraVid Backend
 
-> **Estado:** en ejecución. Abierto el 15/09/2026 sobre `develop` (`a951a89`).
+> **Estado:** fases 0, 2, 3 y 4 hechas; fase 1 hecha a medias. Abierto y ejecutado
+> el 15/09/2026 sobre `develop` (`a951a89`), en la rama
+> `feature/buenas-practicas-y-openapi`. El detalle de qué quedó afuera está en §5.
 >
 > Este plan es distinto de [`specs/PLAN-MEJORAS.md`](specs/PLAN-MEJORAS.md), que está cerrado.
 > Aquél auditaba el **código contra los criterios de aceptación** de las 36 HU: qué
@@ -14,14 +16,14 @@
 
 Todo lo que sigue está medido, no estimado. Ejecutado el 15/09/2026 sobre `develop`:
 
-| Verificación | Comando | Resultado |
-|---|---|---|
-| Compilación de tipos | `npx tsc --noEmit` | ✅ 0 errores |
-| Lint (sin `--fix`) | `npx eslint "{src,test}/**/*.ts"` | ✅ 0 problemas |
-| Tests unitarios | `npm test` | ✅ 184/184 en 19 suites |
-| Smoke end-to-end | `npm run test:smoke` | ✅ **185 OK, 0 fallas** |
-| Cobertura | `npm run test:cov` | ⚠️ 22 % líneas · 11 % funciones |
-| Tests e2e | `npm run test:e2e` | ❌ **1 falla** |
+| Verificación | Comando | Antes | Después |
+|---|---|---|---|
+| Compilación de tipos | `npx tsc --noEmit` | ✅ 0 errores | ✅ 0 errores, ahora en `strict` |
+| Lint (sin `--fix`) | `npx eslint "{src,test}/**/*.ts"` | ✅ 0 problemas | ✅ 0 problemas, con 3 reglas más |
+| Tests unitarios | `npm test` | ✅ 184 en 19 suites | ✅ **207 en 20 suites** |
+| Tests e2e | `npm run test:e2e` | ❌ **1 falla** | ✅ **20 en 2 suites** |
+| Smoke end-to-end | `npm run test:smoke` | ✅ 185 OK, 0 fallas | ✅ 185 OK, 0 fallas |
+| Cobertura | `npm run test:cov` | ⚠️ 22 % líneas | ⚠️ 23 % líneas, con umbrales por archivo |
 
 El smoke corrió contra la API compilada (`npm run start:prod`) y una base
 PostgreSQL 16 + PostGIS real, con las cuatro migraciones aplicadas y el seed
@@ -91,13 +93,13 @@ la trazabilidad y la documentación pesan más que la robustez operativa; por es
 OpenAPI (fase 2) va antes que el endurecimiento (fase 4), aunque técnicamente el
 segundo sea más urgente.
 
-| # | Fase | Qué resuelve | Esfuerzo |
+| # | Fase | Qué resuelve | Estado |
 |---|---|---|---|
-| 0 | Cerrar el ciclo de verificación | Los dos defectos de §2 | ½ día |
-| 1 | Cobertura donde duele | Dinero y multi-tenant sin red | 2–3 días |
-| 2 | Contrato de API (OpenAPI) | Tres repos cliente sin contrato | 1–2 días |
-| 3 | Higiene del repositorio | Deriva entre entornos y manos | ½ día |
-| 4 | Endurecimiento | Fallos tardíos y opacos | 1 día |
+| 0 | Cerrar el ciclo de verificación | Los dos defectos de §2 | 🟢 Hecha |
+| 1 | Cobertura donde duele | Dinero y multi-tenant sin red | 🟠 Parcial — ver §5 |
+| 2 | Contrato de API (OpenAPI) | Tres repos cliente sin contrato | 🟢 Hecha |
+| 3 | Higiene del repositorio | Deriva entre entornos y manos | 🟢 Hecha |
+| 4 | Endurecimiento | Fallos tardíos y opacos | 🟢 Hecha menos el punto 21 |
 
 ### Fase 0 — Cerrar el ciclo de verificación
 
@@ -210,7 +212,50 @@ manejan plata y las que separan empresas descansan hoy enteramente en el smoke.
 
 ---
 
-## 5. Cierre
+## 5. Qué quedó hecho y qué falta
+
+### Hecho
+
+| Punto | Dónde quedó |
+|---|---|
+| 1, 3 — CI en PRs y en `develop`, smoke y e2e en CI | `.github/workflows/desplegar.yml`, job `integracion` |
+| 2 — e2e real en lugar del boilerplate | `test/app.e2e-spec.ts`, 9 casos |
+| 4 — integración contra PostgreSQL real | `test/liquidacion-vendimia.e2e-spec.ts`, `test/fixtures.ts`, 11 casos |
+| 6 — umbrales de cobertura por archivo | `coverageThreshold` en `package.json` |
+| 7, 8, 9 — contrato OpenAPI | `src/config/openapi.ts`, `@ApiTags` en los 23 controladores, `npm run openapi:generar` |
+| 10 a 14 — higiene | `.nvmrc`, `engines`, `.github/dependabot.yml`, plantilla de PR, husky + lint-staged, `CONTRIBUTING.md` |
+| 15 a 20 — endurecimiento | `src/config/validar-entorno.ts`, `GET /api/salud`, `enableShutdownHooks`, CORS cerrado, helmet, compression, `strict` |
+
+Tres cosas que aparecieron al ejecutar y no estaban en el plan:
+
+- **`JwtAuthGuard.canActivate` sobrescribía sin `override`** y **`DashboardService`
+  inyectaba un repositorio que no usa**. Los encontró `strict`; eran los dos
+  únicos errores reales entre 421, el resto era `strictPropertyInitialization`
+  sobre las entidades de TypeORM.
+- **El despliegue verificaba la salud con un 401.** `deploy/actualizar.sh` daba
+  el despliegue por bueno cuando `/api` respondía 401, y ese 401 lo produce el
+  guard antes de tocar la base: una API que arrancó y perdió Postgres pasaba
+  igual. Ahora pega contra `/api/salud`, comprobado parando el contenedor.
+- **Dos tests de liquidación estaban mal escritos** y los corrigió el código:
+  `registrarUno` no lanza cuando falta la tarifa, guarda el pesaje en `ERROR`
+  con el motivo. Es lo correcto para un cliente offline.
+
+### Falta
+
+- **Punto 5, el resto de la cobertura.** Se hizo liquidación (HU-25). Siguen en
+  **0 %** `remitos.service.ts` (457 líneas, HU-26/27), `dashboard.service.ts`
+  (522 líneas), `auth.service.ts` (245 líneas) y `lecturas-iot.service.ts`. El
+  andamiaje ya está —`test/fixtures.ts` y el job de CI que levanta la base—, así
+  que lo que queda es escribir casos, no construir infraestructura.
+- **Punto 21, correlación de request en los logs.** Sin empezar.
+- **Configuración del repositorio en GitHub.** Fuera del alcance de este trabajo
+  por decisión explícita (§4). Mientras nadie marque el job `verificar` como
+  *required check* sobre `main` y `develop`, el CI puede estar en rojo y el
+  merge se puede hacer igual. **Es la única acción manual que sostiene todo lo
+  demás.**
+
+## 6. Cierre
 
 Se cierra cuando las seis verificaciones de §1 pasen **en CI, sobre un pull
-request**, y no en la máquina de quien lo escribió.
+request**, y no en la máquina de quien lo escribió. Hoy pasan las seis, pero en
+una máquina: falta que corra el workflow.
