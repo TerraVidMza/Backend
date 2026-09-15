@@ -163,5 +163,11 @@
       "eslint --fix",
       "prettier --write"
     ]
+  },
+  "allowScripts": {
+    "bcrypt@6.0.0": true,
+    "@firebase/util@1.15.3": true,
+    "protobufjs@7.6.5": true,
+    "unrs-resolver@1.12.2": true
   }
 }
