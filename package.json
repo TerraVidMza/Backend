@@ -1,7 +1,7 @@
 {
-  "name": "Backend",
+  "name": "terravid-backend",
   "version": "0.0.1",
-  "description": "",
+  "description": "API REST de TerraVid: ERP agricola de trazabilidad desde la plantacion hasta la vendimia (NestJS + TypeORM + PostgreSQL/PostGIS).",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
@@ -34,7 +34,8 @@
     "migration:show:dist": "npm run typeorm:dist -- migration:show",
     "db:rol-app:dist": "node dist/database/roles/crear-rol-aplicacion.js",
     "db:verificar-privilegios:dist": "node dist/database/roles/verificar-privilegios.js",
-    "openapi:generar": "npm run build && node dist/config/generar-openapi.js"
+    "openapi:generar": "npm run build && node dist/config/generar-openapi.js",
+    "prepare": "husky || exit 0"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -86,7 +87,9 @@
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
     "globals": "^17.0.0",
+    "husky": "^9.1.7",
     "jest": "^30.0.0",
+    "lint-staged": "^17.5.1",
     "prettier": "^3.4.2",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
@@ -115,6 +118,49 @@
       "**/*.(t|j)s"
     ],
     "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "coverageThreshold": {
+      "src/config/validar-entorno.ts": {
+        "statements": 95,
+        "branches": 95,
+        "functions": 100,
+        "lines": 95
+      },
+      "src/common/tenant/alcance-empresa.service.ts": {
+        "statements": 80,
+        "branches": 75,
+        "functions": 70,
+        "lines": 80
+      },
+      "src/modules/registro-labor/registro-labor.service.ts": {
+        "statements": 55,
+        "branches": 40,
+        "functions": 50,
+        "lines": 55
+      },
+      "src/modules/umbral-sensor/umbral-sensor.service.ts": {
+        "statements": 70,
+        "branches": 55,
+        "functions": 60,
+        "lines": 70
+      }
+    },
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      ".module.ts$",
+      "/database/",
+      "/dto/",
+      ".entity.ts$",
+      "main.ts"
+    ]
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "lint-staged": {
+    "*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ]
   }
 }

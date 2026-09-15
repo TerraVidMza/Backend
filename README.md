@@ -107,11 +107,33 @@ Sin token, el diagnóstico manda contra uno inválido a propósito. Suena raro p
 ### Pruebas
 
 ```bash
-npm test              # 121 tests unitarios
-npm run test:smoke    # 172 casos end-to-end contra la API y la base reales
+npm test              # 207 tests unitarios, con umbrales de cobertura por archivo
+npm run test:e2e      # perimetro de la app + integracion contra la base real
+npm run test:smoke    # 185 casos end-to-end contra la API y la base reales
 ```
 
 El smoke test necesita la API corriendo (`npm run start:prod` en otra terminal) y verifica de punta a punta las correcciones de seguridad, correctitud de datos, paginación y auditoría.
+
+### Contrato de la API (OpenAPI)
+
+Con la API levantada en desarrollo, la documentación queda en
+`http://localhost:3000/api/docs`, y el JSON crudo en `/api/docs-json`.
+
+```bash
+npm run openapi:generar   # escribe openapi.json sin levantar el servidor
+```
+
+Ese archivo es el contrato para los repos `Web`, `Mobile` e `IoTSensor`: los
+tipos del frontend salen de ahí y no de copiar los DTOs a mano. Sale casi
+entero de los DTOs que ya existen —tipos, obligatoriedad y `enum` los deduce el
+plugin de `@nestjs/swagger` desde los decoradores de class-validator, y las
+descripciones de cada campo desde los comentarios JSDoc—, así que documentar un
+endpoint nuevo es documentar su DTO.
+
+> La UI **está apagada en producción** salvo que se ponga `OPENAPI_ENABLED=true`.
+> El documento describe cada ruta, cada campo y qué rol puede usarla; publicarlo
+> junto a la API es una decisión, no un default.
+
 
 ## Estructura de módulos
 
