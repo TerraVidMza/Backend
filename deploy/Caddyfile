@@ -48,3 +48,8 @@
 		level INFO
 	}
 }
+terravid-mobile.duckdns.org {
+    root * /srv/mobile
+    file_server
+    try_files {path} {path}/ /index.html
+}
