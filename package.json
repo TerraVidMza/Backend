@@ -35,7 +35,8 @@
     "db:rol-app:dist": "node dist/database/roles/crear-rol-aplicacion.js",
     "db:verificar-privilegios:dist": "node dist/database/roles/verificar-privilegios.js",
     "openapi:generar": "npm run build && node dist/config/generar-openapi.js",
-    "prepare": "husky || exit 0"
+    "prepare": "husky || exit 0",
+    "test:cov:e2e": "jest --config ./test/jest-e2e.json --coverage"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

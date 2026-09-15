@@ -49,3 +49,6 @@ tmp/
 
 # Contrato generado: se regenera con `npm run openapi:generar`.
 openapi.json
+
+# Cobertura de los tests de integracion.
+coverage-e2e
