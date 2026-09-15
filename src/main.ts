@@ -9,9 +9,15 @@ import helmet from 'helmet';
 import compression from 'compression';
 import { AppModule } from './app.module';
 import { configurarOpenApi } from './config/openapi';
+import { LoggerConRequestId } from './common/logger/logger-con-request-id';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    // Estampa el id de la request en cada linea. Sin esto, en la VM conviven
+    // las lineas de todos los requests en curso y no hay forma de saber cuales
+    // pertenecen a la misma operacion.
+    logger: new LoggerConRequestId(),
+  });
 
   // Sin esto, detrás de un reverse proxy `req.ip` es la IP del proxy: el log de
   // auditoría y el rate limiting por IP quedarían viendo un único origen.

@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { QueryFailedError } from 'typeorm';
+import { requestIdActual } from '../audit/request-context';
 
 /** Códigos de error de PostgreSQL que corresponden a un problema del cliente. */
 const PG_UNIQUE_VIOLATION = '23505';
@@ -94,10 +95,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
       );
     }
 
+    const requestId = requestIdActual();
+
     response.status(status).json({
       statusCode: status,
       path: request.url,
       timestamp: new Date().toISOString(),
+      // Va en la respuesta para que un usuario que reporta un error traiga
+      // consigo la forma de encontrar sus lineas exactas en el log.
+      ...(requestId ? { requestId } : {}),
       message:
         typeof message === 'string'
           ? message

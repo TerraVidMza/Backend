@@ -143,8 +143,11 @@ jobs:
           npm run migration:run
           npm run seed
 
-      - name: Tests e2e
-        run: npm run test:e2e
+      - name: Tests e2e y de integracion
+        # Con cobertura: los umbrales por archivo de test/jest-e2e.json son lo
+        # que impide que auth, remitos o pesaje vuelvan a quedarse sin red sin
+        # que nadie se entere.
+        run: npm run test:cov:e2e
 
       - name: Compilar y levantar la API
         # Contra `dist/`, que es lo que corre en produccion, y no contra

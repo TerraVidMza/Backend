@@ -1,8 +1,10 @@
 # Plan de buenas prácticas — TerraVid Backend
 
-> **Estado:** fases 0, 2, 3 y 4 hechas; fase 1 hecha a medias. Abierto y ejecutado
-> el 15/09/2026 sobre `develop` (`a951a89`), en la rama
-> `feature/buenas-practicas-y-openapi`. El detalle de qué quedó afuera está en §5.
+> **Estado:** las cinco fases ejecutadas. Abierto el 15/09/2026 sobre `develop`
+> (`a951a89`) y cerrado el mismo día, en dos tandas:
+> `feature/buenas-practicas-y-openapi` (fases 0, 2, 3 y 4) y
+> `feature/cobertura-remitos-y-trazabilidad-de-logs` (fase 1 y el punto 21).
+> Lo único pendiente es una acción manual fuera del código — §5.
 >
 > Este plan es distinto de [`specs/PLAN-MEJORAS.md`](specs/PLAN-MEJORAS.md), que está cerrado.
 > Aquél auditaba el **código contra los criterios de aceptación** de las 36 HU: qué
@@ -20,10 +22,11 @@ Todo lo que sigue está medido, no estimado. Ejecutado el 15/09/2026 sobre `deve
 |---|---|---|---|
 | Compilación de tipos | `npx tsc --noEmit` | ✅ 0 errores | ✅ 0 errores, ahora en `strict` |
 | Lint (sin `--fix`) | `npx eslint "{src,test}/**/*.ts"` | ✅ 0 problemas | ✅ 0 problemas, con 3 reglas más |
-| Tests unitarios | `npm test` | ✅ 184 en 19 suites | ✅ **207 en 20 suites** |
-| Tests e2e | `npm run test:e2e` | ❌ **1 falla** | ✅ **20 en 2 suites** |
+| Tests unitarios | `npm test` | ✅ 184 en 19 suites | ✅ **211 en 21 suites** |
+| Tests e2e e integración | `npm run test:e2e` | ❌ **1 falla** | ✅ **49 en 4 suites** |
 | Smoke end-to-end | `npm run test:smoke` | ✅ 185 OK, 0 fallas | ✅ 185 OK, 0 fallas |
-| Cobertura | `npm run test:cov` | ⚠️ 22 % líneas | ⚠️ 23 % líneas, con umbrales por archivo |
+| Cobertura unitaria | `npm run test:cov` | ⚠️ 22 % líneas | ⚠️ 23 % líneas, con umbrales por archivo |
+| Cobertura de integración | `npm run test:cov:e2e` | — | ✅ auth **97 %**, remitos **82 %**, pesaje **56 %** |
 
 El smoke corrió contra la API compilada (`npm run start:prod`) y una base
 PostgreSQL 16 + PostGIS real, con las cuatro migraciones aplicadas y el seed
@@ -96,10 +99,10 @@ segundo sea más urgente.
 | # | Fase | Qué resuelve | Estado |
 |---|---|---|---|
 | 0 | Cerrar el ciclo de verificación | Los dos defectos de §2 | 🟢 Hecha |
-| 1 | Cobertura donde duele | Dinero y multi-tenant sin red | 🟠 Parcial — ver §5 |
+| 1 | Cobertura donde duele | Dinero y multi-tenant sin red | 🟢 Hecha |
 | 2 | Contrato de API (OpenAPI) | Tres repos cliente sin contrato | 🟢 Hecha |
 | 3 | Higiene del repositorio | Deriva entre entornos y manos | 🟢 Hecha |
-| 4 | Endurecimiento | Fallos tardíos y opacos | 🟢 Hecha menos el punto 21 |
+| 4 | Endurecimiento | Fallos tardíos y opacos | 🟢 Hecha |
 
 ### Fase 0 — Cerrar el ciclo de verificación
 
@@ -240,22 +243,51 @@ Tres cosas que aparecieron al ejecutar y no estaban en el plan:
   `registrarUno` no lanza cuando falta la tarifa, guarda el pesaje en `ERROR`
   con el motivo. Es lo correcto para un cliente offline.
 
+### Segunda tanda
+
+| Punto | Dónde quedó |
+|---|---|
+| 5 — circuito de remitos (HU-26/27) | `test/remitos.e2e-spec.ts`, 15 casos · **0 % → 82 %** |
+| 5 — autenticación (HU-01 a HU-04) | `test/autenticacion.e2e-spec.ts`, 14 casos · **0 % → 97 %** |
+| 5 — aislamiento multi-empresa | `crearContextoDeOtraEmpresa` en `test/fixtures.ts` |
+| 6 — umbrales sobre la integración | `coverageThreshold` en `test/jest-e2e.json`, ejecutados en CI |
+| 21 — correlación de logs | `src/common/logger/logger-con-request-id.ts`, cabecera `X-Request-Id` |
+
+Dos cosas que aparecieron acá y valen más que los tests que las encontraron:
+
+- **Un usuario que alguna vez actuó no se puede borrar.** `log_auditoria`
+  referencia al actor y es append-only por trigger (HU-07), así que el `DELETE`
+  viola la foreign key y la entrada del log no se puede sacar — que es
+  justamente el punto. Un solo login deja rastro. No es un problema a arreglar:
+  es la consecuencia correcta de [D-017](DECISIONS.md), y conviene saberla antes
+  de escribir una rutina de limpieza en producción.
+- **La cobertura de integración no se veía.** Los tests corren con otra
+  configuración de Jest, así que `npm run test:cov` los ignoraba y seguía
+  reportando 0 % sobre módulos que ya estaban probados. Ahora hay
+  `npm run test:cov:e2e`, con sus propios umbrales por archivo.
+
 ### Falta
 
-- **Punto 5, el resto de la cobertura.** Se hizo liquidación (HU-25). Siguen en
-  **0 %** `remitos.service.ts` (457 líneas, HU-26/27), `dashboard.service.ts`
-  (522 líneas), `auth.service.ts` (245 líneas) y `lecturas-iot.service.ts`. El
-  andamiaje ya está —`test/fixtures.ts` y el job de CI que levanta la base—, así
-  que lo que queda es escribir casos, no construir infraestructura.
-- **Punto 21, correlación de request en los logs.** Sin empezar.
-- **Configuración del repositorio en GitHub.** Fuera del alcance de este trabajo
-  por decisión explícita (§4). Mientras nadie marque el job `verificar` como
-  *required check* sobre `main` y `develop`, el CI puede estar en rojo y el
+- **Cobertura del resto.** `dashboard.service.ts` (522 líneas) y
+  `lecturas-iot.service.ts` siguen sin tests. Son consulta y agregación: un
+  error ahí muestra un número equivocado, no mueve plata ni abre una puerta, así
+  que van después de lo que ya se cubrió. El andamiaje está y lo que queda es
+  escribir casos.
+- **Configuración del repositorio en GitHub.** Fuera del alcance por decisión
+  explícita (§4). Mientras nadie marque `verificar` e `integracion` como
+  *required checks* sobre `main` y `develop`, el CI puede estar en rojo y el
   merge se puede hacer igual. **Es la única acción manual que sostiene todo lo
   demás.**
 
 ## 6. Cierre
 
-Se cierra cuando las seis verificaciones de §1 pasen **en CI, sobre un pull
-request**, y no en la máquina de quien lo escribió. Hoy pasan las seis, pero en
-una máquina: falta que corra el workflow.
+El criterio era que las verificaciones de §1 pasaran **en CI, sobre un pull
+request**, y no en la máquina de quien las escribió. Con el merge del primer
+lote eso ya ocurre: el workflow corre en cada PR a `main` y a `develop`, levanta
+PostGIS, migra, siembra y ejecuta los 211 unitarios, los 49 de integración y los
+185 del smoke.
+
+Queda una sola cosa, y es manual: **marcar `verificar` e `integracion` como
+required checks** en la configuración del repositorio. Sin eso el CI informa
+pero no frena, y todo lo anterior depende de que nadie mergee en rojo por
+apuro.
