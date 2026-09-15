@@ -1,7 +1,12 @@
 import { NestFactory, Reflector } from '@nestjs/core';
-import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
+import {
+  ClassSerializerInterceptor,
+  Logger,
+  ValidationPipe,
+} from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
+import { configurarOpenApi } from './config/openapi';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -18,6 +23,10 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
 
+  // Sin esto, parar el contenedor corta los requests en vuelo y deja el pool de
+  // TypeORM sin cerrar. El despliegue reemplaza la imagen en cada version.
+  app.enableShutdownHooks();
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -31,6 +40,15 @@ async function bootstrap() {
   // `passwordHash` viaja en toda respuesta que devuelva un Usuario.
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  await app.listen(process.env.PORT ?? 3000);
+  const rutaDocs = configurarOpenApi(app);
+
+  const puerto = process.env.PORT ?? 3000;
+  await app.listen(puerto);
+
+  const logger = new Logger('Bootstrap');
+  logger.log(`API escuchando en http://localhost:${puerto}/api`);
+  if (rutaDocs) {
+    logger.log(`OpenAPI en http://localhost:${puerto}/${rutaDocs}`);
+  }
 }
 void bootstrap();

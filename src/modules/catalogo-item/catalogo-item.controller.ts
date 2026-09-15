@@ -22,8 +22,11 @@ import { RolNombre } from '../../common/enums/rol.enum';
 import { Auditar } from '../../common/audit/auditar.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Dashboard y configuración')
+@ApiBearerAuth('jwt')
 @Controller('catalogos')
 export class CatalogoItemController {
   constructor(private readonly catalogoItemService: CatalogoItemService) {}

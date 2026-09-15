@@ -26,6 +26,14 @@ import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { HttpExceptionFilter } from './../src/common/filters/http-exception.filter';
 
+/** La forma que `HttpExceptionFilter` le da a toda respuesta de error. */
+interface RespuestaDeError {
+  statusCode: number;
+  path: string;
+  timestamp: string;
+  message: unknown;
+}
+
 describe('Perímetro de la aplicación (e2e)', () => {
   let app: INestApplication<App>;
 
@@ -115,12 +123,10 @@ describe('Perímetro de la aplicación (e2e)', () => {
         .get('/api/fincas')
         .expect(401);
 
-      expect(respuesta.body).toMatchObject({
-        statusCode: 401,
-        path: '/api/fincas',
-      });
-      expect(respuesta.body.timestamp).toEqual(expect.any(String));
-      expect(respuesta.body.message).toBeDefined();
+      const cuerpo = respuesta.body as RespuestaDeError;
+      expect(cuerpo).toMatchObject({ statusCode: 401, path: '/api/fincas' });
+      expect(cuerpo.timestamp).toEqual(expect.any(String));
+      expect(cuerpo.message).toBeDefined();
     });
   });
 
@@ -134,7 +140,8 @@ describe('Perímetro de la aplicación (e2e)', () => {
         })
         .expect(200);
 
-      expect(respuesta.body.accessToken).toEqual(expect.any(String));
+      const cuerpo = respuesta.body as { accessToken?: unknown };
+      expect(cuerpo.accessToken).toEqual(expect.any(String));
       // El ClassSerializerInterceptor es lo único que hace efectivos los
       // `@Exclude()` de las entidades. Si se cae de `main.ts`, el passwordHash
       // viaja en toda respuesta que devuelva un Usuario.

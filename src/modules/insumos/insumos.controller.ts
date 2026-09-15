@@ -21,8 +21,11 @@ import { RolNombre } from '../../common/enums/rol.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { Auditar } from '../../common/audit/auditar.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Operaciones y costeo')
+@ApiBearerAuth('jwt')
 @Controller('insumos')
 export class InsumosController {
   constructor(private readonly insumosService: InsumosService) {}

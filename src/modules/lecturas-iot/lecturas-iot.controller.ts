@@ -20,8 +20,11 @@ import { RolNombre } from '../../common/enums/rol.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AlcanceEmpresaService } from '../../common/tenant/alcance-empresa.service';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { ApiBearerAuth, ApiSecurity, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard)
+@ApiTags('Telemetría IoT')
+@ApiBearerAuth('jwt')
 @Controller('lecturas-iot')
 export class LecturasIotController {
   constructor(
@@ -71,6 +74,7 @@ export class LecturasIotController {
    */
   @Public()
   @UseGuards(ApiKeyGuard)
+  @ApiSecurity('api-key-iot')
   @Post()
   ingest(@Body() dto: IngestLecturaDto) {
     return this.lecturasIotService.ingest(dto);

@@ -33,7 +33,8 @@
     "migration:run:dist": "npm run typeorm:dist -- migration:run",
     "migration:show:dist": "npm run typeorm:dist -- migration:show",
     "db:rol-app:dist": "node dist/database/roles/crear-rol-aplicacion.js",
-    "db:verificar-privilegios:dist": "node dist/database/roles/verificar-privilegios.js"
+    "db:verificar-privilegios:dist": "node dist/database/roles/verificar-privilegios.js",
+    "openapi:generar": "npm run build && node dist/config/generar-openapi.js"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -45,6 +46,7 @@
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.1.3",
+    "@nestjs/swagger": "^11.4.7",
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.3",
     "bcrypt": "^6.0.0",

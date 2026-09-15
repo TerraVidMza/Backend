@@ -25,6 +25,7 @@ import { AlcanceEmpresaService } from '../../common/tenant/alcance-empresa.servi
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { Auditar } from '../../common/audit/auditar.decorator';
 import { hoyLocal } from '../../common/fechas/rango-fechas';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 /**
  * Roles que llegan al historial pero no al dinero.
@@ -40,6 +41,8 @@ function sinAlcanceEconomico(user: AuthenticatedUser): boolean {
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Operaciones y costeo')
+@ApiBearerAuth('jwt')
 @Controller('registro-labor')
 export class RegistroLaborController {
   constructor(

@@ -4,8 +4,11 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
 import { Roles } from '../../common/decorators/roles.decorator';
 import { RolNombre } from '../../common/enums/rol.enum';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Usuarios y roles')
+@ApiBearerAuth('jwt')
 @Controller('roles')
 export class RolesController {
   constructor(private readonly rolesService: RolesService) {}
