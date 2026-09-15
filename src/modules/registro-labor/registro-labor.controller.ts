@@ -25,8 +25,24 @@ import { AlcanceEmpresaService } from '../../common/tenant/alcance-empresa.servi
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { Auditar } from '../../common/audit/auditar.decorator';
 import { hoyLocal } from '../../common/fechas/rango-fechas';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+
+/**
+ * Roles que llegan al historial pero no al dinero.
+ *
+ * `costeo` y `margen-bruto` ya excluyen al Auditor por `@Roles`, con el
+ * comentario "dato económico". El historial por cuartel no podía hacer lo
+ * mismo —HU-17 se lo concede— y devolvía el costo unitario de la labor y el de
+ * cada insumo, así que el mismo dato salía por otra puerta. Se filtra en el
+ * payload en lugar de cerrar el endpoint.
+ */
+function sinAlcanceEconomico(user: AuthenticatedUser): boolean {
+  return user.rol === RolNombre.AUDITOR;
+}
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Operaciones y costeo')
+@ApiBearerAuth('jwt')
 @Controller('registro-labor')
 export class RegistroLaborController {
   constructor(
@@ -35,7 +51,8 @@ export class RegistroLaborController {
   ) {}
 
   // El historial por cuartel es el único recurso de negocio que HU-17 le
-  // concede al Auditor, además del log de auditoría.
+  // concede al Auditor, además del log de auditoría. Lo ve completo salvo los
+  // costos: ver `sinAlcanceEconomico`.
   @Get('cuartel/:cuartelId')
   @Roles(
     RolNombre.PROPIETARIO,
@@ -61,6 +78,7 @@ export class RegistroLaborController {
       cuartelId,
       query,
       restringirA,
+      sinAlcanceEconomico(user),
     );
   }
 
@@ -103,7 +121,11 @@ export class RegistroLaborController {
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.registroLaborService.findById(id, user.empresaId);
+    return this.registroLaborService.findById(
+      id,
+      user.empresaId,
+      sinAlcanceEconomico(user),
+    );
   }
 
   @Post()

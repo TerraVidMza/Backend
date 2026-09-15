@@ -4,8 +4,11 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AnyRole } from '../../common/decorators/any-role.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard)
+@ApiTags('Dashboard y configuración')
+@ApiBearerAuth('jwt')
 @Controller('dashboard')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}

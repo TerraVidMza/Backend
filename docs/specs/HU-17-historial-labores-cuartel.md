@@ -17,6 +17,8 @@
 > **Fase 2 (2026-08-24):** el historial ya viene **paginado y con los insumos de cada labor** (`detalles`), que era el dato que faltaba para mostrar el costo real de la fila (F2-2). Falta el resto de los filtros y la restricción del Capataz a sus registros del día.
 >
 > **Criterios (2026-08-25):** sumados los filtros por tipo de labor, usuario y rango de fechas, y **el Capataz queda acotado a sus propios registros del día**: el resto del historial expone trabajo y costos de terceros. La restricción se aplica después de los filtros del query string para que no pueda relajarse desde el cliente.
+>
+> **Alcance del Auditor (2026-08-26):** el Auditor ya podía pedir este endpoint, pero no tenía de dónde sacar el `cuartelId`: los listados de fincas y de cuarteles lo excluían. Ahora los lee. Y el historial **deja de devolverle el costo unitario** —el de la labor y el de cada insumo, que viajan en `null`—: [HU-15](HU-15-consulta-margen-bruto.md) le niega el alcance económico, y de los insumos línea por línea el costo del cuartel se reconstruye a mano. Ve las mismas filas con los mismos filtros; lo que no ve es esa columna. Ver [D-021](../DECISIONS.md#d-021--el-auditor-lee-fincas-y-cuarteles-los-costos-se-filtran-del-payload).
 
 ## Descripción
 

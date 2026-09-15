@@ -20,8 +20,11 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AlcanceEmpresaService } from '../../common/tenant/alcance-empresa.service';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { Auditar } from '../../common/audit/auditar.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Telemetría IoT')
+@ApiBearerAuth('jwt')
 @Controller('sensores')
 export class SensoresController {
   constructor(

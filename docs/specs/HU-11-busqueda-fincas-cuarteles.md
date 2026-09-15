@@ -15,6 +15,8 @@
 > **Auditoría (2026-08-24):** sin búsqueda en cuarteles, sin filtros por variedad/estado/año, sin ordenamiento configurable y sin paginación. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
 > **Criterios (2026-08-25):** ✅ implementada: `GET /cuarteles/buscar` atraviesa toda la empresa con búsqueda por nombre, filtros de variedad, estado y año, orden configurable por lista blanca y paginación. `GET /cuarteles/variedades` devuelve las variedades presentes en una finca para poblar el filtro.
+>
+> **Alcance del Auditor (2026-08-26):** ambos endpoints suman al Auditor, que no es actor de esta HU pero necesita llegar al cuartel del historial de [HU-17](HU-17-historial-labores-cuartel.md). Ver [D-021](../DECISIONS.md#d-021--el-auditor-lee-fincas-y-cuarteles-los-costos-se-filtran-del-payload).
 
 ## Descripción
 

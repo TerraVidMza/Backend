@@ -20,16 +20,32 @@ import { RolNombre } from '../../common/enums/rol.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { Auditar } from '../../common/audit/auditar.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Cartografía')
+@ApiBearerAuth('jwt')
 @Controller('fincas')
 export class FincasController {
   constructor(private readonly fincasService: FincasService) {}
 
-  // El Auditor queda excluido a propósito: HU-07 acota su alcance al log de
-  // auditoría y al historial de operaciones por cuartel (HU-17).
+  /**
+   * El Auditor lee, pero no escribe (D-021).
+   *
+   * HU-17 le concede el historial de operaciones **por cuartel**, y ese
+   * endpoint pide un `cuartelId`. Antes no tenía de dónde sacarlo: el listado
+   * de fincas lo excluía y el de cuarteles también, así que su única historia
+   * de negocio era inalcanzable salvo pegando un UUID a mano. La finca no
+   * lleva ningún dato económico —nombre, ubicación, hectáreas y coordenadas—,
+   * y el alta, la edición y la baja siguen siendo del Propietario.
+   */
   @Get()
-  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
+  @Roles(
+    RolNombre.PROPIETARIO,
+    RolNombre.AGRONOMO,
+    RolNombre.CAPATAZ,
+    RolNombre.AUDITOR,
+  )
   findAll(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ListarFincasDto,
@@ -38,7 +54,12 @@ export class FincasController {
   }
 
   @Get(':id')
-  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
+  @Roles(
+    RolNombre.PROPIETARIO,
+    RolNombre.AGRONOMO,
+    RolNombre.CAPATAZ,
+    RolNombre.AUDITOR,
+  )
   findOne(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

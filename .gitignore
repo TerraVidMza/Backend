@@ -46,3 +46,6 @@ service-account*.json
 
 # temp
 tmp/
+
+# Contrato generado: se regenera con `npm run openapi:generar`.
+openapi.json

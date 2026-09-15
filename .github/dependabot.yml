@@ -1,0 +1,41 @@
+# Actualizaciones automaticas de dependencias.
+#
+# Las acciones de GitHub importan tanto como npm: este repositorio ya sufrio una
+# vez la migracion forzada de node20 a node24 en las acciones, que seguian
+# funcionando solo porque el runner las forzaba. Enterarse por un PR es mejor
+# que enterarse cuando dejan de arrancar.
+version: 2
+
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    open-pull-requests-limit: 5
+    # Un PR por grupo y no uno por paquete: Nest publica sus doce paquetes
+    # juntos, y revisarlos de a uno es ruido que termina en que no se revisa
+    # ninguno.
+    groups:
+      nestjs:
+        patterns:
+          - '@nestjs/*'
+      typeorm-y-base:
+        patterns:
+          - typeorm
+          - pg
+          - '@types/pg'
+      herramientas-de-desarrollo:
+        dependency-type: development
+        patterns:
+          - '*'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci'

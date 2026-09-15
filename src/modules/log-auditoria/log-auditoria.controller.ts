@@ -7,8 +7,11 @@ import { Roles } from '../../common/decorators/roles.decorator';
 import { RolNombre } from '../../common/enums/rol.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Auditoría')
+@ApiBearerAuth('jwt')
 @Controller('log-auditoria')
 export class LogAuditoriaController {
   constructor(private readonly logAuditoriaService: LogAuditoriaService) {}

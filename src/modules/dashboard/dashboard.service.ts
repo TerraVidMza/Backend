@@ -8,7 +8,6 @@ import {
   EstadoAlerta,
 } from '../alertas-iot/entities/alerta-iot.entity';
 import { RegistroLabor } from '../registro-labor/entities/registro-labor.entity';
-import { DetalleInsumoLabor } from '../registro-labor/entities/detalle-insumo-labor.entity';
 import { PesajeVendimia } from '../pesaje-vendimia/entities/pesaje-vendimia.entity';
 import { Remito, EstadoRemito } from '../remitos/entities/remito.entity';
 import { LogAuditoriaService } from '../log-auditoria/log-auditoria.service';
@@ -112,8 +111,6 @@ export class DashboardService {
     private readonly alertaRepository: Repository<AlertaIot>,
     @InjectRepository(RegistroLabor)
     private readonly registroLaborRepository: Repository<RegistroLabor>,
-    @InjectRepository(DetalleInsumoLabor)
-    private readonly detalleInsumoLaborRepository: Repository<DetalleInsumoLabor>,
     @InjectRepository(PesajeVendimia)
     private readonly pesajeRepository: Repository<PesajeVendimia>,
     @InjectRepository(Remito)

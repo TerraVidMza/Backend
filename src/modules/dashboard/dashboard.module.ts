@@ -4,7 +4,6 @@ import { Finca } from '../fincas/entities/finca.entity';
 import { Cuartel } from '../cuarteles/entities/cuartel.entity';
 import { AlertaIot } from '../alertas-iot/entities/alerta-iot.entity';
 import { RegistroLabor } from '../registro-labor/entities/registro-labor.entity';
-import { DetalleInsumoLabor } from '../registro-labor/entities/detalle-insumo-labor.entity';
 import { PesajeVendimia } from '../pesaje-vendimia/entities/pesaje-vendimia.entity';
 import { Remito } from '../remitos/entities/remito.entity';
 import { UsuarioFinca } from '../usuarios/entities/usuario-finca.entity';
@@ -19,7 +18,6 @@ import { DashboardController } from './dashboard.controller';
       Cuartel,
       AlertaIot,
       RegistroLabor,
-      DetalleInsumoLabor,
       PesajeVendimia,
       Remito,
       UsuarioFinca,

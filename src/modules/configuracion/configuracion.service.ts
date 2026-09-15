@@ -1,9 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Configuracion } from './entities/configuracion.entity';
 import { SetConfiguracionDto } from './dto/set-configuracion.dto';
-import { CLAVES_SECRETAS, VALOR_ENMASCARADO } from './configuracion.keys';
+import {
+  CLAVES_PREFERENCIAS,
+  CLAVES_SECRETAS,
+  VALOR_ENMASCARADO,
+} from './configuracion.keys';
 
 /** El proyecto es de Mendoza; es el default sensato mientras no se configure. */
 export const ZONA_HORARIA_POR_DEFECTO = 'America/Argentina/Mendoza';
@@ -23,6 +27,28 @@ export class ConfiguracionService {
       where: { empresaId },
       order: { clave: 'ASC' },
     });
+    return configs.map((c) => this.enmascarar(c));
+  }
+
+  /**
+   * Preferencias de presentación de la empresa (D-020).
+   *
+   * Es el mismo dato que `findAll` pero acotado a `CLAVES_PREFERENCIAS`, para
+   * que los formateadores de la interfaz —moneda, unidades, zona horaria— estén
+   * disponibles para todos los roles sin abrirles la configuración del sistema,
+   * que incluye el SMTP sin enmascarar salvo la contraseña.
+   *
+   * Devuelve solo las claves cargadas: una empresa recién creada no tiene
+   * ninguna fila y el cliente cae a sus propios valores por defecto.
+   */
+  async findPreferencias(empresaId: string): Promise<Configuracion[]> {
+    const configs = await this.configuracionRepository.find({
+      where: { empresaId, clave: In([...CLAVES_PREFERENCIAS]) },
+      order: { clave: 'ASC' },
+    });
+    // Hoy ninguna preferencia es secreta y el tipo de `CLAVES_PREFERENCIAS` no
+    // lo impide: enmascarar igual evita que agregar una clave a la lista se
+    // convierta en una filtración silenciosa.
     return configs.map((c) => this.enmascarar(c));
   }
 

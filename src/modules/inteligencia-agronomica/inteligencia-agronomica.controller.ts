@@ -20,11 +20,14 @@ import { RolNombre } from '../../common/enums/rol.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AlcanceEmpresaService } from '../../common/tenant/alcance-empresa.service';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 // Todos los endpoints cruzan costos con telemetría, así que quedan restringidos
 // a los roles que HU-29/30/31 declaran como actores.
 @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
 @UseGuards(JwtAuthGuard)
+@ApiTags('Inteligencia agronómica')
+@ApiBearerAuth('jwt')
 @Controller('inteligencia-agronomica')
 export class InteligenciaAgronomicaController {
   constructor(

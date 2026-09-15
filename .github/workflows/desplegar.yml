@@ -14,7 +14,13 @@ name: Desplegar
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
+  # El job `verificar` tiene que correr **antes** del merge, no despues. Con los
+  # disparadores anteriores (solo push a main) la verificacion llegaba cuando el
+  # codigo ya estaba camino a produccion, y los PRs a develop que manda
+  # CONTRIBUTING.md no verificaban nada.
+  pull_request:
+    branches: [main, develop]
   # Para republicar sin tener que hacer un commit vacio.
   workflow_dispatch:
 
@@ -31,8 +37,12 @@ permissions:
 # cancel-in-progress, porque abandonar un push a mitad de camino puede dejar
 # capas a medio subir.
 concurrency:
-  group: desplegar-produccion
-  cancel-in-progress: false
+  # Por ref: dos merges seguidos a main siguen compartiendo grupo y no publican
+  # en paralelo, pero un PR ya no hace cola detras de otro PR.
+  group: desplegar-${{ github.ref }}
+  # En main no se cancela a mitad de camino: abandonar un push puede dejar capas
+  # a medio subir. En un PR si, porque ahi no se publica nada.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   IMAGEN: us-central1-docker.pkg.dev/terravid/terravid/api
@@ -74,9 +84,99 @@ jobs:
       - name: Tests
         run: npm test
 
+  integracion:
+    name: Smoke y e2e contra Postgres real
+    runs-on: ubuntu-latest
+
+    # Los 185 casos del smoke y los e2e son la unica verificacion que ejerce
+    # constraints, triggers y aislamiento multi-empresa de verdad: los unitarios
+    # no tocan SQL. Hasta ahora dependian de que alguien se acordara de correr
+    # cuatro comandos a mano, y eso no escala a un equipo.
+    services:
+      db:
+        # La misma imagen que docker-compose.yml: PostGIS no es opcional, las
+        # migraciones crean la extension.
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: terravid
+        ports:
+          - 5432:5432
+        # Sin esto el job arranca antes de que Postgres acepte conexiones y la
+        # migracion falla con ECONNREFUSED.
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      NODE_ENV: test
+      PORT: '3000'
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      DB_DATABASE: terravid
+      # Valores de juguete: esta base se crea y se tira en el job. El secreto de
+      # produccion vive en el .env de la VM y no pasa por aca (D-017).
+      JWT_SECRET: secreto-solo-para-ci-no-usar-en-ningun-otro-lado
+      JWT_EXPIRES_IN: 8h
+      IOT_API_KEY: dev-iot-api-key-solo-para-desarrollo
+      BCRYPT_SALT_ROUNDS: '10'
+      MAIL_TRANSPORT: log
+      PUSH_TRANSPORT: log
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Esquema y datos semilla
+        run: |
+          npm run migration:run
+          npm run seed
+
+      - name: Tests e2e
+        run: npm run test:e2e
+
+      - name: Compilar y levantar la API
+        # Contra `dist/`, que es lo que corre en produccion, y no contra
+        # ts-node: asi el job ejerce el mismo artefacto que se despliega.
+        run: |
+          npm run build
+          # La salida va a un archivo y no al pipe del step: sin redirigirla, el
+          # runner se queda esperando a que cierre stdout y el step nunca
+          # termina, aunque la API este arriba.
+          npm run start:prod > /tmp/api.log 2>&1 &
+          for _ in $(seq 1 30); do
+            codigo=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/salud || echo 000)
+            # `/api/salud` consulta la base antes de contestar, asi que un 200
+            # dice que la API puede servir y no solo que el proceso arranco.
+            if [ "$codigo" = 200 ]; then echo "API arriba"; exit 0; fi
+            sleep 2
+          done
+          echo "la API no respondio en 60s"; exit 1
+
+      - name: Smoke end-to-end
+        run: npm run test:smoke
+
+      - name: Log de la API si algo fallo
+        if: failure()
+        run: cat /tmp/api.log || true
+
   publicar:
     name: Construir y publicar la imagen
-    needs: verificar
+    needs: [verificar, integracion]
+    # Un PR verifica pero no publica: la etiqueta `main` es la que sigue la VM y
+    # solo puede moverla codigo que ya esta en main.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

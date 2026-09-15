@@ -18,7 +18,9 @@ import { AnyRole } from '../../common/decorators/any-role.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from './strategies/jwt.strategy';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
+@ApiTags('Auth y seguridad')
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -34,6 +36,7 @@ export class AuthController {
   }
 
   @AnyRole()
+  @ApiBearerAuth('jwt')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('logout')
@@ -64,6 +67,7 @@ export class AuthController {
   }
 
   @AnyRole()
+  @ApiBearerAuth('jwt')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
   @Post('cambiar-password')

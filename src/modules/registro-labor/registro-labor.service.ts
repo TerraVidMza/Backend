@@ -39,6 +39,28 @@ export interface SyncResultItem {
   inconsistenciaCatalogo?: boolean;
 }
 
+/**
+ * Copia de la entidad con el costo unitario en `null`.
+ *
+ * Conserva el prototipo a propósito. class-transformer resuelve el `@Exclude()`
+ * y el `@Expose()` de cada objeto por su constructor, así que un objeto
+ * literal deja a la entidad sin metadatos de serialización. Hoy no cambia nada
+ * —ni `RegistroLabor` ni `DetalleInsumoLabor` declaran ninguno, y el
+ * `passwordHash` que viaja adentro lo saca el `Usuario` anidado, que conserva
+ * su clase igual—, pero el día que se agregue un `@Exclude()` a estas dos
+ * entidades no tendría efecto por este camino y nada fallaría a la vista.
+ */
+function copiaSinCosto<T extends { costoUnitarioAlSync: number | null }>(
+  entidad: T,
+): T {
+  const copia = Object.assign(
+    Object.create(Object.getPrototypeOf(entidad) as object) as T,
+    entidad,
+  );
+  copia.costoUnitarioAlSync = null;
+  return copia;
+}
+
 @Injectable()
 export class RegistroLaborService {
   private readonly logger = new Logger(RegistroLaborService.name);
@@ -63,11 +85,18 @@ export class RegistroLaborService {
    * `restringirA` acota el resultado a un usuario y una fecha. Se usa para el
    * Capataz, que según HU-17 solo ve **sus** registros **del día**: el resto
    * del historial del cuartel incluye costos y trabajo de terceros.
+   *
+   * `ocultarCostos` saca el costo unitario de la labor y de cada insumo. Es
+   * para el Auditor: HU-17 le da la trazabilidad del cuartel —qué se hizo,
+   * cuándo y quién— pero no el alcance económico, que `costeo` y
+   * `margen-bruto` ya le niegan. Sin esto, el dato que esos dos endpoints le
+   * cierran salía igual por el historial, insumo por insumo.
    */
   async findByCuartel(
     cuartelId: string,
     query: ListarLaboresDto = {},
     restringirA?: { usuarioId: string; fecha: string },
+    ocultarCostos = false,
   ): Promise<ResultadoPaginado<RegistroLabor>> {
     const { page, pageSize, skip, take } = calcularPaginacion(query);
 
@@ -89,7 +118,7 @@ export class RegistroLaborService {
       where.fecha = restringirA.fecha;
     }
 
-    const resultado = await this.registroLaborRepository.findAndCount({
+    const [registros, total] = await this.registroLaborRepository.findAndCount({
       where,
       // `detalles` viene incluido: sin los insumos, la fila del historial no
       // puede mostrar el costo real de la labor (criterio de HU-17).
@@ -103,11 +132,36 @@ export class RegistroLaborService {
       take,
     });
 
-    return armarResultado(resultado, page, pageSize);
+    return armarResultado(
+      [
+        ocultarCostos ? registros.map((r) => this.sinCostos(r)) : registros,
+        total,
+      ],
+      page,
+      pageSize,
+    );
   }
 
-  /** `empresaId` acota al tenant siguiendo la cadena cuartel → finca → empresa. */
-  async findById(id: string, empresaId: string): Promise<RegistroLabor> {
+  /** El registro y sus detalles, con los costos en `null`. */
+  private sinCostos(registro: RegistroLabor): RegistroLabor {
+    const copia = copiaSinCosto(registro);
+    if (registro.detalles) {
+      copia.detalles = registro.detalles.map((d) => copiaSinCosto(d));
+    }
+    return copia;
+  }
+
+  /**
+   * `empresaId` acota al tenant siguiendo la cadena cuartel → finca → empresa.
+   *
+   * `ocultarCostos` sigue el mismo criterio que `findByCuartel`: el Auditor
+   * llega a este endpoint y no debe ver el costo unitario.
+   */
+  async findById(
+    id: string,
+    empresaId: string,
+    ocultarCostos = false,
+  ): Promise<RegistroLabor> {
     const registro = await this.registroLaborRepository.findOne({
       where: { id, cuartel: { finca: { empresaId } } },
       relations: { tipoLabor: true, cuartel: { finca: true }, usuario: true },
@@ -115,7 +169,7 @@ export class RegistroLaborService {
     if (!registro) {
       throw new NotFoundException('Registro de labor no encontrado');
     }
-    return registro;
+    return ocultarCostos ? this.sinCostos(registro) : registro;
   }
 
   /**

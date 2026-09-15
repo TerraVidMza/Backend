@@ -1,0 +1,10 @@
+# Formato y lint solo sobre lo que se esta commiteando.
+#
+# El motivo de que sea `lint-staged` y no `npm run lint`: ese script corre con
+# --fix sobre todo el arbol, asi que reescribe archivos que no tienen nada que
+# ver con el cambio y los mete en el commit sin que nadie lo pida.
+#
+# No corre los tests. Un hook que tarda un minuto se saltea con --no-verify a
+# la tercera vez, y ahi se pierde tambien el lint. Los tests son trabajo del
+# CI, que ahora si corre en cada pull request.
+npx lint-staged

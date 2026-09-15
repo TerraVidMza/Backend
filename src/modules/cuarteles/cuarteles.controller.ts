@@ -21,8 +21,11 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { AlcanceEmpresaService } from '../../common/tenant/alcance-empresa.service';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { Auditar } from '../../common/audit/auditar.decorator';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
+@ApiTags('Cartografía')
+@ApiBearerAuth('jwt')
 @Controller('cuarteles')
 export class CuartelesController {
   constructor(
@@ -30,10 +33,23 @@ export class CuartelesController {
     private readonly alcance: AlcanceEmpresaService,
   ) {}
 
-  // El Auditor queda excluido a propósito: HU-07 acota su alcance al log de
-  // auditoría y al historial de operaciones por cuartel (HU-17).
+  /**
+   * Las cuatro lecturas de cuarteles incluyen al Auditor (D-021).
+   *
+   * El historial de operaciones por cuartel que le concede HU-17 se pide por
+   * `cuartelId`, así que sin el listado no tenía cómo llegar a él. El cuartel
+   * no lleva ningún dato económico —nombre, variedad, sistema de conducción,
+   * hectáreas, estado y coordenadas—; los costos viven en el registro de
+   * labores, y ahí se filtran aparte. Crear, editar y dar de baja siguen
+   * cerrados para él.
+   */
   @Get()
-  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
+  @Roles(
+    RolNombre.PROPIETARIO,
+    RolNombre.AGRONOMO,
+    RolNombre.CAPATAZ,
+    RolNombre.AUDITOR,
+  )
   async findByFinca(
     @CurrentUser() user: AuthenticatedUser,
     @Query('fincaId', ParseUUIDPipe) fincaId: string,
@@ -48,7 +64,12 @@ export class CuartelesController {
    * sirviendo el caso de una sola finca.
    */
   @Get('buscar')
-  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
+  @Roles(
+    RolNombre.PROPIETARIO,
+    RolNombre.AGRONOMO,
+    RolNombre.CAPATAZ,
+    RolNombre.AUDITOR,
+  )
   buscar(
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ListarCuartelesDto,
@@ -58,7 +79,12 @@ export class CuartelesController {
 
   /** Variedades presentes en una finca, para poblar el filtro de HU-11. */
   @Get('variedades')
-  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
+  @Roles(
+    RolNombre.PROPIETARIO,
+    RolNombre.AGRONOMO,
+    RolNombre.CAPATAZ,
+    RolNombre.AUDITOR,
+  )
   async variedades(
     @CurrentUser() user: AuthenticatedUser,
     @Query('fincaId', ParseUUIDPipe) fincaId: string,
@@ -69,7 +95,12 @@ export class CuartelesController {
 
   // Va después de las rutas literales: `:id` capturaría "buscar" y "variedades".
   @Get(':id')
-  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
+  @Roles(
+    RolNombre.PROPIETARIO,
+    RolNombre.AGRONOMO,
+    RolNombre.CAPATAZ,
+    RolNombre.AUDITOR,
+  )
   async findOne(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id', ParseUUIDPipe) id: string,

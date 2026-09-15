@@ -43,8 +43,25 @@ readonly LOCK=/var/lock/terravid-deploy.lock
 # arrancar y morir en lugar de quedarse quieta en la última versión que anda.
 readonly MARCA_FALLIDO="$ESTADO/imagen-fallida"
 
+# El SHA cuya imagen se está esperando. Existe por dos razones: para no repetir
+# el mismo aviso cada dos minutos, y para que se pueda ver de afuera que la VM
+# está esperando —si el workflow falló, los merges dejan de llegar y sin esto
+# no habría ninguna señal—.
+readonly MARCA_ESPERA="$ESTADO/esperando-imagen"
+
 log() { echo "==> $*"; }
 error() { echo "!!! $*" >&2; }
+
+# Avisa una sola vez por commit. Esperar es lo normal —el workflow tarda unos
+# minutos— así que no es un error; pero esperar para siempre sí significa que
+# el build falló, y por eso queda el archivo.
+anotar_espera() {
+  local sha="$1"
+  if [ "$(cat "$MARCA_ESPERA" 2>/dev/null || true)" != "$sha" ]; then
+    printf '%s' "$sha" >"$MARCA_ESPERA"
+    log "esperando la imagen de $sha (el workflow sigue corriendo, o falló)"
+  fi
+}
 
 # Lee una variable de un archivo de entorno sin evaluarlo: `source` ejecutaría
 # lo que hubiera adentro, y estos archivos los edita gente a mano.
@@ -73,53 +90,101 @@ main() {
   [ -n "$imagen" ] || { error "no encontré API_IMAGE en $DIR/.env"; return 1; }
   [ -n "$dominio" ] || { error "no encontré DOMINIO en $DIR/.env"; return 1; }
 
-  # ---- 1. traer el repositorio -------------------------------------------
-  # El compose, el Caddyfile y este script viven ahí, así que un despliegue no
-  # es solo una imagen nueva. `reset --hard` porque esta máquina debe reflejar
-  # `main` y nada más: cualquier edición local hecha acá se descarta. Los dos
-  # `.env` no están versionados, así que sobreviven.
-  local git_antes git_despues
+  # ---- 1. cuál es el commit objetivo -------------------------------------
+  # Se mira `origin/main` **sin** tocar el árbol de trabajo todavía. El repo
+  # local se mueve más abajo, recién cuando se sabe que hay una imagen para ese
+  # commit: hasta entonces el checkout tiene que seguir coincidiendo con lo que
+  # está corriendo.
+  local git_antes objetivo corto
   git_antes=$(git -C "$REPO" rev-parse HEAD)
   git -C "$REPO" fetch --quiet origin main
-  git -C "$REPO" reset --hard --quiet origin/main
-  git_despues=$(git -C "$REPO" rev-parse HEAD)
+  objetivo=$(git -C "$REPO" rev-parse origin/main)
+  corto=${objetivo:0:7}
 
-  # ---- 2. ¿hay algo nuevo? ------------------------------------------------
-  local digest_antes id_antes
-  id_antes=$(docker image inspect --format '{{.Id}}' "$imagen" 2>/dev/null || echo ninguna)
+  # ---- 2. la imagen de ESE commit, no la etiqueta móvil ------------------
+  # Acá estaba el problema que esto arregla. Siguiendo `:main` el despliegue
+  # disparaba dos veces por merge: el `git fetch` ve el commit al instante,
+  # pero la imagen tarda lo que tardan los tests y el build. El primer
+  # despliegue aplicaba el código nuevo **con la imagen vieja** y el segundo,
+  # tres minutos después, corregía. Dos recreaciones del contenedor y una
+  # ventana en la que el compose y la imagen no eran del mismo commit.
+  #
+  # Con la etiqueta del SHA no hay ambigüedad posible: o existe la imagen de
+  # este commit y se despliega entero, o no existe y se espera. De paso, «qué
+  # está corriendo» pasa a ser una pregunta con una sola respuesta.
+  local base=$imagen
+  # Se saca la etiqueta solo si la hay: el `:` de un host con puerto
+  # (`registro:5000/repo`) no es una etiqueta, y cortar ahí rompería el nombre.
+  case "${imagen##*/}" in *:*) base=${imagen%:*} ;; esac
+  local objetivo_imagen="${base}:${corto}"
+
+  autenticar_registro "${base%%/*}" || error "sigo igual; el pull va a decir si alcanzaba"
+
+  local salida
+  if ! salida=$(docker pull -q "$objetivo_imagen" 2>&1); then
+    # «not found» es el caso normal: el workflow todavía no terminó. Cualquier
+    # otro error —red, credenciales— sí hay que informarlo.
+    if grep -q 'not found' <<<"$salida"; then
+      anotar_espera "$corto"
+      return 0
+    fi
+    error "no pude traer $objetivo_imagen:"
+    printf '%s\n' "$salida" | sed 's/^/    /' >&2
+    return 1
+  fi
+  rm -f "$MARCA_ESPERA"
+
+  # Se comparan identificadores locales entre sí: el `.Image` del contenedor y
+  # el `.Id` de la imagen son la misma clase de valor. El digest del registro
+  # es otra cosa y mezclarlos daría diferencias falsas.
+  local id_objetivo id_corriendo digest_antes api_viva=no
+  id_objetivo=$(docker image inspect --format '{{.Id}}' "$objetivo_imagen")
+  id_corriendo=$(docker inspect --format '{{.Image}}' terravid-api 2>/dev/null || echo ninguna)
   digest_antes=$(docker image inspect \
-    --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' "$imagen" 2>/dev/null || echo "")
+    --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' "$id_corriendo" 2>/dev/null || echo "")
 
-  autenticar_registro "${imagen%%/*}" || error "sigo igual; el pull va a decir si alcanzaba"
-  $compose pull --quiet api
-
-  local id_despues digest_despues
-  id_despues=$(docker image inspect --format '{{.Id}}' "$imagen")
-  digest_despues=$(docker image inspect \
-    --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' "$imagen")
-
-  local api_viva=no
   if [ "$(docker inspect -f '{{.State.Running}}' terravid-api 2>/dev/null || echo false)" = true ]; then
     api_viva=si
   fi
 
-  if [ "$id_antes" = "$id_despues" ] &&
-    [ "$git_antes" = "$git_despues" ] &&
+  if [ "$id_objetivo" = "$id_corriendo" ] &&
+    [ "$git_antes" = "$objetivo" ] &&
     [ "$api_viva" = si ]; then
-    log "sin cambios (${git_despues:0:7})"
+    log "sin cambios ($corto)"
     return 0
   fi
 
-  if [ -f "$MARCA_FALLIDO" ] && [ "$digest_despues" = "$(cat "$MARCA_FALLIDO")" ]; then
-    log "esta imagen ya falló antes; espero una versión nueva en lugar de reintentar"
+  # La marca es el par commit + imagen, no la imagen sola. Un merge que solo
+  # cambia el Caddyfile o el compose da la misma imagen —esos archivos no entran
+  # al contexto de build—, así que con la imagen sola el arreglo de un
+  # despliegue roto quedaría bloqueado por el despliegue que rompió. Y guardar
+  # solo el commit bloquearía una imagen corregida para el mismo commit,
+  # republicada a mano.
+  local marca="$objetivo $id_objetivo"
+  if [ -f "$MARCA_FALLIDO" ] && [ "$marca" = "$(cat "$MARCA_FALLIDO")" ]; then
+    log "$corto con esta imagen ya falló antes; espero algo nuevo en lugar de reintentar"
     return 0
   fi
 
-  log "desplegando ${git_despues:0:7}"
-  [ "$id_antes" != "$id_despues" ] && log "imagen nueva: $digest_despues"
-  [ "$git_antes" != "$git_despues" ] && log "código nuevo: ${git_antes:0:7} -> ${git_despues:0:7}"
+  # ---- 3. recién ahora se mueve el checkout ------------------------------
+  # Al commit exacto cuya imagen ya está en disco, no a `origin/main`: si
+  # alguien mergeó algo en el medio, este despliegue sigue siendo coherente y
+  # el próximo tic se ocupa del commit siguiente.
+  #
+  # `reset --hard` porque esta máquina refleja `main` y nada más: cualquier
+  # edición local se descarta. Los dos `.env` no están versionados y sobreviven.
+  git -C "$REPO" reset --hard --quiet "$objetivo"
 
-  # ---- 3. migrar ----------------------------------------------------------
+  log "desplegando $corto"
+  [ "$id_objetivo" != "$id_corriendo" ] && log "imagen: $objetivo_imagen"
+  [ "$git_antes" != "$objetivo" ] && log "código: ${git_antes:0:7} -> $corto"
+
+  # Que compose use la etiqueta del commit y no la de `.env`. El shell gana
+  # sobre el archivo, así que alcanza con exportarla.
+  export API_IMAGE="$objetivo_imagen"
+  local git_despues=$objetivo
+
+  # ---- 4. migrar ----------------------------------------------------------
   # Corre **desde la imagen recién bajada**, no desde un checkout con
   # devDependencies: `data-source.ts` deduce sus globs de su propia ubicación,
   # así que el mismo archivo sirve compilado. Antes esto era un paso manual por
@@ -155,7 +220,7 @@ main() {
     error "no encontré DB_PASSWORD en .env.app: salteo los privilegios del rol"
   fi
 
-  # ---- 4. levantar --------------------------------------------------------
+  # ---- 5. levantar --------------------------------------------------------
   # Solo `api`, salvo que el compose haya cambiado de verdad. Un `up -d` de
   # todo evalúa también db y caddy, y cualquier deriva en el hash de
   # configuración de esos servicios los recrearía: un despliegue de la API no
@@ -178,7 +243,7 @@ main() {
     docker exec terravid-caddy caddy reload --config /etc/caddy/Caddyfile
   fi
 
-  # ---- 5. verificar -------------------------------------------------------
+  # ---- 6. verificar -------------------------------------------------------
   # Se prueba la cadena completa, entrando por Caddy con el nombre real
   # resuelto a loopback: así el certificado coincide y se ejerce el mismo
   # camino que usa un cliente. `/api` sin token responde 401, y ese 401 es la
@@ -193,11 +258,11 @@ main() {
     return 0
   fi
 
-  # ---- 6. volver atrás ----------------------------------------------------
-  error "la API no responde después del despliegue"
-  echo "$digest_despues" >"$MARCA_FALLIDO"
+  # ---- 7. volver atrás ----------------------------------------------------
+  error "la API no responde después del despliegue de $corto"
+  printf '%s' "$marca" >"$MARCA_FALLIDO"
 
-  if [ -z "$digest_antes" ] || [ "$digest_antes" = "$digest_despues" ]; then
+  if [ -z "$digest_antes" ] || [ "$digest_antes" = "$objetivo_imagen" ]; then
     error "no tengo una imagen anterior a la que volver. La API queda caída."
     return 1
   fi
@@ -238,13 +303,22 @@ autenticar_registro() {
   printf '%s' "$token" | docker login -u oauth2accesstoken --password-stdin "https://$host" >/dev/null
 }
 
-# 401 (sin token) o 200 cuentan como viva. Hasta 90 segundos: en una e2-micro
-# con 0,25 vCPU de línea base el arranque de Nest no es inmediato.
+# Pega contra `/api/salud`, que consulta la base antes de contestar: un 200 ahí
+# significa que la aplicación puede servir, no solo que el proceso arrancó.
+#
+# Antes esto miraba `/api` y aceptaba el 401 del guard, que se produce **antes**
+# de tocar nada: una API que arrancó y perdió la base pasaba la verificación
+# igual, y el despliegue se daba por bueno. El 401 se sigue aceptando para que
+# un rollback a una imagen anterior a `/api/salud` no quede sin forma de
+# verificarse.
+#
+# Hasta 90 segundos: en una e2-micro con 0,25 vCPU de línea base el arranque de
+# Nest no es inmediato.
 verificar_salud() {
   local dominio="$1" codigo
   for _ in $(seq 1 45); do
     codigo=$(curl -sk -o /dev/null -w '%{http_code}' --max-time 5 \
-      --resolve "${dominio}:443:127.0.0.1" "https://${dominio}/api" 2>/dev/null || echo 000)
+      --resolve "${dominio}:443:127.0.0.1" "https://${dominio}/api/salud" 2>/dev/null || echo 000)
     case "$codigo" in
     401 | 200)
       log "responde ($codigo)"
