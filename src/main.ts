@@ -43,12 +43,30 @@ async function bootstrap() {
   // la red por si alguien desactiva esa validacion.
   //
   // Solo afecta a navegadores: la app movil y los nodos ESP32 no mandan Origin.
-  const origenes = process.env.CORS_ORIGIN?.split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
+  const origenes =
+    process.env.CORS_ORIGIN?.split(',')
+      .map((o) => o.trim())
+      // Opcional: quitar cualquier '/' al final por si se coló por error en el .env
+      .map((o) => (o.endsWith('/') ? o.slice(0, -1) : o))
+      .filter(Boolean) || [];
 
   app.enableCors({
-    origin: origenes?.length ? origenes : process.env.NODE_ENV !== 'production',
+    origin: function (origin, callback) {
+      // Permitir si no hay origen (ej: Postman, servidor local)
+      if (!origin) {
+        return callback(null, true);
+      }
+      // Si el origen está en nuestra lista, permitir
+      if (origenes.includes(origin)) {
+        return callback(null, true);
+      }
+      // Fallback: Si no hay orígenes configurados y NO es producción, permitir todo
+      if (origenes.length === 0 && process.env.NODE_ENV !== 'production') {
+        return callback(null, true);
+      }
+      // Si no cumple nada de lo anterior, bloquear (no devuelve la cabecera CORS)
+      callback(null, false);
+    },
     credentials: true,
   });
 
