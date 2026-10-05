@@ -390,3 +390,70 @@ Una versión mayor de framework o de toolchain no es una actualización de rutin
 **Cuándo se revisa.** Cuando `@nestjs/throttler` publique una versión con peer `^12`. Si esa versión tardara mucho, la alternativa es reemplazar el rate limiting por una implementación propia, que es trabajo real y hay que decidirlo aparte: hoy son cuatro líneas de configuración y un decorador por endpoint.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-023 — Sesiones con refresh token rotativo y duración configurable por empresa
+
+**Contexto:** el access token duraba 8 horas y no había forma de renovarlo:
+al vencer, el usuario perdía la sesión a mitad del trabajo, y un token robado
+servía las 8 horas completas (la lista de revocación de HU-02 solo cubre el
+logout). `.env.example` declaraba `JWT_REFRESH_SECRET` y
+`JWT_REFRESH_EXPIRES_IN`, pero ningún código los usaba. El product owner pidió
+implementar el refresh token y que la duración de las sesiones sea
+configurable.
+
+**Decisión:**
+
+- **Access token corto** (JWT, 15 minutos por defecto) y **refresh token
+  opaco** (256 bits aleatorios, 7 días por defecto). El refresh no es un JWT:
+  no lleva datos, no necesita secreto propio y se guarda en la tabla
+  `refresh_token` como SHA-256. Una copia de la tabla no sirve para abrir
+  sesiones. Con esa entropía alcanza un hash rápido; bcrypt haría lenta una
+  consulta que se resuelve por índice único.
+- **Rotación en cada uso** (`POST /api/auth/refresh`, pública, con límite de
+  30 requests por minuto por IP). El token presentado se revoca y se entrega
+  uno nuevo de la misma **familia** (la sesión), junto con un access token
+  nuevo. El rol y el estado del usuario se releen de la base: un usuario
+  desactivado no renueva.
+- **Detección de reuso.** Si aparece un token ya rotado, alguien más tiene una
+  copia: se revoca la familia completa. Hay una **gracia de 30 segundos** para
+  los tokens recién rotados, porque dos pestañas de la Web (o un reintento de
+  red del móvil) pueden renovar con el mismo token casi a la vez; la segunda
+  recibe 401 sin castigar a la sesión, y toma el token nuevo del almacenamiento
+  compartido. La revocación es condicional (`WHERE revocado_at IS NULL`), así
+  que dos consumos simultáneos no pueden emitir dos sucesores.
+- **El access token lleva la familia** (claim `fam`). Así el logout corta el
+  refresh token sin pedirle nada más al cliente. Cambiar la contraseña revoca
+  las demás sesiones del usuario y conserva la actual; restablecerla por mail
+  las revoca todas, porque puede ser la recuperación de una cuenta
+  comprometida.
+- **Duraciones por empresa** en `configuracion`:
+  `sesion_access_minutos` (5 a 60, por defecto 15) y `sesion_refresh_dias`
+  (1 a 30, por defecto 7). El máximo de 30 días contempla a un capataz que pasa
+  varios días en campo sin señal. `PUT /configuracion` rechaza valores fuera de
+  rango; un valor inválido cargado a mano en la base se ignora y se usa el
+  valor por defecto, para que una configuración rota no deje a una empresa
+  entera sin poder entrar.
+- La respuesta del login y del refresh es
+  `{ accessToken, expiresIn, refreshToken, refreshExpiresAt, user }`.
+  `expiresIn` está en segundos: el cliente renueva antes de que venza.
+- El cron de las 3 AM purga los refresh tokens vencidos junto con las
+  revocaciones.
+- Se eliminan `JWT_EXPIRES_IN`, `JWT_REFRESH_SECRET` y
+  `JWT_REFRESH_EXPIRES_IN` de los `.env` de ejemplo y del CI.
+
+**Consecuencias:**
+
+- Los clientes (Web y Mobile) guardan el refresh token y renuevan con un único
+  request en vuelo; ante un 401 en `/auth/refresh` cierran la sesión local.
+- Los tokens emitidos antes de esta versión no tienen `fam` ni refresh token:
+  siguen sirviendo hasta su vencimiento y después piden login.
+- Es estado nuevo en la base, en el camino de cada renovación (no de cada
+  request: el access token se sigue validando como antes).
+- Pruebas: `test/autenticacion.e2e-spec.ts` (rotación, reuso dentro y fuera de
+  la gracia, vencimiento, usuario inactivo, logout, cambio y reseteo de
+  contraseña, duraciones de la empresa), `duraciones-sesion.spec.ts` y el smoke
+  test.
+
+**Estado:** ✅ Vigente.

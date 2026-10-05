@@ -636,6 +636,47 @@ check(
   null,
 );
 
+seccion('D-023 · refresh token: rota, renueva y muere con el logout');
+const refreshTrasLogout = await req('POST', '/auth/refresh', {
+  refreshToken: sesion.body?.refreshToken,
+});
+check(
+  'el refresh token de una sesión cerrada no renueva (401)',
+  refreshTrasLogout.status === 401,
+  refreshTrasLogout.status,
+);
+
+const sesionRenovable = await req('POST', '/auth/login', {
+  email: 'propietario@terravid.demo',
+  password: 'Terravid123!',
+});
+check(
+  'el login devuelve refreshToken y expiresIn',
+  typeof sesionRenovable.body?.refreshToken === 'string' &&
+    typeof sesionRenovable.body?.expiresIn === 'number',
+  sesionRenovable.body,
+);
+const renovada = await req('POST', '/auth/refresh', {
+  refreshToken: sesionRenovable.body?.refreshToken,
+});
+check('renovar responde 200', renovada.status === 200, renovada.status);
+check(
+  'la renovación entrega un refresh token distinto',
+  renovada.body?.refreshToken &&
+    renovada.body.refreshToken !== sesionRenovable.body?.refreshToken,
+  null,
+);
+const conTokenRenovado = await fetch(`${API}/usuarios/me`, {
+  headers: { Authorization: `Bearer ${renovada.body?.accessToken}` },
+});
+check(
+  'el access token renovado sirve',
+  conTokenRenovado.status === 200,
+  conTokenRenovado.status,
+);
+const sinBody = await req('POST', '/auth/refresh', {});
+check('refresh sin token es 400', sinBody.status === 400, sinBody.status);
+
 seccion('HU-05 · alta con contraseña temporal y correo de bienvenida');
 const nuevoEmail = `capataz.${RUN}@terravid.demo`;
 const roles = await req('GET', '/roles');

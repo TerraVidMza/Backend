@@ -1,5 +1,6 @@
 /**
- * Autenticación (HU-01 a HU-04) contra PostgreSQL real.
+ * Autenticación (HU-01 a HU-04) y sesiones con refresh token (D-023) contra
+ * PostgreSQL real.
  *
  * `auth.service.ts` son 245 líneas sin un solo test. Lo que se verifica acá no
  * es que bcrypt compare —eso lo prueba bcrypt— sino las decisiones de seguridad
@@ -167,6 +168,7 @@ describe('Autenticación (integración)', () => {
         id: usuario.id,
         jti: payload.jti,
         expiraEn: new Date(payload.exp * 1000),
+        familiaId: null,
       });
 
       const filas = await dataSource.query<{ n: number }[]>(
@@ -188,6 +190,7 @@ describe('Autenticación (integración)', () => {
         id: usuario.id,
         jti: payload.jti,
         expiraEn: new Date(payload.exp * 1000),
+        familiaId: null,
       });
 
       const filas = await dataSource.query<{ expires_at: Date }[]>(
@@ -259,6 +262,191 @@ describe('Autenticación (integración)', () => {
 
       await expect(entrar(nueva)).resolves.toBeDefined();
       await expect(entrar()).rejects.toThrow();
+    });
+  });
+
+  describe('sesiones con refresh token (D-023)', () => {
+    const familiaDe = (accessToken: string) =>
+      jwt.verify<{ fam: string; jti: string; exp: number; iat: number }>(
+        accessToken,
+      );
+
+    const refreshEnBase = async (familia: string) =>
+      dataSource.query<
+        {
+          token_hash: string;
+          revocado_at: Date | null;
+          reemplazado_por_id: string | null;
+        }[]
+      >(
+        'SELECT token_hash, revocado_at, reemplazado_por_id FROM refresh_token WHERE familia_id = $1 ORDER BY created_at',
+        [familia],
+      );
+
+    it('el login entrega un refresh token opaco que no se guarda en claro', async () => {
+      const sesion = await entrar();
+
+      expect(sesion.refreshToken).toMatch(/^[\w-]{43}$/);
+      expect(sesion.expiresIn).toBe(15 * 60);
+      expect(new Date(sesion.refreshExpiresAt).getTime()).toBeGreaterThan(
+        Date.now() + 6 * 24 * 3600 * 1000,
+      );
+
+      const filas = await refreshEnBase(familiaDe(sesion.accessToken).fam);
+      expect(filas).toHaveLength(1);
+      expect(filas[0].token_hash).not.toBe(sesion.refreshToken);
+      expect(filas[0].token_hash).toHaveLength(64);
+    });
+
+    it('renovar rota el token: el viejo queda revocado y enlazado al nuevo', async () => {
+      const sesion = await entrar();
+      const renovada = await auth.refresh(sesion.refreshToken);
+
+      expect(renovada.refreshToken).not.toBe(sesion.refreshToken);
+      expect(familiaDe(renovada.accessToken).fam).toBe(
+        familiaDe(sesion.accessToken).fam,
+      );
+
+      const filas = await refreshEnBase(familiaDe(sesion.accessToken).fam);
+      expect(filas).toHaveLength(2);
+      expect(filas[0].revocado_at).not.toBeNull();
+      expect(filas[0].reemplazado_por_id).not.toBeNull();
+      expect(filas[1].revocado_at).toBeNull();
+    });
+
+    it('reusar un token rotado dentro de la gracia falla sin cortar la sesión', async () => {
+      const sesion = await entrar();
+      const renovada = await auth.refresh(sesion.refreshToken);
+
+      await expect(auth.refresh(sesion.refreshToken)).rejects.toThrow(
+        /ya no es válida/,
+      );
+      // La sesión legítima sigue: dos pestañas renovando a la vez no se castigan.
+      await expect(auth.refresh(renovada.refreshToken)).resolves.toBeDefined();
+    });
+
+    it('reusar un token rotado fuera de la gracia revoca la familia completa', async () => {
+      const sesion = await entrar();
+      const renovada = await auth.refresh(sesion.refreshToken);
+      // Se simula que la rotación ocurrió hace un minuto.
+      await dataSource.query(
+        `UPDATE refresh_token SET revocado_at = now() - interval '1 minute'
+          WHERE familia_id = $1 AND reemplazado_por_id IS NOT NULL`,
+        [familiaDe(sesion.accessToken).fam],
+      );
+
+      await expect(auth.refresh(sesion.refreshToken)).rejects.toThrow();
+      // El token vigente también murió: alguien más tenía una copia.
+      await expect(auth.refresh(renovada.refreshToken)).rejects.toThrow();
+    });
+
+    it('un token inventado o vencido no renueva', async () => {
+      await expect(auth.refresh('x'.repeat(43))).rejects.toThrow(
+        'Sesión inválida',
+      );
+
+      const sesion = await entrar();
+      await dataSource.query(
+        `UPDATE refresh_token SET expires_at = now() - interval '1 second' WHERE familia_id = $1`,
+        [familiaDe(sesion.accessToken).fam],
+      );
+      await expect(auth.refresh(sesion.refreshToken)).rejects.toThrow(/expiró/);
+    });
+
+    it('un usuario desactivado no renueva', async () => {
+      const sesion = await entrar();
+      await dataSource.query(
+        'UPDATE usuarios SET activo = false WHERE id = $1',
+        [usuario.id],
+      );
+      await expect(auth.refresh(sesion.refreshToken)).rejects.toThrow(
+        /inactivo/,
+      );
+    });
+
+    it('el logout corta también el refresh token', async () => {
+      const sesion = await entrar();
+      const payload = familiaDe(sesion.accessToken);
+
+      await auth.logout({
+        id: usuario.id,
+        jti: payload.jti,
+        expiraEn: new Date(payload.exp * 1000),
+        familiaId: payload.fam,
+      });
+
+      await expect(auth.refresh(sesion.refreshToken)).rejects.toThrow();
+    });
+
+    it('cambiar la contraseña cierra las otras sesiones y conserva la actual', async () => {
+      const actual = await entrar();
+      const otra = await entrar();
+
+      await auth.changePassword(
+        usuario.id,
+        PASSWORD_DE_PRUEBA,
+        'NuevaClave456!',
+        familiaDe(actual.accessToken).fam,
+      );
+
+      await expect(auth.refresh(otra.refreshToken)).rejects.toThrow();
+      await expect(auth.refresh(actual.refreshToken)).resolves.toBeDefined();
+    });
+
+    it('restablecer la contraseña cierra todas las sesiones', async () => {
+      const sesion = await entrar();
+      const token = await auth.forgotPassword(usuario.email);
+
+      await auth.resetPassword(token as string, 'NuevaClave456!');
+
+      await expect(auth.refresh(sesion.refreshToken)).rejects.toThrow();
+    });
+
+    it('usa las duraciones configuradas por la empresa', async () => {
+      const empresa = await dataSource.query<{ empresa_id: string }[]>(
+        'SELECT empresa_id FROM usuarios WHERE id = $1',
+        [usuario.id],
+      );
+      const empresaId = empresa[0].empresa_id;
+      // La empresa es la del seed y la comparten otros archivos que corren en
+      // paralelo: solo se toca dentro de este test y se restaura al final.
+      const previas = await dataSource.query<
+        { clave: string; valor: string }[]
+      >(
+        `SELECT clave, valor FROM configuracion WHERE empresa_id = $1 AND clave LIKE 'sesion_%'`,
+        [empresaId],
+      );
+      await dataSource.query(
+        `DELETE FROM configuracion WHERE empresa_id = $1 AND clave LIKE 'sesion_%'`,
+        [empresaId],
+      );
+      await dataSource.query(
+        `INSERT INTO configuracion (clave, valor, empresa_id)
+         VALUES ('sesion_access_minutos', '30', $1), ('sesion_refresh_dias', '2', $1)`,
+        [empresaId],
+      );
+      try {
+        const sesion = await entrar();
+        const payload = familiaDe(sesion.accessToken);
+
+        expect(sesion.expiresIn).toBe(30 * 60);
+        expect(payload.exp - payload.iat).toBe(30 * 60);
+        const dias =
+          (new Date(sesion.refreshExpiresAt).getTime() - Date.now()) /
+          (24 * 3600 * 1000);
+        expect(dias).toBeCloseTo(2, 1);
+      } finally {
+        await dataSource.query(
+          `DELETE FROM configuracion WHERE empresa_id = $1 AND clave LIKE 'sesion_%'`,
+          [empresaId],
+        );
+        for (const p of previas) {
+          await dataSource.query(
+            'INSERT INTO configuracion (clave, valor, empresa_id) VALUES ($1, $2, $3)',
+            [p.clave, p.valor, empresaId],
+          );
+        }
+      }
     });
   });
 });

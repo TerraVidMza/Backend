@@ -88,8 +88,11 @@ la vendimia.
 ### Autenticación
 
 Todas las rutas exigen JWT salvo las marcadas como públicas. Se obtiene con
-\`POST /api/auth/login\` y viaja en \`Authorization: Bearer <token>\`. Dura 8
-horas.
+\`POST /api/auth/login\` y viaja en \`Authorization: Bearer <token>\`. Dura lo
+que configure la empresa (15 minutos por defecto): antes de que venza, el
+cliente lo renueva con \`POST /api/auth/refresh\` y el \`refreshToken\` que vino
+en el login. Cada renovación entrega un refresh token nuevo y anula el anterior
+(D-023).
 
 La ingesta de telemetría es la excepción: los nodos ESP32 no pueden sostener una
 sesión de usuario, así que \`POST /api/lecturas-iot\` se autentica con una API

@@ -4,6 +4,8 @@ import { UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 
 import { AuthService } from './auth.service';
+import { RefreshTokenService } from './refresh-token.service';
+import { ConfiguracionService } from '../configuracion/configuracion.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { TokenRecuperacionService } from '../token-recuperacion/token-recuperacion.service';
 import { LogAuditoriaService } from '../log-auditoria/log-auditoria.service';
@@ -24,6 +26,11 @@ describe('AuthService', () => {
   let logAuditoriaService: { registrar: jest.Mock };
   let mailService: { enviar: jest.Mock };
   let tokenRevocadoService: { revocar: jest.Mock };
+  let refreshTokenService: {
+    emitir: jest.Mock;
+    revocarFamilia: jest.Mock;
+    revocarDeUsuario: jest.Mock;
+  };
 
   beforeEach(async () => {
     usuariosService = {
@@ -38,6 +45,18 @@ describe('AuthService', () => {
     logAuditoriaService = { registrar: jest.fn(() => Promise.resolve()) };
     mailService = { enviar: jest.fn(() => Promise.resolve(true)) };
     tokenRevocadoService = { revocar: jest.fn(() => Promise.resolve()) };
+    refreshTokenService = {
+      emitir: jest.fn(() =>
+        Promise.resolve({
+          id: 'rt-1',
+          token: 'refresh-opaco',
+          familiaId: 'fam-1',
+          expiraEn: new Date('2026-01-08T00:00:00.000Z'),
+        }),
+      ),
+      revocarFamilia: jest.fn(() => Promise.resolve()),
+      revocarDeUsuario: jest.fn(() => Promise.resolve()),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -54,6 +73,15 @@ describe('AuthService', () => {
         },
         { provide: MailService, useValue: mailService },
         { provide: TokenRevocadoService, useValue: tokenRevocadoService },
+        { provide: RefreshTokenService, useValue: refreshTokenService },
+        {
+          provide: ConfiguracionService,
+          useValue: {
+            getDuracionesSesion: jest.fn(() =>
+              Promise.resolve({ accessMinutos: 15, refreshDias: 7 }),
+            ),
+          },
+        },
       ],
     }).compile();
 
@@ -188,6 +216,23 @@ describe('AuthService', () => {
       await expect(
         service.login({ email: 'x@x.com', password: 'CorrectaPass1!' }),
       ).rejects.toThrow('Tu cuenta está desactivada');
+    });
+  });
+
+  describe('sesiones (D-023)', () => {
+    it('el logout revoca la familia del refresh token', async () => {
+      await service.logout({
+        id: 'user-1',
+        jti: 'jti-1',
+        expiraEn: null,
+        familiaId: 'fam-1',
+      });
+      expect(refreshTokenService.revocarFamilia).toHaveBeenCalledWith('fam-1');
+    });
+
+    it('un token sin familia (emitido antes de D-023) no intenta revocarla', async () => {
+      await service.logout({ id: 'user-1', jti: 'jti-1', expiraEn: null });
+      expect(refreshTokenService.revocarFamilia).not.toHaveBeenCalled();
     });
   });
 });

@@ -155,7 +155,7 @@ npm run db:verificar-privilegios
 
 # 4. Datos iniciales (roles de usuario, catálogos).
 #    El seed levanta un contexto Nest completo: AuthModule exige JWT_SECRET
-#    y JWT_REFRESH_SECRET aunque el seed solo inserte filas.
+#    aunque el seed solo inserte filas.
 #
 #    SEED_PROPIETARIO_PASSWORD es obligatoria con NODE_ENV=production: sin
 #    ella el seed no arranca. La contraseña de desarrollo está publicada en
@@ -181,7 +181,6 @@ crear_secreto() { printf '%s' "$2" | gcloud secrets create "$1" --data-file=- ; 
 
 crear_secreto DB_PASSWORD         '<la DB_APP_PASSWORD de la sección 5>'
 crear_secreto JWT_SECRET          "$(openssl rand -base64 48)"
-crear_secreto JWT_REFRESH_SECRET  "$(openssl rand -base64 48)"
 crear_secreto IOT_API_KEY         "$(openssl rand -hex 32)"
 ```
 
@@ -218,7 +217,7 @@ MIEMBRO="serviceAccount:$SA@$PROJECT.iam.gserviceaccount.com"
 gcloud projects add-iam-policy-binding $PROJECT \
   --member="$MIEMBRO" --role="roles/cloudsql.client"
 
-for S in DB_PASSWORD JWT_SECRET JWT_REFRESH_SECRET IOT_API_KEY; do
+for S in DB_PASSWORD JWT_SECRET IOT_API_KEY; do
   gcloud secrets add-iam-policy-binding $S \
     --member="$MIEMBRO" --role="roles/secretmanager.secretAccessor"
 done
@@ -249,8 +248,6 @@ DB_DATABASE=terravid;\
 DB_USERNAME=terravid_app;\
 DB_SYNCHRONIZE=false;\
 BCRYPT_SALT_ROUNDS=12;\
-JWT_EXPIRES_IN=8h;\
-JWT_REFRESH_EXPIRES_IN=7d;\
 TRUST_PROXY_HOPS=1;\
 MAIL_TRANSPORT=log;\
 PUSH_TRANSPORT=log;\
@@ -262,7 +259,6 @@ LECTURAS_RETENCION_DIAS=30" \
   --set-secrets="\
 DB_PASSWORD=DB_PASSWORD:latest,\
 JWT_SECRET=JWT_SECRET:latest,\
-JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest,\
 IOT_API_KEY=IOT_API_KEY:latest"
 ```
 
@@ -676,8 +672,8 @@ DB_APP_PASSWORD='<contraseña-larga-generada>' npm run db:rol-app
 npm run db:verificar-privilegios
 
 # El seed levanta un contexto Nest completo, así que AuthModule exige
-# JWT_SECRET y JWT_REFRESH_SECRET aunque solo vaya a insertar filas. Sin
-# ellas falla con "JwtStrategy requires a secret or key", que no sugiere
+# JWT_SECRET aunque solo vaya a insertar filas. Sin
+# él falla con "JwtStrategy requires a secret or key", que no sugiere
 # que lo que falta sea una variable de entorno.
 # SEED_PROPIETARIO_PASSWORD es obligatoria con NODE_ENV=production: sin ella
 # el seed no arranca. La de desarrollo está publicada en el README, y esta es

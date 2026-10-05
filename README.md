@@ -206,8 +206,9 @@ La infraestructura de **Redis + BullMQ** que describe [`docs/ARCHITECTURE.md`](d
 Todas las rutas requieren JWT por defecto (guard global). Usar `@Public()` para exponer una ruta sin autenticación, y `@Roles(RolNombre.X)` para restringir por rol.
 
 ```
-POST /api/auth/login          { email, password }
-POST /api/auth/logout
+POST /api/auth/login          { email, password } → { accessToken, expiresIn, refreshToken, refreshExpiresAt, user }
+POST /api/auth/refresh        { refreshToken }    → misma respuesta; rota el refresh token (D-023)
+POST /api/auth/logout                             (revoca el access token y la sesión)
 POST /api/auth/forgot-password
 POST /api/auth/reset-password
 POST /api/auth/cambiar-password
