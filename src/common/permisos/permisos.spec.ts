@@ -16,6 +16,7 @@ import { CuadrillasController } from '../../modules/cuadrillas/cuadrillas.contro
 import { CuartelesController } from '../../modules/cuarteles/cuarteles.controller';
 import { DashboardController } from '../../modules/dashboard/dashboard.controller';
 import { EmpresasController } from '../../modules/empresas/empresas.controller';
+import { MetasCosechaController } from '../../modules/metas-cosecha/metas-cosecha.controller';
 import { FincasController } from '../../modules/fincas/fincas.controller';
 import { InsumosController } from '../../modules/insumos/insumos.controller';
 import { InteligenciaAgronomicaController } from '../../modules/inteligencia-agronomica/inteligencia-agronomica.controller';
@@ -113,6 +114,7 @@ const COBERTURA: Record<Exclude<Permiso, 'appMovil'>, Handler[]> = {
     [CampaniasController, 'update'],
     [CampaniasController, 'cerrar'],
     [CampaniasController, 'reabrir'],
+    [MetasCosechaController, 'fijar'],
   ],
   ayudaAdministracion: [
     [AyudaController, 'createArticulo'],
@@ -172,6 +174,8 @@ const COBERTURA: Record<Exclude<Permiso, 'appMovil'>, Handler[]> = {
     [PesajeVendimiaController, 'estadoCosechaFinca'],
     [PesajeVendimiaController, 'estadoCosecha'],
     [PesajeVendimiaController, 'findOne'],
+    [MetasCosechaController, 'avanceActual'],
+    [MetasCosechaController, 'avance'],
   ],
   pesajesRegistro: [
     [PesajeVendimiaController, 'registrarUno'],

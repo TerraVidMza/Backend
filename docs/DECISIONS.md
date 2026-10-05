@@ -601,3 +601,37 @@ sensor.
 HTTP. El contrato para migrarlos está en [`IOT-MQTT.md`](IOT-MQTT.md).
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-027 — Metas de cosecha por cuartel y ubicación GPS de los registros de campo
+
+**Contexto:** la app móvil tenía funcionalidades escritas pero sin conectar
+(mobile-v2). El indicador de avance de cosecha usaba una meta fija de
+10.000 kg en el código, y la captura de GPS no tenía dónde guardarse: ni el
+esquema local ni los DTO del backend tenían columnas de ubicación. El product
+owner pidió terminar esas funcionalidades.
+
+**Decisión:**
+
+- **Metas de cosecha:** tabla `metas_cosecha` con la meta en kg por
+  **cuartel y campaña** (única por par). La carga el Propietario:
+  - `PUT /api/campanias/:id/metas/:cuartelId { metaKg }`. `metaKg = 0` borra
+    la meta.
+  - `GET /api/campanias/actual/avance?fincaId=` y
+    `GET /api/campanias/:id/avance?fincaId=` (Propietario, Agrónomo y
+    Capataz) devuelven, por cuartel activo, la meta y los kilos pesados dentro
+    del rango de la campaña, más los totales. La app de campo lo usa para el
+    indicador; la Web, para cargar las metas.
+  - Sin campaña en curso, el avance viene vacío (`campania: null`).
+- **GPS:** `latitud` y `longitud` opcionales (`numeric(10,7)`) en
+  `registro_labor` y `pesajes_vendimia`, validadas en los DTO
+  (−90..90, −180..180). Opcionales: sin permiso de ubicación o sin señal el
+  registro se guarda igual. Llegan por el POST individual y por `/sync`.
+- El índice parcial `uq_empresas_plataforma` (D-025) se declara en la entidad
+  para que el generador de migraciones no lo borre.
+
+**Pruebas:** `test/metas-y-gps.e2e-spec.ts` y la cobertura en
+`permisos.spec.ts`.
+
+**Estado:** ✅ Vigente.

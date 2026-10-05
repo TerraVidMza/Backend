@@ -2,12 +2,19 @@ import {
   Column,
   CreateDateColumn,
   Entity,
+  Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { Usuario } from '../../usuarios/entities/usuario.entity';
 
+// A lo sumo una empresa de plataforma (D-025). Declarado acá para que el
+// generador de migraciones no lo borre.
+@Index('uq_empresas_plataforma', ['esPlataforma'], {
+  unique: true,
+  where: 'es_plataforma',
+})
 @Entity('empresas')
 export class Empresa {
   @PrimaryGeneratedColumn('uuid')
