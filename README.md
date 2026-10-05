@@ -205,8 +205,10 @@ La infraestructura de **Redis + BullMQ** que describe [`docs/ARCHITECTURE.md`](d
 
 Todas las rutas requieren JWT por defecto (guard global). Usar `@Public()` para exponer una ruta sin autenticación, y `@Roles(RolNombre.X)` para restringir por rol.
 
+Los permisos que ven los clientes salen de [`src/common/permisos/permisos.ts`](src/common/permisos/permisos.ts) (D-024). Al cambiar un `@Roles`, actualizar esa tabla: `permisos.spec.ts` falla si no coinciden.
+
 ```
-POST /api/auth/login          { email, password } → { accessToken, expiresIn, refreshToken, refreshExpiresAt, user }
+POST /api/auth/login          { email, password, cliente?: 'web'|'movil' } → { accessToken, expiresIn, refreshToken, refreshExpiresAt, user: { …, permisos } }
 POST /api/auth/refresh        { refreshToken }    → misma respuesta; rota el refresh token (D-023)
 POST /api/auth/logout                             (revoca el access token y la sesión)
 POST /api/auth/forgot-password

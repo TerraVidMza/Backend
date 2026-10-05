@@ -18,6 +18,8 @@
 
 > **Refresh token (2026-10-05):** el login ya no entrega un token de 8 horas. Devuelve un access token corto (15 minutos por defecto) y un refresh token opaco (7 días por defecto) que el cliente usa en `POST /auth/refresh` para renovar la sesión sin volver a pedir la contraseña. Las dos duraciones las configura el Propietario por empresa (`sesion_access_minutos`, `sesion_refresh_dias`). El criterio «el token expira tras 8 horas de inactividad» pasa a ser «la sesión expira cuando el refresh token vence sin usarse». Ver [D-023](../DECISIONS.md#d-023--sesiones-con-refresh-token-rotativo-y-duración-configurable-por-empresa).
 
+> **Permisos y app móvil (2026-10-05):** el usuario de la sesión incluye `permisos`, la lista de capacidades de su rol. Con `cliente: 'movil'` el login exige el permiso `appMovil` (Propietario, Agrónomo y Capataz) y responde 403 al Auditor. Ver [D-024](../DECISIONS.md#d-024--los-permisos-se-definen-en-el-backend-y-viajan-con-la-sesión).
+
 ## Descripción
 
 Como **usuario del sistema (cualquier rol)**

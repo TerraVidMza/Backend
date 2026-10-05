@@ -457,3 +457,43 @@ configurable.
   test.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-024 — Los permisos se definen en el backend y viajan con la sesión
+
+**Contexto:** la Web tenía su propia tabla de qué rol ve cada sección
+(`src/auth/permisos.ts`), copiada a mano de los `@Roles` de cada controller, y
+ya se había desfasado: seguía diciendo que el Auditor no ve fincas cuando D-021
+se lo habilitó. La app móvil no restringía nada: cualquier rol podía entrar,
+aunque solo sirve para registrar labores y pesajes. El product owner pidió que
+la app móvil sea para quien tenga permiso de hacer lo que la app permite, y que
+se maneje como permiso.
+
+**Decisión:**
+
+- `src/common/permisos/permisos.ts` es la **única** tabla de permisos:
+  capacidades con nombre (`fincas`, `laboresRegistro`, `vendimiaAprobacion`,
+  …) y los roles que las tienen. La tabla es fija por rol; no se edita desde
+  la aplicación.
+- La lista de permisos del usuario viaja en `user.permisos` del login y de la
+  renovación de sesión, y en `GET /usuarios/me`. Los clientes deciden con ella
+  qué mostrar y dejan de tener tablas propias.
+- **La autoridad sigue siendo el `RolesGuard`** con los `@Roles` de cada
+  handler. `permisos.spec.ts` asocia cada permiso con los handlers que cubre y
+  verifica que acepten **exactamente** los mismos roles. Si alguien cambia un
+  `@Roles` sin tocar la tabla, o al revés, el test falla. Hoy cubre 105
+  handlers.
+- **`appMovil`** es la unión de `laboresRegistro` y `pesajesRegistro`
+  (Propietario, Agrónomo y Capataz). `POST /auth/login` acepta
+  `cliente: 'web' | 'movil'`; con `movil` y sin ese permiso responde **403**. Se
+  valida después de la contraseña, igual que la cuenta desactivada, para no
+  revelar nada a quien no tiene credenciales. La app también lo valida del
+  lado del cliente.
+
+**Por qué no se reemplazaron los `@Roles` por un decorador de permisos:** son
+114 handlers y la entrega es en dos semanas. El test de consistencia da la
+misma garantía (tabla y guard no pueden divergir) sin tocar cada controller.
+Migrar a `@Permiso('x')` queda como mejora.
+
+**Estado:** ✅ Vigente.

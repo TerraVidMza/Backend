@@ -449,4 +449,78 @@ describe('Autenticación (integración)', () => {
       }
     });
   });
+
+  describe('permisos (D-024)', () => {
+    it('el login devuelve los permisos del rol', async () => {
+      const sesion = await entrar();
+      expect(sesion.user.permisos).toContain('usuarios');
+      expect(sesion.user.permisos).toContain('appMovil');
+    });
+
+    it('el Auditor no puede iniciar sesión desde la app móvil, pero sí desde la web', async () => {
+      const auditor = await crearUsuario(
+        dataSource,
+        'auditor-movil',
+        'Auditor',
+      );
+      try {
+        await expect(
+          auth.login({
+            email: auditor.email,
+            password: PASSWORD_DE_PRUEBA,
+            cliente: 'movil',
+          }),
+        ).rejects.toThrow(/app móvil/);
+
+        const web = await auth.login({
+          email: auditor.email,
+          password: PASSWORD_DE_PRUEBA,
+          cliente: 'web',
+        });
+        expect(web.user.permisos).toContain('logAuditoria');
+        expect(web.user.permisos).not.toContain('appMovil');
+      } finally {
+        await limpiarUsuario(dataSource, auditor);
+      }
+    });
+
+    it('el Capataz entra a la app móvil', async () => {
+      const capataz = await crearUsuario(
+        dataSource,
+        'capataz-movil',
+        'Capataz',
+      );
+      try {
+        const sesion = await auth.login({
+          email: capataz.email,
+          password: PASSWORD_DE_PRUEBA,
+          cliente: 'movil',
+        });
+        expect(sesion.user.permisos).toEqual(
+          expect.arrayContaining([
+            'laboresRegistro',
+            'pesajesRegistro',
+            'appMovil',
+          ]),
+        );
+      } finally {
+        await limpiarUsuario(dataSource, capataz);
+      }
+    });
+
+    it('con la contraseña incorrecta no revela que el rol no tiene acceso móvil', async () => {
+      const auditor = await crearUsuario(dataSource, 'auditor-mal', 'Auditor');
+      try {
+        await expect(
+          auth.login({
+            email: auditor.email,
+            password: 'Incorrecta123!',
+            cliente: 'movil',
+          }),
+        ).rejects.toThrow('Email o contraseña incorrectos');
+      } finally {
+        await limpiarUsuario(dataSource, auditor);
+      }
+    });
+  });
 });

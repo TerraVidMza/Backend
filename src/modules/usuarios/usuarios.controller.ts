@@ -25,6 +25,7 @@ import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { RolNombre } from '../../common/enums/rol.enum';
 import { Auditar } from '../../common/audit/auditar.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { permisosDe } from '../../common/permisos/permisos';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
 @ApiTags('Usuarios y roles')
@@ -45,8 +46,11 @@ export class UsuariosController {
   // El perfil propio no depende del rol: cada usuario ve y edita el suyo.
   @AnyRole()
   @Get('me')
-  findMe(@CurrentUser() user: AuthenticatedUser) {
-    return this.usuariosService.findById(user.id);
+  async findMe(@CurrentUser() user: AuthenticatedUser) {
+    const usuario = await this.usuariosService.findById(user.id);
+    // Los permisos del rol actual (D-024): el cliente los refresca sin
+    // esperar a la próxima renovación de sesión.
+    return usuario ? { ...usuario, permisos: permisosDe(user.rol) } : usuario;
   }
 
   @AnyRole()

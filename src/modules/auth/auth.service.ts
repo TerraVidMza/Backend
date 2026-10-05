@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -21,6 +22,7 @@ import { MailService } from '../../common/mail/mail.service';
 import { TokenRevocadoService } from './token-revocado.service';
 import { RefreshTokenService } from './refresh-token.service';
 import { ConfiguracionService } from '../configuracion/configuracion.service';
+import { permisosDe, tienePermiso } from '../../common/permisos/permisos';
 
 const MAX_INTENTOS = 5;
 const BLOQUEO_MINUTOS = 15;
@@ -97,6 +99,18 @@ export class AuthService {
     // atacante sin credenciales que la cuenta existe.
     if (!usuario.activo) {
       throw new UnauthorizedException('Tu cuenta está desactivada');
+    }
+
+    // La app de campo solo la usa quien puede registrar labores o pesajes
+    // (D-024). Se valida después de la contraseña, como la cuenta desactivada,
+    // para no revelar nada a quien no tiene credenciales.
+    if (
+      dto.cliente === 'movil' &&
+      !tienePermiso(usuario.rol.nombreRol as RolNombre, 'appMovil')
+    ) {
+      throw new ForbiddenException(
+        'Tu rol no tiene acceso a la app móvil. Ingresá desde la versión web.',
+      );
     }
 
     await this.usuariosService.registrarAccesoExitoso(usuario.id);
@@ -337,7 +351,16 @@ export class AuthService {
         expiresIn,
         refreshToken: refresh.token,
         refreshExpiresAt: refresh.expiraEn.toISOString(),
-        user: { id: sub, email, rol, empresaId, debeCambiarPassword },
+        user: {
+          id: sub,
+          email,
+          rol,
+          empresaId,
+          debeCambiarPassword,
+          // Lo que el usuario puede hacer, para que la Web y la app decidan qué
+          // mostrar sin una tabla propia (D-024).
+          permisos: permisosDe(rol),
+        },
       },
       /** Para enlazar la rotación; no viaja al cliente. */
       refreshTokenId: refresh.id,
