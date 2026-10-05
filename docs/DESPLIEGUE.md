@@ -1019,3 +1019,43 @@ SEED_ADMIN_EMAIL='<correo>' SEED_ADMIN_PASSWORD='<contraseña generada>' npm run
 
 - Una empresa desactivada desde *Empresas* corta a todos sus usuarios en la
   request siguiente: no pueden iniciar ni renovar sesión.
+
+
+## Broker MQTT (D-026)
+
+La telemetría puede entrar por MQTT con TLS además de por HTTP. Es opcional: sin
+estos pasos la VM despliega igual que antes.
+
+1. **Firewall:** abrir el **TCP 8883** hacia la VM (regla de GCP
+   `allow-mqtts`, igual que la de 443).
+2. **`.env` de la infraestructura** (el que lee Compose):
+
+   ```bash
+   COMPOSE_PROFILES=mqtt
+   MQTT_ADMIN_USUARIO=terravid-api
+   MQTT_ADMIN_PASSWORD=<generada: openssl rand -base64 32>
+   ```
+
+   Se usan **solo la primera vez**, para crear en el broker el usuario con el
+   que la API lo administra.
+3. **`.env.app`** (el de la API), con los mismos valores:
+
+   ```bash
+   MQTT_URL=mqtt://mqtt:1883
+   MQTT_USUARIO=terravid-api
+   MQTT_PASSWORD=<la misma de MQTT_ADMIN_PASSWORD>
+   MQTT_URL_PUBLICA=mqtts://terravid-api.duckdns.org:8883
+   ```
+4. `docker compose -f docker-compose.prod.yml up -d`. El broker toma el
+   certificado de Caddy (mismo dominio que la API), así que Caddy tiene que
+   haberlo obtenido antes.
+5. Desde la Web, en cada sensor, **Generar credencial MQTT** y cargarla en el
+   nodo. Contrato completo en [`IOT-MQTT.md`](IOT-MQTT.md).
+
+**Renovación del certificado:** `actualizar.sh` compara la fecha del
+certificado de Caddy con la del arranque del broker y lo reinicia cuando hay
+uno nuevo. Los sensores se reconectan solos.
+
+**Datos del broker:** usuarios y roles viven en el volumen `mqtt_data`
+(`dynamic-security.json`). Si se pierde, hay que regenerar las credenciales de
+todos los sensores desde la Web.

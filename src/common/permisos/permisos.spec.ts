@@ -156,6 +156,7 @@ const COBERTURA: Record<Exclude<Permiso, 'appMovil'>, Handler[]> = {
     [SensoresController, 'create'],
     [SensoresController, 'update'],
     [SensoresController, 'desactivar'],
+    [SensoresController, 'credencialMqtt'],
     [LecturasIotController, 'findBySensor'],
     [LecturasIotController, 'serie'],
     [AlertasIotController, 'findPendientes'],

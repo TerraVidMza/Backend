@@ -544,3 +544,60 @@ smoke (403 del dashboard, `/empresas` solo para el Administrador, roles
 asignables, login móvil).
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-026 — Ingesta de telemetría por MQTT con credenciales por sensor
+
+**Contexto:** `ARCHITECTURE.md` prometía MQTT/MQTTS para los sensores, pero la
+ingesta era solo HTTP con una API key compartida por todos los nodos: un nodo
+comprometido podía publicar lecturas de cualquier sensor. El product owner
+pidió implementar MQTT.
+
+**Decisión:**
+
+- **Broker Mosquitto 2** en la VM, en el profile `mqtt` del compose de
+  producción. TLS en el **8883** con el certificado que Caddy ya obtiene para el
+  dominio de la API (lo copia `deploy/mosquitto/entrypoint.sh` al arrancar). El
+  1883 sin cifrar queda solo en la red interna, para la API. Sin acceso
+  anónimo.
+- **Tópico `terravid/sensores/{codigo}/lecturas`.** Se propuso
+  `terravid/{empresaId}/sensores/{codigo}/lecturas`, pero el código de sensor
+  ya es único en todo el sistema y el `empresaId` en el tópico obligaba a
+  verificar que coincidiera con la empresa del sensor. Sin él, la identidad la
+  da solo el código, que es el usuario autenticado.
+- **Una credencial por sensor, administrada por la API** con el plugin
+  *dynamic security* de Mosquitto: la API le manda comandos JSON al broker por
+  MQTT (`$CONTROL/dynamic-security/v1`). Cada sensor tiene un rol propio que
+  **solo permite publicar en su tópico**. Así un nodo comprometido no puede
+  hacerse pasar por otro, y no hay que reiniciar el broker ni editar archivos.
+  - `POST /api/sensores/:id/credenciales-mqtt` (Propietario y Agrónomo) genera
+    o regenera la credencial y devuelve la contraseña **una sola vez**. El log
+    de auditoría registra la acción sin el cuerpo.
+  - Dar de baja un sensor deshabilita su credencial; renombrarlo borra la del
+    código anterior. Si el broker no responde, el ABM sigue y queda en el log.
+- **La API se suscribe a `terravid/sensores/+/lecturas`** y procesa cada
+  lectura con el **mismo** `LecturasIotService.ingest` que el endpoint HTTP:
+  rango físico, anómalas, umbrales y alertas. El código del sensor sale del
+  **tópico** y no del payload, porque el tópico es lo que el broker autenticó.
+- **Opcional:** sin `MQTT_URL` la API no se conecta y la ingesta es solo HTTP.
+  El desarrollo, los tests y el CI no necesitan broker. El endpoint HTTP queda
+  como respaldo.
+- *Dynamic security* desconecta a un cliente cuando le cambian los roles. La
+  API se otorga a sí misma el permiso de suscripción la primera vez que se
+  conecta a un broker nuevo, y por eso esa vez se reconecta sola (y retoma las
+  suscripciones).
+- Cuando Caddy renueva el certificado, `actualizar.sh` reinicia el broker para
+  que lo tome; los sensores se reconectan solos.
+
+**Pruebas:** `src/modules/mqtt/mqtt.spec.ts` (filtros, comandos de dynamic
+security, ingesta) y `validar-entorno.spec.ts`. Además se verificó de punta a
+punta contra Mosquitto real en Docker: credencial generada por la API, lectura
+ingerida, publicación en el tópico de otro sensor rechazada ("Not authorized"),
+contraseña incorrecta rechazada y credencial deshabilitada al dar de baja el
+sensor.
+
+**Pendiente:** el firmware de `IoTSensor` y su simulador siguen publicando por
+HTTP. El contrato para migrarlos está en [`IOT-MQTT.md`](IOT-MQTT.md).
+
+**Estado:** ✅ Vigente.
