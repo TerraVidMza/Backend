@@ -677,6 +677,47 @@ check(
 const sinBody = await req('POST', '/auth/refresh', {});
 check('refresh sin token es 400', sinBody.status === 400, sinBody.status);
 
+seccion('D-025 · Administrador de plataforma y empresas');
+const loginAdmin = await req('POST', '/auth/login', {
+  email: 'admin@terravid.demo',
+  password: 'Terravid123!',
+});
+check('el Administrador inicia sesión', loginAdmin.status === 200, loginAdmin.status);
+check(
+  'sus permisos son solo perfil y empresas',
+  JSON.stringify(loginAdmin.body?.user?.permisos) === JSON.stringify(['perfil', 'empresas']),
+  loginAdmin.body?.user?.permisos,
+);
+const comoAdmin = (metodo, ruta) =>
+  fetch(`${API}${ruta}`, {
+    method: metodo,
+    headers: { Authorization: `Bearer ${loginAdmin.body?.accessToken}` },
+  });
+const empresasAdmin = await comoAdmin('GET', '/empresas');
+check('el Administrador lista empresas', empresasAdmin.status === 200, empresasAdmin.status);
+const dashAdmin = await comoAdmin('GET', '/dashboard/indicadores');
+check(
+  '@AnyRole no incluye al Administrador: dashboard 403',
+  dashAdmin.status === 403,
+  dashAdmin.status,
+);
+const perfilAdmin = await comoAdmin('GET', '/usuarios/me');
+check('pero sí ve su perfil', perfilAdmin.status === 200, perfilAdmin.status);
+const empresasProp = await req('GET', '/empresas');
+check('un Propietario no lista empresas (403)', empresasProp.status === 403, empresasProp.status);
+const rolesProp = await req('GET', '/roles');
+check(
+  'el Propietario no puede asignar el rol Administrador',
+  !(rolesProp.body ?? []).some((r) => r.nombreRol === 'Administrador'),
+  rolesProp.body,
+);
+const movilAdmin = await req('POST', '/auth/login', {
+  email: 'admin@terravid.demo',
+  password: 'Terravid123!',
+  cliente: 'movil',
+});
+check('el Administrador no entra a la app móvil (403)', movilAdmin.status === 403, movilAdmin.status);
+
 seccion('HU-05 · alta con contraseña temporal y correo de bienvenida');
 const nuevoEmail = `capataz.${RUN}@terravid.demo`;
 const roles = await req('GET', '/roles');

@@ -49,7 +49,7 @@ export class AuthController {
     return this.authService.refresh(dto.refreshToken, ip);
   }
 
-  @AnyRole()
+  @AnyRole({ incluyeAdministrador: true })
   @ApiBearerAuth('jwt')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -80,7 +80,7 @@ export class AuthController {
     return { message: 'Contraseña actualizada correctamente.' };
   }
 
-  @AnyRole()
+  @AnyRole({ incluyeAdministrador: true })
   @ApiBearerAuth('jwt')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)

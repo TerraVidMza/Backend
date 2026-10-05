@@ -1,7 +1,10 @@
 import { Reflector } from '@nestjs/core';
-import { RolNombre } from '../enums/rol.enum';
+import { RolNombre, ROLES_DE_EMPRESA } from '../enums/rol.enum';
 import { ROLES_KEY } from '../decorators/roles.decorator';
-import { ANY_ROLE_KEY } from '../decorators/any-role.decorator';
+import {
+  ANY_ROLE_KEY,
+  CON_ADMINISTRADOR,
+} from '../decorators/any-role.decorator';
 import { PERMISOS, permisosDe, tienePermiso, type Permiso } from './permisos';
 
 import { AlertasIotController } from '../../modules/alertas-iot/alertas-iot.controller';
@@ -12,6 +15,7 @@ import { ConfiguracionController } from '../../modules/configuracion/configuraci
 import { CuadrillasController } from '../../modules/cuadrillas/cuadrillas.controller';
 import { CuartelesController } from '../../modules/cuarteles/cuarteles.controller';
 import { DashboardController } from '../../modules/dashboard/dashboard.controller';
+import { EmpresasController } from '../../modules/empresas/empresas.controller';
 import { FincasController } from '../../modules/fincas/fincas.controller';
 import { InsumosController } from '../../modules/insumos/insumos.controller';
 import { InteligenciaAgronomicaController } from '../../modules/inteligencia-agronomica/inteligencia-agronomica.controller';
@@ -30,7 +34,7 @@ import { UsuariosController } from '../../modules/usuarios/usuarios.controller';
 // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
 type Handler = [Function, string];
 
-const TODOS = Object.values(RolNombre);
+const TODOS = ROLES_DE_EMPRESA;
 
 /**
  * Qué handlers cubre cada permiso (D-024). Un permiso sin handlers propios
@@ -41,6 +45,13 @@ const COBERTURA: Record<Exclude<Permiso, 'appMovil'>, Handler[]> = {
   perfil: [
     [UsuariosController, 'findMe'],
     [UsuariosController, 'updateMe'],
+  ],
+  empresas: [
+    [EmpresasController, 'listar'],
+    [EmpresasController, 'crear'],
+    [EmpresasController, 'actualizar'],
+    [EmpresasController, 'desactivar'],
+    [EmpresasController, 'activar'],
   ],
   notificaciones: [
     [NotificacionesController, 'findMine'],
@@ -200,8 +211,13 @@ function rolesDe([controlador, metodo]: Handler): RolNombre[] {
     Handler[0] | undefined;
   if (!handler) throw new Error(`${controlador.name}.${metodo} no existe`);
   const objetivos = [handler, controlador];
-  if (reflector.getAllAndOverride<boolean>(ANY_ROLE_KEY, objetivos)) {
-    return [...TODOS];
+  const anyRole = reflector.getAllAndOverride<
+    boolean | typeof CON_ADMINISTRADOR | undefined
+  >(ANY_ROLE_KEY, objetivos);
+  if (anyRole) {
+    return anyRole === CON_ADMINISTRADOR
+      ? [...TODOS, RolNombre.ADMINISTRADOR]
+      : [...TODOS];
   }
   return (
     reflector.getAllAndOverride<RolNombre[] | undefined>(
@@ -243,9 +259,14 @@ describe('Tabla de permisos (D-024)', () => {
     expect(auditor).toContain('logAuditoria');
     expect(auditor).toContain('fincas');
     expect(auditor).not.toContain('usuarios');
-    // El Propietario es el administrador de su empresa: tiene todos.
-    expect(permisosDe(RolNombre.PROPIETARIO)).toHaveLength(
-      Object.keys(PERMISOS).length,
+    // El Propietario administra su empresa: tiene todos salvo dar de alta
+    // empresas, que es de la plataforma (D-025).
+    expect(permisosDe(RolNombre.PROPIETARIO)).toEqual(
+      (Object.keys(PERMISOS) as Permiso[]).filter((p) => p !== 'empresas'),
     );
+  });
+
+  it('el Administrador de plataforma solo administra empresas y su perfil', () => {
+    expect(permisosDe(RolNombre.ADMINISTRADOR)).toEqual(['perfil', 'empresas']);
   });
 });

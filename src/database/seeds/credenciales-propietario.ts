@@ -97,3 +97,40 @@ function validarPassword(password: string): string | null {
   }
   return null;
 }
+
+/** Administrador de plataforma de demostración (D-025). Solo fuera de producción. */
+export const EMAIL_ADMIN_DEMO = 'admin@terravid.demo';
+
+/**
+ * Credenciales del Administrador de plataforma (D-025), o `null` si no hay que
+ * crearlo.
+ *
+ * Fuera de producción hay uno de demostración con la misma contraseña que el
+ * Propietario demo. En producción solo se crea si se define
+ * `SEED_ADMIN_PASSWORD`: no es obligatorio porque el seed también se corre para
+ * actualizar roles y catálogos de una instancia que ya tiene su Administrador.
+ * Valen las mismas reglas que para el Propietario.
+ */
+export function credencialesDelAdministrador(
+  entorno: NodeJS.ProcessEnv = process.env,
+): CredencialesPropietario | null {
+  const enProduccion = entorno.NODE_ENV === 'production';
+  const email = entorno.SEED_ADMIN_EMAIL ?? EMAIL_ADMIN_DEMO;
+  const password = entorno.SEED_ADMIN_PASSWORD;
+
+  if (!enProduccion) {
+    return { email, password: password ?? PASSWORD_DEMO, forzarCambio: false };
+  }
+  if (!password) return null;
+  if (password === PASSWORD_DEMO) {
+    throw new Error(
+      'SEED_ADMIN_PASSWORD es la contraseña de demostración, que está ' +
+        'publicada en el README. Usá otra.',
+    );
+  }
+  const problema = validarPassword(password);
+  if (problema) {
+    throw new Error(`SEED_ADMIN_PASSWORD no cumple la política: ${problema}`);
+  }
+  return { email, password, forzarCambio: true };
+}

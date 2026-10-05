@@ -44,7 +44,7 @@ export class UsuariosController {
   }
 
   // El perfil propio no depende del rol: cada usuario ve y edita el suyo.
-  @AnyRole()
+  @AnyRole({ incluyeAdministrador: true })
   @Get('me')
   async findMe(@CurrentUser() user: AuthenticatedUser) {
     const usuario = await this.usuariosService.findById(user.id);
@@ -53,7 +53,7 @@ export class UsuariosController {
     return usuario ? { ...usuario, permisos: permisosDe(user.rol) } : usuario;
   }
 
-  @AnyRole()
+  @AnyRole({ incluyeAdministrador: true })
   @Patch('me')
   @Auditar({ accion: 'ACTUALIZAR_PERFIL', entidad: 'usuario' })
   updateMe(

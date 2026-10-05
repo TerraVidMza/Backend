@@ -47,6 +47,11 @@ Usuario demo creado por el seed, **solo fuera de producción**:
 - **email:** `propietario@terravid.demo`
 - **password:** `Terravid123!`
 
+y un **Administrador de plataforma** (D-025), que da de alta empresas cliente:
+
+- **email:** `admin@terravid.demo`
+- **password:** `Terravid123!`
+
 > ⚠️ Esas credenciales están publicadas acá, así que no sirven para un entorno
 > real. Con `NODE_ENV=production` el seed **no arranca** sin
 > `SEED_PROPIETARIO_PASSWORD`, y el Propietario que crea entra obligado a

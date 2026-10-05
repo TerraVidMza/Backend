@@ -41,7 +41,12 @@ describe('UsuariosService', () => {
       }),
       update: jest.fn(() => Promise.resolve()),
     };
-    rolRepo = { findOne: jest.fn() };
+    // Por defecto el rol existe y es de empresa; los tests de rol lo pisan.
+    rolRepo = {
+      findOne: jest.fn(() =>
+        Promise.resolve({ id: 'rol-1', nombreRol: 'Capataz' }),
+      ),
+    };
     mailService = { enviar: jest.fn(() => Promise.resolve(true)) };
 
     const moduleRef = await Test.createTestingModule({
@@ -66,6 +71,21 @@ describe('UsuariosService', () => {
   });
 
   describe('create (HU-05)', () => {
+    it('no deja crear un Administrador de plataforma (D-025)', async () => {
+      rolRepo.findOne.mockResolvedValueOnce({
+        id: 'rol-admin',
+        nombreRol: 'Administrador',
+      });
+
+      await expect(
+        service.create(
+          { nombre: 'Intruso', email: 'intruso@x.com', rolId: 'rol-admin' },
+          EMPRESA_ID,
+        ),
+      ).rejects.toThrow(/no es asignable/);
+      expect(usuarioRepo.save).not.toHaveBeenCalled();
+    });
+
     it('rechaza el alta si ya existe un usuario con ese email', async () => {
       usuarioRepo.findOne.mockResolvedValueOnce({ id: 'existente' });
 

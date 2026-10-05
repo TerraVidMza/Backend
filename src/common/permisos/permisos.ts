@@ -1,7 +1,8 @@
-import { RolNombre } from '../enums/rol.enum';
+import { RolNombre, ROLES_DE_EMPRESA } from '../enums/rol.enum';
 
-const { PROPIETARIO, AGRONOMO, CAPATAZ, AUDITOR } = RolNombre;
-const TODOS = [PROPIETARIO, AGRONOMO, CAPATAZ, AUDITOR] as const;
+const { PROPIETARIO, AGRONOMO, CAPATAZ, AUDITOR, ADMINISTRADOR } = RolNombre;
+/** Los cuatro roles de empresa: lo que cubre `@AnyRole()` (D-025). */
+const TODOS = ROLES_DE_EMPRESA;
 
 /**
  * Qué puede hacer cada rol, expresado como capacidades (D-024).
@@ -20,8 +21,8 @@ const TODOS = [PROPIETARIO, AGRONOMO, CAPATAZ, AUDITOR] as const;
 export const PERMISOS = {
   /** `DashboardController` — el contenido varía por rol (HU-32). */
   dashboard: TODOS,
-  /** `UsuariosController.findMe/updateMe` (HU-04). */
-  perfil: TODOS,
+  /** `UsuariosController.findMe/updateMe` (HU-04); incluye al Administrador. */
+  perfil: [...ROLES_DE_EMPRESA, ADMINISTRADOR],
   /** `NotificacionesController` — cada uno ve las suyas (HU-35). */
   notificaciones: TODOS,
   /** `CatalogoItemController.findByTipo`. */
@@ -71,6 +72,9 @@ export const PERMISOS = {
   cuadrillasTarifas: [PROPIETARIO],
 
   inteligencia: [PROPIETARIO, AGRONOMO],
+
+  /** Alta y administración de empresas: solo la plataforma (D-025). */
+  empresas: [ADMINISTRADOR],
 
   /**
    * Usar la app móvil de campo. No cubre un endpoint: es la unión de lo que

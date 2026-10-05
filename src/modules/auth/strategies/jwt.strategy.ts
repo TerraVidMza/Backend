@@ -56,7 +56,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     const usuario = await this.usuariosService.findById(payload.sub);
-    if (!usuario || !usuario.activo) {
+    // Una empresa desactivada corta a todos sus usuarios en la request
+    // siguiente, sin esperar a que venzan los tokens (D-025).
+    if (!usuario || !usuario.activo || usuario.empresa?.activa === false) {
       throw new UnauthorizedException('Usuario inactivo o inexistente');
     }
 

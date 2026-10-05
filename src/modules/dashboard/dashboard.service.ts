@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Finca } from '../fincas/entities/finca.entity';
@@ -157,6 +157,12 @@ export class DashboardService {
         this.getIndicadoresCapataz(usuarioId, fincaIds),
       ]);
       return { rol: RolNombre.CAPATAZ, ...operativos, ...propios };
+    }
+
+    // `@AnyRole()` ya le niega el dashboard al Administrador de plataforma
+    // (D-025); esto mantiene el tipo de la respuesta honesto.
+    if (rol !== RolNombre.PROPIETARIO && rol !== RolNombre.AGRONOMO) {
+      throw new ForbiddenException('El dashboard es de los roles de empresa');
     }
 
     const operativos = await this.getOperativos(empresaId);

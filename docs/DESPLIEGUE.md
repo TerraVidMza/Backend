@@ -161,7 +161,7 @@ npm run db:verificar-privilegios
 #    ella el seed no arranca. La contraseña de desarrollo está publicada en
 #    el README, y esta es la cuenta que puede crear todas las demás. El
 #    Propietario entra obligado a cambiarla en el primer acceso.
-SEED_PROPIETARIO_EMAIL='<correo del dueño>' SEED_PROPIETARIO_PASSWORD='<contraseña generada>' npm run seed
+SEED_PROPIETARIO_EMAIL='<correo del dueño>' SEED_PROPIETARIO_PASSWORD='<contraseña generada>' \nSEED_ADMIN_EMAIL='<correo del administrador>' SEED_ADMIN_PASSWORD='<otra contraseña generada>' npm run seed
 
 cp .env.desarrollo .env                   # volver a desarrollo
 ```
@@ -999,3 +999,23 @@ Tres señales de que la VM dejó de alcanzar:
 El camino de salida es el cuerpo de este documento, que ya está escrito: la imagen es la misma y el `.env.app` tiene las mismas variables. Cambia dónde vive el contenedor.
 
 Lo que **no** se lleva es la mitad de la entrega continua que corre en la VM: el `actualizar.sh` da por sentado que hay una máquina persistente con Docker, un checkout de git y los `.env` en disco. En Cloud Run el despliegue lo empuja el CI (`gcloud run deploy`) y las migraciones vuelven a correrse desde una máquina de desarrollo por el proxy, porque no hay dónde guardar la credencial de DDL. La mitad de GitHub Actions —tests, build, publicar la imagen— se reusa tal cual.
+
+
+## Administrador de plataforma (D-025)
+
+El **Administrador de plataforma** da de alta las empresas cliente y su primer
+Propietario desde la Web (*Empresas*). No pertenece a ninguna empresa cliente y
+no ve sus datos.
+
+- La migración `EmpresasYAdministrador` crea el rol y la columna
+  `empresas.es_plataforma`. La empresa de plataforma la crea el seed.
+- Para crear el Administrador en una instancia existente, volver a correr el
+  seed con `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`. Es idempotente: no toca
+  lo que ya existe, y el Administrador entra obligado a cambiar la contraseña.
+
+```bash
+SEED_ADMIN_EMAIL='<correo>' SEED_ADMIN_PASSWORD='<contraseña generada>' npm run seed
+```
+
+- Una empresa desactivada desde *Empresas* corta a todos sus usuarios en la
+  request siguiente: no pueden iniciar ni renovar sesión.

@@ -497,3 +497,50 @@ misma garantía (tabla y guard no pueden divergir) sin tocar cada controller.
 Migrar a `@Permiso('x')` queda como mejora.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-025 — Administrador de plataforma y alta de empresas
+
+**Contexto:** el sistema es multi-empresa (todas las consultas filtran por
+`empresa_id`), pero solo existía la empresa que crea el seed: no había forma de
+dar de alta un cliente nuevo por la API. El product owner pidió poder crear más
+empresas.
+
+**Decisión:**
+
+- **Rol nuevo, `Administrador`**, de plataforma. Pertenece a una empresa
+  especial (`empresas.es_plataforma = true`, a lo sumo una, la crea el seed)
+  que no es un cliente, no tiene datos y no aparece en los listados.
+- **`/api/empresas`**, solo para el Administrador:
+  - `GET` lista las empresas cliente con sus usuarios activos.
+  - `POST { nombre, cuit, propietario: { nombre, email } }` crea la empresa,
+    sus catálogos por defecto (los mismos del seed, ahora en
+    `catalogos-por-defecto.ts`) y el primer Propietario con contraseña
+    temporal y correo de bienvenida. El Administrador nunca conoce esa
+    contraseña. Si el alta del Propietario falla, la empresa se revierte.
+  - `PATCH /:id`, `PATCH /:id/desactivar` y `PATCH /:id/activar`.
+- **Una empresa desactivada** no puede iniciar sesión ni renovarla, y la
+  estrategia JWT rechaza sus access tokens vigentes en la request siguiente.
+- **El Administrador no ve datos de empresas.** `@AnyRole()` pasa a significar
+  "cualquier rol de empresa". Los únicos handlers que lo admiten lo declaran
+  con `@AnyRole({ incluyeAdministrador: true })`: su perfil, el cambio de
+  contraseña y el logout. Todo lo demás le responde 403. Sus permisos (D-024)
+  son `perfil` y `empresas`, y no entra a la app móvil.
+- **Un Propietario no puede crear administradores.** `GET /roles` devuelve solo
+  los roles de empresa, y el alta y la edición de usuarios rechazan el rol
+  `Administrador`. El alta antes no validaba el rol: aceptaba cualquier
+  `rolId`.
+- Credenciales: fuera de producción el seed crea `admin@terravid.demo` con la
+  contraseña de demostración. En producción, solo si se definen
+  `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`, con las mismas reglas que el
+  Propietario (no puede ser la de demostración y entra obligado a cambiarla).
+- El rol se inserta en la migración `EmpresasYAdministrador` y no solo en el
+  seed, porque una instancia ya sembrada no vuelve a correrlo.
+
+**Pruebas:** `test/empresas.e2e-spec.ts`, los permisos en `permisos.spec.ts`,
+el bloqueo del rol en `usuarios.service.spec.ts` y siete controles HTTP en el
+smoke (403 del dashboard, `/empresas` solo para el Administrador, roles
+asignables, login móvil).
+
+**Estado:** ✅ Vigente.

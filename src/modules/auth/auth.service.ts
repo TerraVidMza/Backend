@@ -100,6 +100,9 @@ export class AuthService {
     if (!usuario.activo) {
       throw new UnauthorizedException('Tu cuenta está desactivada');
     }
+    if (usuario.empresa && !usuario.empresa.activa) {
+      throw new UnauthorizedException('Tu empresa está desactivada');
+    }
 
     // La app de campo solo la usa quien puede registrar labores o pesajes
     // (D-024). Se valida después de la contraseña, como la cuenta desactivada,
@@ -143,7 +146,7 @@ export class AuthService {
     const consumido = await this.refreshTokenService.consumir(refreshToken);
 
     const usuario = await this.usuariosService.findById(consumido.usuarioId);
-    if (!usuario || !usuario.activo) {
+    if (!usuario || !usuario.activo || usuario.empresa?.activa === false) {
       await this.refreshTokenService.revocarFamilia(consumido.familiaId);
       throw new UnauthorizedException('Usuario inactivo o inexistente');
     }
