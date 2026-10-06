@@ -148,6 +148,9 @@ jobs:
         # que nadie se entere.
         run: npm run test:cov:e2e
 
+      - name: Cobertura combinada unit + e2e (minimo 70 % de lineas, D-028)
+        run: npm run test:cov:total
+
       - name: Compilar y levantar la API
         # Contra `dist/`, que es lo que corre en produccion, y no contra
         # ts-node: asi el job ejerce el mismo artefacto que se despliega.

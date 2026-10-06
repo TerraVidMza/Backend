@@ -635,3 +635,44 @@ owner pidió terminar esas funcionalidades.
 `permisos.spec.ts`.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-028 — Cobertura combinada de unit + e2e con piso de 70 %
+
+**Contexto:** el objetivo de la entrega es 70 % de líneas sumando pruebas
+unitarias y e2e. Medidas por separado daban 47 % (unit) y 41 % (e2e), porque
+cada tipo cubre una parte distinta: los unitarios, reglas y casos borde con
+dependencias simuladas; los e2e, el camino real contra PostgreSQL.
+
+**Decisión:**
+
+- `jest.cobertura.config.js` corre los dos proyectos juntos y combina la
+  cobertura (`npm run test:cov:total`, salida en `coverage-total/`). El umbral
+  global es **70 % de líneas y de sentencias**; el CI lo corre después de los
+  e2e y falla si baja.
+- Se excluyen migraciones, seeds y scripts operativos (`src/database/`), DTO,
+  entidades, módulos, `main.ts` y la descripción de OpenAPI: son declarativos o
+  se ejercitan al levantar la base, no desde los tests. Los patrones aceptan
+  `/` y `\`, porque en Windows las rutas usan barra invertida.
+- `test/recorrido-api.e2e-spec.ts` recorre por HTTP los módulos que no tenían
+  e2e: dashboard de los cuatro roles, sensores, umbral, ingesta, alertas,
+  series, inteligencia agronómica, catálogos, insumos, tipos de labor, costeo,
+  cuadrillas, usuarios, notificaciones y campañas.
+
+**Resultado:** **80,6 % de líneas** (2552 de 3165), 505 tests.
+
+**Errores reales que encontró el recorrido:**
+
+- **El dashboard del Capataz respondía 500 siempre:** la consulta de cuarteles
+  en cosecha usaba la tabla `pesaje_vendimia`, que no existe (es
+  `pesajes_vendimia`).
+- **Ninguna recomendación agronómica se podía resolver por la API** (HU-30):
+  `EstadoResolucion` tenía miembros calculados
+  (`= EstadoRecomendacion.APLICADA`). Con eso TypeScript emite `Number` como
+  tipo de la propiedad, y la conversión implícita del `ValidationPipe`
+  convertía `"aplicada"` en `NaN`: todo `PATCH` respondía 400. Ahora el enum
+  usa literales, con un `satisfies` que verifica la equivalencia con la
+  entidad.
+
+**Estado:** ✅ Vigente.

@@ -391,7 +391,7 @@ export class DashboardService {
                          AS "kgCosechados"
            FROM cuarteles c
            JOIN fincas f ON f.id = c.finca_id
-           LEFT JOIN pesaje_vendimia p ON p.cuartel_id = c.id
+           LEFT JOIN pesajes_vendimia p ON p.cuartel_id = c.id
           WHERE c.finca_id = ANY($1)
             AND c.activo = true
             AND c.estado = $3

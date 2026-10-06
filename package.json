@@ -38,7 +38,8 @@
     "prepare": "husky || exit 0",
     "test:cov:e2e": "jest --config ./test/jest-e2e.json --coverage",
     "db:rotar-password": "ts-node -r tsconfig-paths/register src/database/scripts/rotar-password.ts",
-    "db:rotar-password:dist": "node dist/database/scripts/rotar-password.js"
+    "db:rotar-password:dist": "node dist/database/scripts/rotar-password.js",
+    "test:cov:total": "jest --config ./jest.cobertura.config.js --coverage --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",

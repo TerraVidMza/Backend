@@ -31,7 +31,7 @@ describe('Metas de cosecha y GPS (integración, D-027)', () => {
     dataSource = modulo.get(DataSource);
     metas = modulo.get(MetasCosechaService);
     pesajes = modulo.get(PesajeVendimiaService);
-    ctx = await crearContexto(dataSource);
+    ctx = await crearContexto(dataSource, 'metas');
     await darTarifa(dataSource, ctx, 10, '2020-01-01');
     const actual = await modulo.get(CampaniasService).getActual(ctx.empresaId);
     if (!actual)
