@@ -26,7 +26,7 @@ ERP agrícola para la trazabilidad integral desde la plantación hasta la vendim
 
 ## Requisitos
 
-- Node.js 20+
+- Node.js 24 (`.nvmrc`)
 - Docker Desktop (o una instancia de PostgreSQL con PostGIS accesible)
 
 ## Puesta en marcha
@@ -45,6 +45,11 @@ La API queda expuesta en `http://localhost:3000/api`.
 Usuario demo creado por el seed, **solo fuera de producción**:
 
 - **email:** `propietario@terravid.demo`
+- **password:** `Terravid123!`
+
+y un **Administrador de plataforma** (D-025), que da de alta empresas cliente:
+
+- **email:** `admin@terravid.demo`
 - **password:** `Terravid123!`
 
 > ⚠️ Esas credenciales están publicadas acá, así que no sirven para un entorno
@@ -116,7 +121,8 @@ Sin token, el diagnóstico manda contra uno inválido a propósito. Suena raro p
 ### Pruebas
 
 ```bash
-npm test              # 207 tests unitarios, con umbrales de cobertura por archivo
+npm test              # tests unitarios, con umbrales de cobertura por archivo
+npm run test:cov:total # unit + e2e combinados, mínimo 70 % de líneas (D-028)
 npm run test:e2e      # perimetro de la app + integracion contra la base real
 npm run test:smoke    # 185 casos end-to-end contra la API y la base reales
 ```
@@ -146,7 +152,7 @@ endpoint nuevo es documentar su DTO.
 
 ## Estructura de módulos
 
-Los 24 módulos del backend están construidos y exponen sus endpoints REST. El detalle funcional de cada Historia de Usuario (criterios de aceptación, endpoints, pantalla de Figma, estado real de implementación) vive en [`docs/specs/`](docs/specs/README.md).
+Los módulos del backend están construidos y exponen sus endpoints REST. El detalle funcional de cada Historia de Usuario (criterios de aceptación, endpoints, pantalla de Figma, estado real de implementación) vive en [`docs/specs/`](docs/specs/README.md).
 
 | Módulo | HUs cubiertas | Descripción |
 |---|---|---|
@@ -205,9 +211,12 @@ La infraestructura de **Redis + BullMQ** que describe [`docs/ARCHITECTURE.md`](d
 
 Todas las rutas requieren JWT por defecto (guard global). Usar `@Public()` para exponer una ruta sin autenticación, y `@Roles(RolNombre.X)` para restringir por rol.
 
+Los permisos que ven los clientes salen de [`src/common/permisos/permisos.ts`](src/common/permisos/permisos.ts) (D-024). Al cambiar un `@Roles`, actualizar esa tabla: `permisos.spec.ts` falla si no coinciden.
+
 ```
-POST /api/auth/login          { email, password }
-POST /api/auth/logout
+POST /api/auth/login          { email, password, cliente?: 'web'|'movil' } → { accessToken, expiresIn, refreshToken, refreshExpiresAt, user: { …, permisos } }
+POST /api/auth/refresh        { refreshToken }    → misma respuesta; rota el refresh token (D-023)
+POST /api/auth/logout                             (revoca el access token y la sesión)
 POST /api/auth/forgot-password
 POST /api/auth/reset-password
 POST /api/auth/cambiar-password

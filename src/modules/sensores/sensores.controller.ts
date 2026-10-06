@@ -79,6 +79,26 @@ export class SensoresController {
     return this.sensoresService.update(id, dto);
   }
 
+  /**
+   * Credencial MQTT del sensor (D-026). Cada llamada la regenera: la anterior
+   * deja de servir. La contraseña se ve solo en esta respuesta.
+   */
+  @Post(':id/credenciales-mqtt')
+  @Auditar({
+    accion: 'GENERAR_CREDENCIAL_MQTT',
+    entidad: 'sensor',
+    idDesde: 'param:id',
+    datos: 'ninguno',
+  })
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
+  async credencialMqtt(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.alcance.verificarSensor(id, user.empresaId);
+    return this.sensoresService.credencialMqtt(id);
+  }
+
   @Patch(':id/desactivar')
   @Auditar({
     accion: 'DESACTIVAR_SENSOR',

@@ -243,6 +243,11 @@ main() {
     docker exec terravid-caddy caddy reload --config /etc/caddy/Caddyfile
   fi
 
+  # El broker MQTT (D-026) usa el certificado de Caddy, copiado al arrancar.
+  # Cuando Caddy lo renueva (cada ~60 días) hay que reiniciar el broker para
+  # que tome el nuevo; los sensores se reconectan solos.
+  refrescar_certificado_mqtt "$dominio"
+
   # ---- 6. verificar -------------------------------------------------------
   # Se prueba la cadena completa, entrando por Caddy con el nombre real
   # resuelto a loopback: así el certificado coincide y se ejerce el mismo
@@ -319,6 +324,20 @@ autenticar_registro() {
 #
 # Hasta 90 segundos: en una e2-micro con 0,25 vCPU de linea base el arranque de
 # Nest no es inmediato.
+# Reinicia el broker MQTT si Caddy renovó el certificado después de que el
+# broker arrancó (D-026). No hace nada si el broker no está desplegado.
+refrescar_certificado_mqtt() {
+  local dominio=$1 cert inicio_broker modificado_cert
+  [ "$(docker inspect -f '{{.State.Running}}' terravid-mqtt 2>/dev/null || echo false)" = true ] || return 0
+  cert="/data/caddy/certificates/acme-v02.api.letsencrypt.org-directory/$dominio/$dominio.crt"
+  modificado_cert=$(docker exec terravid-caddy stat -c %Y "$cert" 2>/dev/null) || return 0
+  inicio_broker=$(date -d "$(docker inspect -f '{{.State.StartedAt}}' terravid-mqtt)" +%s)
+  if [ "$modificado_cert" -gt "$inicio_broker" ]; then
+    log "Caddy renovó el certificado: reiniciando el broker MQTT"
+    docker restart terravid-mqtt >/dev/null
+  fi
+}
+
 verificar_salud() {
   local dominio="$1" codigo
   for _ in $(seq 1 45); do

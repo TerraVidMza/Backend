@@ -44,3 +44,4 @@ Para **garantizar que el despacho de uva esté validado antes de ejecutarse.**
 ## Notas / decisiones
 
 - Implementado en `src/modules/remitos`. Pendiente confirmar el formato exacto del número secuencial de remito (`REM-AÑO-SECUENCIA`) en el service.
+  **Resuelto:** el número es `REM-AÑO-NNNNN` (`remitos.service.ts`). (revisión 2026-10-06)

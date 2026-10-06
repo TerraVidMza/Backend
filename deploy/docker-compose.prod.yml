@@ -112,9 +112,42 @@ services:
       # para el mismo dominio.
       - caddy_data:/data
       - caddy_config:/config
+      - /opt/terravid/mobile:/srv/mobile
+    logging: *logging
+
+  mqtt:
+    # Broker MQTT para la telemetría (D-026). Va en el profile `mqtt` para que
+    # una VM sin las variables de MQTT siga desplegando como antes: se activa
+    # con COMPOSE_PROFILES=mqtt en .env.
+    #
+    # Usuarios, roles y ACL los administra la API (plugin dynamic security).
+    # MQTT_ADMIN_* solo se usan la primera vez, para crear ese usuario: tienen
+    # que coincidir con MQTT_USUARIO / MQTT_PASSWORD del .env.app.
+    profiles: ['mqtt']
+    image: eclipse-mosquitto:2
+    container_name: terravid-mqtt
+    restart: unless-stopped
+    depends_on:
+      - caddy
+    entrypoint: ['/bin/sh', '/entrypoint.sh']
+    environment:
+      MQTT_ADMIN_USUARIO: ${MQTT_ADMIN_USUARIO:-}
+      MQTT_ADMIN_PASSWORD: ${MQTT_ADMIN_PASSWORD:-}
+      # Mismo dominio que la API: se reutiliza su certificado de Caddy.
+      MQTT_DOMINIO: ${DOMINIO:-}
+    ports:
+      # Solo TLS hacia afuera. El 1883 sin cifrar queda en la red de Compose,
+      # para la API.
+      - '8883:8883'
+    volumes:
+      - ./mosquitto/entrypoint.sh:/entrypoint.sh:ro
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+      - caddy_data:/caddy-data:ro
     logging: *logging
 
 volumes:
   db_data:
   caddy_data:
   caddy_config:
+  mqtt_data:

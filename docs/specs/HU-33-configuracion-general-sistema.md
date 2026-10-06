@@ -20,6 +20,8 @@
 >
 > **Preferencias para todos los roles (2026-08-26):** cuatro de estas claves —`nombre_organizacion`, `moneda`, `unidades` y `zona_horaria`— no son configuración de administración: son las que la interfaz necesita para formatear lo que muestra en **todas** las pantallas. Se agregó `GET /configuracion/preferencias`, que las devuelve a cualquier rol autenticado. El criterio «el Propietario es el único con acceso a `/configuracion`» sigue valiendo para la pantalla y para todo lo escribible, y deja de valer para el prefijo de la ruta. Ver [D-020](../DECISIONS.md#d-020--las-preferencias-de-presentación-salen-de-la-configuración-del-sistema).
 
+> **Duración de sesión (2026-10-05):** dos claves nuevas, `sesion_access_minutos` (5 a 60) y `sesion_refresh_dias` (1 a 30). `PUT /configuracion` rechaza valores fuera de rango. Ver [D-023](../DECISIONS.md#d-023--sesiones-con-refresh-token-rotativo-y-duración-configurable-por-empresa).
+
 ## Descripción
 
 Como **Propietario**

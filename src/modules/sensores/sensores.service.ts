@@ -1,19 +1,26 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Sensor } from './entities/sensor.entity';
 import { CreateSensorDto } from './dto/create-sensor.dto';
 import { UpdateSensorDto } from './dto/update-sensor.dto';
+import { DynsecService, topicoDeLecturas } from '../mqtt/dynsec.service';
 
 @Injectable()
 export class SensoresService {
+  private readonly logger = new Logger(SensoresService.name);
+
   constructor(
     @InjectRepository(Sensor)
     private readonly sensorRepository: Repository<Sensor>,
+    private readonly dynsec: DynsecService,
+    private readonly config: ConfigService,
   ) {}
 
   /**
@@ -101,13 +108,62 @@ export class SensoresService {
 
   async update(id: string, dto: UpdateSensorDto): Promise<Sensor> {
     const sensor = await this.findById(id);
+    const codigoAnterior = sensor.codigo;
     // El `update` no revalidaba la unicidad: se podía renombrar un sensor al
     // código de otro y romper la ingesta por código de HU-19.
     if (dto.codigo && dto.codigo !== sensor.codigo) {
       await this.verificarCodigoLibre(dto.codigo);
     }
     Object.assign(sensor, dto);
-    return this.sensorRepository.save(sensor);
+    const guardado = await this.sensorRepository.save(sensor);
+    // La credencial MQTT es el código: renombrar deja la vieja sin uso y hay
+    // que generar una nueva (D-026).
+    if (codigoAnterior !== guardado.codigo) {
+      await this.alBroker((d) => d.eliminar(codigoAnterior));
+    }
+    return guardado;
+  }
+
+  /**
+   * Genera (o regenera) la credencial MQTT del sensor (D-026). La contraseña
+   * se devuelve una sola vez, para cargarla en el dispositivo.
+   */
+  async credencialMqtt(id: string): Promise<{
+    broker: string | null;
+    usuario: string;
+    password: string;
+    topico: string;
+  }> {
+    const sensor = await this.findById(id);
+    if (!sensor.activo) {
+      throw new ConflictException(
+        `El sensor ${sensor.codigo} está dado de baja: no se le generan credenciales.`,
+      );
+    }
+    const password = await this.dynsec.crearCredencial(sensor.codigo);
+    return {
+      broker: this.config.get<string>('MQTT_URL_PUBLICA') ?? null,
+      usuario: sensor.codigo,
+      password,
+      topico: topicoDeLecturas(sensor.codigo),
+    };
+  }
+
+  /**
+   * Cambios en el broker que no pueden frenar la operación principal: si el
+   * broker no está o no responde, se registra y el ABM sigue.
+   */
+  private async alBroker(
+    accion: (dynsec: DynsecService) => Promise<void>,
+  ): Promise<void> {
+    if (!this.dynsec.habilitado) return;
+    try {
+      await accion(this.dynsec);
+    } catch (error) {
+      this.logger.warn(
+        `No se pudo actualizar el broker MQTT: ${(error as Error).message}`,
+      );
+    }
   }
 
   /** 409 y no 400: el código es válido, lo que falla es que ya está tomado. */
@@ -123,6 +179,9 @@ export class SensoresService {
   async desactivar(id: string): Promise<Sensor> {
     const sensor = await this.findById(id);
     sensor.activo = false;
-    return this.sensorRepository.save(sensor);
+    const guardado = await this.sensorRepository.save(sensor);
+    // Un sensor dado de baja deja de poder conectarse al broker (D-026).
+    await this.alBroker((d) => d.deshabilitar(sensor.codigo));
+    return guardado;
   }
 }

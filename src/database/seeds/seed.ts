@@ -6,10 +6,8 @@ import { AppModule } from '../../app.module';
 import { Rol } from '../../modules/roles/entities/rol.entity';
 import { Empresa } from '../../modules/empresas/entities/empresa.entity';
 import { Usuario } from '../../modules/usuarios/entities/usuario.entity';
-import {
-  CatalogoItem,
-  CatalogoTipo,
-} from '../../modules/catalogo-item/entities/catalogo-item.entity';
+import { CatalogoItem } from '../../modules/catalogo-item/entities/catalogo-item.entity';
+import { CATALOGOS_POR_DEFECTO } from '../../modules/catalogo-item/catalogos-por-defecto';
 import {
   ArticuloAyuda,
   ModuloAyuda,
@@ -18,7 +16,10 @@ import {
 import { Configuracion } from '../../modules/configuracion/entities/configuracion.entity';
 import { Campania } from '../../modules/campanias/entities/campania.entity';
 import { RolNombre } from '../../common/enums/rol.enum';
-import { credencialesDelPropietario } from './credenciales-propietario';
+import {
+  credencialesDelAdministrador,
+  credencialesDelPropietario,
+} from './credenciales-propietario';
 
 async function seed() {
   const app = await NestFactory.createApplicationContext(AppModule);
@@ -92,19 +93,48 @@ async function seed() {
     console.log('  (ya existía; no se modifica)');
   }
 
+  // Después de la empresa demo: los e2e toman "la primera empresa creada" como
+  // la del seed.
+  console.log('Sembrando empresa de plataforma (D-025)...');
+  let plataforma = await empresaRepo.findOne({ where: { esPlataforma: true } });
+  if (!plataforma) {
+    plataforma = await empresaRepo.save(
+      empresaRepo.create({
+        nombre: 'TerraVid (plataforma)',
+        cuit: '00-00000000-0',
+        activa: true,
+        esPlataforma: true,
+      }),
+    );
+  }
+
+  const admin = credencialesDelAdministrador();
+  if (!admin) {
+    console.log(
+      '  Sin SEED_ADMIN_PASSWORD: no se crea Administrador de plataforma.',
+    );
+  } else if (await usuarioRepo.findOne({ where: { email: admin.email } })) {
+    console.log(`  Administrador ${admin.email} ya existía; no se modifica.`);
+  } else {
+    console.log(`  Sembrando Administrador de plataforma (${admin.email})...`);
+    await usuarioRepo.save(
+      usuarioRepo.create({
+        nombre: 'Administrador de plataforma',
+        email: admin.email,
+        passwordHash: await bcrypt.hash(
+          admin.password,
+          parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '12', 10),
+        ),
+        empresaId: plataforma.id,
+        rolId: roles[RolNombre.ADMINISTRADOR].id,
+        activo: true,
+        debeCambiarPassword: admin.forzarCambio,
+      }),
+    );
+  }
+
   console.log('Sembrando catálogos maestros...');
-  const catalogos: Array<{ tipo: CatalogoTipo; nombre: string }> = [
-    { tipo: CatalogoTipo.VARIEDAD, nombre: 'Malbec' },
-    { tipo: CatalogoTipo.VARIEDAD, nombre: 'Cabernet Sauvignon' },
-    { tipo: CatalogoTipo.VARIEDAD, nombre: 'Chardonnay' },
-    { tipo: CatalogoTipo.SISTEMA_CONDUCCION, nombre: 'Espaldero Alto' },
-    { tipo: CatalogoTipo.SISTEMA_CONDUCCION, nombre: 'Parral' },
-    { tipo: CatalogoTipo.ESTADO_CUARTEL, nombre: 'Productivo' },
-    { tipo: CatalogoTipo.ESTADO_CUARTEL, nombre: 'En implantación' },
-    { tipo: CatalogoTipo.UNIDAD_MEDIDA, nombre: 'kg' },
-    { tipo: CatalogoTipo.UNIDAD_MEDIDA, nombre: 'litros' },
-    { tipo: CatalogoTipo.UNIDAD_MEDIDA, nombre: 'horas' },
-  ];
+  const catalogos = CATALOGOS_POR_DEFECTO;
 
   // Los catálogos son por empresa (D-h): se siembran para la empresa demo, no
   // como valores globales de la instancia.

@@ -12,5 +12,24 @@ services:
     volumes:
       - terravid_db_data:/var/lib/postgresql/data
 
+  # Broker MQTT de desarrollo (D-026). Opcional: la API solo se conecta si
+  # MQTT_URL está definida en .env. Credenciales de administración de juguete.
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: terravid-mqtt
+    restart: unless-stopped
+    entrypoint: ['/bin/sh', '/entrypoint.sh']
+    environment:
+      MQTT_ADMIN_USUARIO: terravid-api
+      MQTT_ADMIN_PASSWORD: mqtt-dev-solo-local
+      MOSQUITTO_CONF: /mosquitto/config/mosquitto.dev.conf
+    ports:
+      - '127.0.0.1:1883:1883'
+    volumes:
+      - ./deploy/mosquitto/entrypoint.sh:/entrypoint.sh:ro
+      - ./deploy/mosquitto/mosquitto.dev.conf:/mosquitto/config/mosquitto.dev.conf:ro
+      - terravid_mqtt_data:/mosquitto/data
+
 volumes:
   terravid_db_data:
+  terravid_mqtt_data:

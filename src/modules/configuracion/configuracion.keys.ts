@@ -15,6 +15,8 @@ export const CLAVES_CONFIGURACION = [
   'smtp_user',
   'smtp_pass',
   'smtp_from',
+  'sesion_access_minutos',
+  'sesion_refresh_dias',
 ] as const;
 
 export type ClaveConfiguracion = (typeof CLAVES_CONFIGURACION)[number];
@@ -49,3 +51,19 @@ export const CLAVES_PREFERENCIAS = [
   'unidades',
   'zona_horaria',
 ] as const satisfies readonly ClaveConfiguracion[];
+
+/**
+ * Duración de las sesiones por empresa (D-023).
+ *
+ * El access token es corto porque no se puede revocar sin consultar la base en
+ * cada request (la lista de revocación cubre el logout, no un robo que nadie
+ * reportó). El refresh token define cuánto puede pasar un usuario sin volver a
+ * escribir la contraseña: un capataz en campo sin señal varios días necesita
+ * margen, por eso el máximo es de un mes.
+ */
+export const LIMITES_SESION = {
+  sesion_access_minutos: { min: 5, max: 60, porDefecto: 15 },
+  sesion_refresh_dias: { min: 1, max: 30, porDefecto: 7 },
+} as const satisfies Partial<
+  Record<ClaveConfiguracion, { min: number; max: number; porDefecto: number }>
+>;

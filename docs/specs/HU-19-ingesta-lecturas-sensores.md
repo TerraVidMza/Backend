@@ -18,6 +18,8 @@
 >
 > **Criterios (2026-08-25):** cerrados los dos criterios que faltaban: **validación de rango físico** por variable, con las lecturas fuera de rango apartadas a `lecturas_anomalas` en vez de contaminar los promedios, y **rechazo de sensor dado de baja** (403). Además el contrato de ingesta pasó a `codigoSensor` —la etiqueta física, que es lo que el nodo conoce—, con el UUID interno aceptado por compatibilidad.
 
+> **MQTT (2026-10-05):** además del `POST /api/lecturas-iot`, la telemetría entra por **MQTT con TLS** (Mosquitto, puerto 8883). Cada sensor tiene usuario y contraseña propios, que el Propietario o el Agrónomo generan desde la Web, y solo puede publicar en `terravid/sensores/{codigo}/lecturas`. El código se toma del tópico, no del payload. La lectura sigue el mismo camino que por HTTP: rango físico, anómalas, umbrales y alertas. El contrato para el firmware está en [`docs/IOT-MQTT.md`](../IOT-MQTT.md). Ver [D-026](../DECISIONS.md#d-026--ingesta-de-telemetría-por-mqtt-con-credenciales-por-sensor).
+
 ## Descripción
 
 Como **sistema**

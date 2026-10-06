@@ -51,3 +51,4 @@ Para **estar informado de situaciones que requieren mi atención sin revisar con
 ## Notas / decisiones
 
 - Implementado en `src/modules/notificaciones`. Pendiente confirmar el envío push FCM (mobile) — no verificable desde las rutas del controller.
+  **Resuelto:** el envío push por FCM está verificado (D-015) y la app móvil registra el token del dispositivo. (revisión 2026-10-06)

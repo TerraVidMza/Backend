@@ -61,7 +61,7 @@ La causa de fondo es que **no existe ninguna fuente de ingreso en el modelo de d
 
 **Pendiente de definir:** si el ingreso se registra por remito aprobado (liquidación de bodega) o como precio por kg y variedad. Hasta que exista, el cálculo actual **no debe publicarse como margen**.
 
-**Estado:** 🟡 Decidido, no implementado.
+**Estado:** ✅ Implementado por D-010 (liquidación de bodega por remito).
 
 ---
 
@@ -388,5 +388,291 @@ Una versión mayor de framework o de toolchain no es una actualización de rutin
 **Qué falló de la configuración anterior de Dependabot.** El grupo de desarrollo tenía `dependency-type: development` con patrón `*`, y se llevó `@nestjs/testing`, `@nestjs/cli` y `@nestjs/schematics` a un PR distinto del resto de `@nestjs/*`. Los de producción subieron a 12 y los de desarrollo quedaron en 11: **ningún PR era consistente por sí solo**, así que ninguno podía pasar el CI ni siquiera en teoría. El grupo `nestjs` ahora no declara `dependency-type` —para que los tres viajen con el framework— y el grupo de desarrollo los excluye explícitamente.
 
 **Cuándo se revisa.** Cuando `@nestjs/throttler` publique una versión con peer `^12`. Si esa versión tardara mucho, la alternativa es reemplazar el rate limiting por una implementación propia, que es trabajo real y hay que decidirlo aparte: hoy son cuatro líneas de configuración y un decorador por endpoint.
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-023 — Sesiones con refresh token rotativo y duración configurable por empresa
+
+**Contexto:** el access token duraba 8 horas y no había forma de renovarlo:
+al vencer, el usuario perdía la sesión a mitad del trabajo, y un token robado
+servía las 8 horas completas (la lista de revocación de HU-02 solo cubre el
+logout). `.env.example` declaraba `JWT_REFRESH_SECRET` y
+`JWT_REFRESH_EXPIRES_IN`, pero ningún código los usaba. El product owner pidió
+implementar el refresh token y que la duración de las sesiones sea
+configurable.
+
+**Decisión:**
+
+- **Access token corto** (JWT, 15 minutos por defecto) y **refresh token
+  opaco** (256 bits aleatorios, 7 días por defecto). El refresh no es un JWT:
+  no lleva datos, no necesita secreto propio y se guarda en la tabla
+  `refresh_token` como SHA-256. Una copia de la tabla no sirve para abrir
+  sesiones. Con esa entropía alcanza un hash rápido; bcrypt haría lenta una
+  consulta que se resuelve por índice único.
+- **Rotación en cada uso** (`POST /api/auth/refresh`, pública, con límite de
+  30 requests por minuto por IP). El token presentado se revoca y se entrega
+  uno nuevo de la misma **familia** (la sesión), junto con un access token
+  nuevo. El rol y el estado del usuario se releen de la base: un usuario
+  desactivado no renueva.
+- **Detección de reuso.** Si aparece un token ya rotado, alguien más tiene una
+  copia: se revoca la familia completa. Hay una **gracia de 30 segundos** para
+  los tokens recién rotados, porque dos pestañas de la Web (o un reintento de
+  red del móvil) pueden renovar con el mismo token casi a la vez; la segunda
+  recibe 401 sin castigar a la sesión, y toma el token nuevo del almacenamiento
+  compartido. La revocación es condicional (`WHERE revocado_at IS NULL`), así
+  que dos consumos simultáneos no pueden emitir dos sucesores.
+- **El access token lleva la familia** (claim `fam`). Así el logout corta el
+  refresh token sin pedirle nada más al cliente. Cambiar la contraseña revoca
+  las demás sesiones del usuario y conserva la actual; restablecerla por mail
+  las revoca todas, porque puede ser la recuperación de una cuenta
+  comprometida.
+- **Duraciones por empresa** en `configuracion`:
+  `sesion_access_minutos` (5 a 60, por defecto 15) y `sesion_refresh_dias`
+  (1 a 30, por defecto 7). El máximo de 30 días contempla a un capataz que pasa
+  varios días en campo sin señal. `PUT /configuracion` rechaza valores fuera de
+  rango; un valor inválido cargado a mano en la base se ignora y se usa el
+  valor por defecto, para que una configuración rota no deje a una empresa
+  entera sin poder entrar.
+- La respuesta del login y del refresh es
+  `{ accessToken, expiresIn, refreshToken, refreshExpiresAt, user }`.
+  `expiresIn` está en segundos: el cliente renueva antes de que venza.
+- El cron de las 3 AM purga los refresh tokens vencidos junto con las
+  revocaciones.
+- Se eliminan `JWT_EXPIRES_IN`, `JWT_REFRESH_SECRET` y
+  `JWT_REFRESH_EXPIRES_IN` de los `.env` de ejemplo y del CI.
+
+**Consecuencias:**
+
+- Los clientes (Web y Mobile) guardan el refresh token y renuevan con un único
+  request en vuelo; ante un 401 en `/auth/refresh` cierran la sesión local.
+- Los tokens emitidos antes de esta versión no tienen `fam` ni refresh token:
+  siguen sirviendo hasta su vencimiento y después piden login.
+- Es estado nuevo en la base, en el camino de cada renovación (no de cada
+  request: el access token se sigue validando como antes).
+- Pruebas: `test/autenticacion.e2e-spec.ts` (rotación, reuso dentro y fuera de
+  la gracia, vencimiento, usuario inactivo, logout, cambio y reseteo de
+  contraseña, duraciones de la empresa), `duraciones-sesion.spec.ts` y el smoke
+  test.
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-024 — Los permisos se definen en el backend y viajan con la sesión
+
+**Contexto:** la Web tenía su propia tabla de qué rol ve cada sección
+(`src/auth/permisos.ts`), copiada a mano de los `@Roles` de cada controller, y
+ya se había desfasado: seguía diciendo que el Auditor no ve fincas cuando D-021
+se lo habilitó. La app móvil no restringía nada: cualquier rol podía entrar,
+aunque solo sirve para registrar labores y pesajes. El product owner pidió que
+la app móvil sea para quien tenga permiso de hacer lo que la app permite, y que
+se maneje como permiso.
+
+**Decisión:**
+
+- `src/common/permisos/permisos.ts` es la **única** tabla de permisos:
+  capacidades con nombre (`fincas`, `laboresRegistro`, `vendimiaAprobacion`,
+  …) y los roles que las tienen. La tabla es fija por rol; no se edita desde
+  la aplicación.
+- La lista de permisos del usuario viaja en `user.permisos` del login y de la
+  renovación de sesión, y en `GET /usuarios/me`. Los clientes deciden con ella
+  qué mostrar y dejan de tener tablas propias.
+- **La autoridad sigue siendo el `RolesGuard`** con los `@Roles` de cada
+  handler. `permisos.spec.ts` asocia cada permiso con los handlers que cubre y
+  verifica que acepten **exactamente** los mismos roles. Si alguien cambia un
+  `@Roles` sin tocar la tabla, o al revés, el test falla. Hoy cubre 105
+  handlers.
+- **`appMovil`** es la unión de `laboresRegistro` y `pesajesRegistro`
+  (Propietario, Agrónomo y Capataz). `POST /auth/login` acepta
+  `cliente: 'web' | 'movil'`; con `movil` y sin ese permiso responde **403**. Se
+  valida después de la contraseña, igual que la cuenta desactivada, para no
+  revelar nada a quien no tiene credenciales. La app también lo valida del
+  lado del cliente.
+
+**Por qué no se reemplazaron los `@Roles` por un decorador de permisos:** son
+114 handlers y la entrega es en dos semanas. El test de consistencia da la
+misma garantía (tabla y guard no pueden divergir) sin tocar cada controller.
+Migrar a `@Permiso('x')` queda como mejora.
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-025 — Administrador de plataforma y alta de empresas
+
+**Contexto:** el sistema es multi-empresa (todas las consultas filtran por
+`empresa_id`), pero solo existía la empresa que crea el seed: no había forma de
+dar de alta un cliente nuevo por la API. El product owner pidió poder crear más
+empresas.
+
+**Decisión:**
+
+- **Rol nuevo, `Administrador`**, de plataforma. Pertenece a una empresa
+  especial (`empresas.es_plataforma = true`, a lo sumo una, la crea el seed)
+  que no es un cliente, no tiene datos y no aparece en los listados.
+- **`/api/empresas`**, solo para el Administrador:
+  - `GET` lista las empresas cliente con sus usuarios activos.
+  - `POST { nombre, cuit, propietario: { nombre, email } }` crea la empresa,
+    sus catálogos por defecto (los mismos del seed, ahora en
+    `catalogos-por-defecto.ts`) y el primer Propietario con contraseña
+    temporal y correo de bienvenida. El Administrador nunca conoce esa
+    contraseña. Si el alta del Propietario falla, la empresa se revierte.
+  - `PATCH /:id`, `PATCH /:id/desactivar` y `PATCH /:id/activar`.
+- **Una empresa desactivada** no puede iniciar sesión ni renovarla, y la
+  estrategia JWT rechaza sus access tokens vigentes en la request siguiente.
+- **El Administrador no ve datos de empresas.** `@AnyRole()` pasa a significar
+  "cualquier rol de empresa". Los únicos handlers que lo admiten lo declaran
+  con `@AnyRole({ incluyeAdministrador: true })`: su perfil, el cambio de
+  contraseña y el logout. Todo lo demás le responde 403. Sus permisos (D-024)
+  son `perfil` y `empresas`, y no entra a la app móvil.
+- **Un Propietario no puede crear administradores.** `GET /roles` devuelve solo
+  los roles de empresa, y el alta y la edición de usuarios rechazan el rol
+  `Administrador`. El alta antes no validaba el rol: aceptaba cualquier
+  `rolId`.
+- Credenciales: fuera de producción el seed crea `admin@terravid.demo` con la
+  contraseña de demostración. En producción, solo si se definen
+  `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`, con las mismas reglas que el
+  Propietario (no puede ser la de demostración y entra obligado a cambiarla).
+- El rol se inserta en la migración `EmpresasYAdministrador` y no solo en el
+  seed, porque una instancia ya sembrada no vuelve a correrlo.
+
+**Pruebas:** `test/empresas.e2e-spec.ts`, los permisos en `permisos.spec.ts`,
+el bloqueo del rol en `usuarios.service.spec.ts` y siete controles HTTP en el
+smoke (403 del dashboard, `/empresas` solo para el Administrador, roles
+asignables, login móvil).
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-026 — Ingesta de telemetría por MQTT con credenciales por sensor
+
+**Contexto:** `ARCHITECTURE.md` prometía MQTT/MQTTS para los sensores, pero la
+ingesta era solo HTTP con una API key compartida por todos los nodos: un nodo
+comprometido podía publicar lecturas de cualquier sensor. El product owner
+pidió implementar MQTT.
+
+**Decisión:**
+
+- **Broker Mosquitto 2** en la VM, en el profile `mqtt` del compose de
+  producción. TLS en el **8883** con el certificado que Caddy ya obtiene para el
+  dominio de la API (lo copia `deploy/mosquitto/entrypoint.sh` al arrancar). El
+  1883 sin cifrar queda solo en la red interna, para la API. Sin acceso
+  anónimo.
+- **Tópico `terravid/sensores/{codigo}/lecturas`.** Se propuso
+  `terravid/{empresaId}/sensores/{codigo}/lecturas`, pero el código de sensor
+  ya es único en todo el sistema y el `empresaId` en el tópico obligaba a
+  verificar que coincidiera con la empresa del sensor. Sin él, la identidad la
+  da solo el código, que es el usuario autenticado.
+- **Una credencial por sensor, administrada por la API** con el plugin
+  *dynamic security* de Mosquitto: la API le manda comandos JSON al broker por
+  MQTT (`$CONTROL/dynamic-security/v1`). Cada sensor tiene un rol propio que
+  **solo permite publicar en su tópico**. Así un nodo comprometido no puede
+  hacerse pasar por otro, y no hay que reiniciar el broker ni editar archivos.
+  - `POST /api/sensores/:id/credenciales-mqtt` (Propietario y Agrónomo) genera
+    o regenera la credencial y devuelve la contraseña **una sola vez**. El log
+    de auditoría registra la acción sin el cuerpo.
+  - Dar de baja un sensor deshabilita su credencial; renombrarlo borra la del
+    código anterior. Si el broker no responde, el ABM sigue y queda en el log.
+- **La API se suscribe a `terravid/sensores/+/lecturas`** y procesa cada
+  lectura con el **mismo** `LecturasIotService.ingest` que el endpoint HTTP:
+  rango físico, anómalas, umbrales y alertas. El código del sensor sale del
+  **tópico** y no del payload, porque el tópico es lo que el broker autenticó.
+- **Opcional:** sin `MQTT_URL` la API no se conecta y la ingesta es solo HTTP.
+  El desarrollo, los tests y el CI no necesitan broker. El endpoint HTTP queda
+  como respaldo.
+- *Dynamic security* desconecta a un cliente cuando le cambian los roles. La
+  API se otorga a sí misma el permiso de suscripción la primera vez que se
+  conecta a un broker nuevo, y por eso esa vez se reconecta sola (y retoma las
+  suscripciones).
+- Cuando Caddy renueva el certificado, `actualizar.sh` reinicia el broker para
+  que lo tome; los sensores se reconectan solos.
+
+**Pruebas:** `src/modules/mqtt/mqtt.spec.ts` (filtros, comandos de dynamic
+security, ingesta) y `validar-entorno.spec.ts`. Además se verificó de punta a
+punta contra Mosquitto real en Docker: credencial generada por la API, lectura
+ingerida, publicación en el tópico de otro sensor rechazada ("Not authorized"),
+contraseña incorrecta rechazada y credencial deshabilitada al dar de baja el
+sensor.
+
+**Pendiente:** el firmware de `IoTSensor` y su simulador siguen publicando por
+HTTP. El contrato para migrarlos está en [`IOT-MQTT.md`](IOT-MQTT.md).
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-027 — Metas de cosecha por cuartel y ubicación GPS de los registros de campo
+
+**Contexto:** la app móvil tenía funcionalidades escritas pero sin conectar
+(mobile-v2). El indicador de avance de cosecha usaba una meta fija de
+10.000 kg en el código, y la captura de GPS no tenía dónde guardarse: ni el
+esquema local ni los DTO del backend tenían columnas de ubicación. El product
+owner pidió terminar esas funcionalidades.
+
+**Decisión:**
+
+- **Metas de cosecha:** tabla `metas_cosecha` con la meta en kg por
+  **cuartel y campaña** (única por par). La carga el Propietario:
+  - `PUT /api/campanias/:id/metas/:cuartelId { metaKg }`. `metaKg = 0` borra
+    la meta.
+  - `GET /api/campanias/actual/avance?fincaId=` y
+    `GET /api/campanias/:id/avance?fincaId=` (Propietario, Agrónomo y
+    Capataz) devuelven, por cuartel activo, la meta y los kilos pesados dentro
+    del rango de la campaña, más los totales. La app de campo lo usa para el
+    indicador; la Web, para cargar las metas.
+  - Sin campaña en curso, el avance viene vacío (`campania: null`).
+- **GPS:** `latitud` y `longitud` opcionales (`numeric(10,7)`) en
+  `registro_labor` y `pesajes_vendimia`, validadas en los DTO
+  (−90..90, −180..180). Opcionales: sin permiso de ubicación o sin señal el
+  registro se guarda igual. Llegan por el POST individual y por `/sync`.
+- El índice parcial `uq_empresas_plataforma` (D-025) se declara en la entidad
+  para que el generador de migraciones no lo borre.
+
+**Pruebas:** `test/metas-y-gps.e2e-spec.ts` y la cobertura en
+`permisos.spec.ts`.
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-028 — Cobertura combinada de unit + e2e con piso de 70 %
+
+**Contexto:** el objetivo de la entrega es 70 % de líneas sumando pruebas
+unitarias y e2e. Medidas por separado daban 47 % (unit) y 41 % (e2e), porque
+cada tipo cubre una parte distinta: los unitarios, reglas y casos borde con
+dependencias simuladas; los e2e, el camino real contra PostgreSQL.
+
+**Decisión:**
+
+- `jest.cobertura.config.js` corre los dos proyectos juntos y combina la
+  cobertura (`npm run test:cov:total`, salida en `coverage-total/`). El umbral
+  global es **70 % de líneas y de sentencias**; el CI lo corre después de los
+  e2e y falla si baja.
+- Se excluyen migraciones, seeds y scripts operativos (`src/database/`), DTO,
+  entidades, módulos, `main.ts` y la descripción de OpenAPI: son declarativos o
+  se ejercitan al levantar la base, no desde los tests. Los patrones aceptan
+  `/` y `\`, porque en Windows las rutas usan barra invertida.
+- `test/recorrido-api.e2e-spec.ts` recorre por HTTP los módulos que no tenían
+  e2e: dashboard de los cuatro roles, sensores, umbral, ingesta, alertas,
+  series, inteligencia agronómica, catálogos, insumos, tipos de labor, costeo,
+  cuadrillas, usuarios, notificaciones y campañas.
+
+**Resultado:** **80,6 % de líneas** (2552 de 3165), 505 tests.
+
+**Errores reales que encontró el recorrido:**
+
+- **El dashboard del Capataz respondía 500 siempre:** la consulta de cuarteles
+  en cosecha usaba la tabla `pesaje_vendimia`, que no existe (es
+  `pesajes_vendimia`).
+- **Ninguna recomendación agronómica se podía resolver por la API** (HU-30):
+  `EstadoResolucion` tenía miembros calculados
+  (`= EstadoRecomendacion.APLICADA`). Con eso TypeScript emite `Number` como
+  tipo de la propiedad, y la conversión implícita del `ValidationPipe`
+  convertía `"aplicada"` en `NaN`: todo `PATCH` respondía 400. Ahora el enum
+  usa literales, con un `satisfies` que verifica la equivalencia con la
+  entidad.
 
 **Estado:** ✅ Vigente.

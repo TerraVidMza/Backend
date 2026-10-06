@@ -126,4 +126,11 @@ export class PesajeVendimia {
 
   @Column({ name: 'synced_at', type: 'timestamptz', nullable: true })
   syncedAt: Date | null;
+
+  /** Ubicación del teléfono al registrar (D-027); null si no hubo GPS. */
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  latitud: number | null;
+
+  @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
+  longitud: number | null;
 }

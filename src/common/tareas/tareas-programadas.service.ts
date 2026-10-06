@@ -4,6 +4,7 @@ import { NotificacionesService } from '../../modules/notificaciones/notificacion
 import { TokenRecuperacionService } from '../../modules/token-recuperacion/token-recuperacion.service';
 import { LecturasIotService } from '../../modules/lecturas-iot/lecturas-iot.service';
 import { TokenRevocadoService } from '../../modules/auth/token-revocado.service';
+import { RefreshTokenService } from '../../modules/auth/refresh-token.service';
 
 /**
  * Tareas de mantenimiento nocturnas.
@@ -27,6 +28,7 @@ export class TareasProgramadasService {
     private readonly tokenRecuperacionService: TokenRecuperacionService,
     private readonly lecturasIotService: LecturasIotService,
     private readonly tokenRevocadoService: TokenRevocadoService,
+    private readonly refreshTokenService: RefreshTokenService,
   ) {}
 
   /** HU-35: las notificaciones se conservan 30 días. */
@@ -50,18 +52,20 @@ export class TareasProgramadasService {
   /**
    * HU-02 y HU-03: se descartan los tokens de recuperación ya vencidos o usados
    * y las revocaciones de sesión cuyo JWT venció por su cuenta —a partir de ahí
-   * el token se rechaza por `exp` y recordar el bloqueo no aporta nada—.
+   * el token se rechaza por `exp` y recordar el bloqueo no aporta nada—, y
+   * los refresh tokens vencidos (D-023).
    */
   @Cron(CronExpression.EVERY_DAY_AT_3AM, { name: 'purga-tokens' })
   async purgarTokens(): Promise<void> {
     try {
-      const [recuperacion, revocados] = await Promise.all([
+      const [recuperacion, revocados, refresh] = await Promise.all([
         this.tokenRecuperacionService.purgarVencidos(),
         this.tokenRevocadoService.purgarVencidos(),
+        this.refreshTokenService.purgarVencidos(),
       ]);
-      if (recuperacion > 0 || revocados > 0) {
+      if (recuperacion > 0 || revocados > 0 || refresh > 0) {
         this.logger.log(
-          `Purga de tokens: ${recuperacion} de recuperación, ${revocados} revocaciones.`,
+          `Purga de tokens: ${recuperacion} de recuperación, ${revocados} revocaciones, ${refresh} refresh.`,
         );
       }
     } catch (error) {

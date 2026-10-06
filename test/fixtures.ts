@@ -224,6 +224,9 @@ export async function limpiarUsuario(
   await dataSource.query('DELETE FROM token_revocado WHERE usuario_id = $1', [
     usuario.id,
   ]);
+  await dataSource.query('DELETE FROM refresh_token WHERE usuario_id = $1', [
+    usuario.id,
+  ]);
 
   const rastro = await dataSource.query<{ n: number }[]>(
     'SELECT count(*)::int AS n FROM log_auditoria WHERE actor_id = $1',

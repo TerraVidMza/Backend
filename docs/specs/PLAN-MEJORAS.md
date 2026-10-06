@@ -239,7 +239,7 @@ Salvo eso, lo que queda **no es deuda del backend**:
 1. ~~Verificar el push real.~~ ✅ **Hecho** ([D-015](../DECISIONS.md)). Con el service account cargado, `npm run push:diagnostico` confirma que Firebase acepta las credenciales. Queda probar la última milla contra un teléfono, que necesita Mobile: `npm run push:diagnostico -- <token>`.
 2. ~~Endurecer el despliegue.~~ ✅ **Hecho** ([D-017](../DECISIONS.md)). Al desplegar hay que correr `npm run db:rol-app` una vez por entorno y apuntar `DB_USERNAME` al rol nuevo; `npm run db:verificar-privilegios` lo comprueba y sale con código 1 si algo falta, así que conviene dejarlo como paso del pipeline.
 3. **Revisar las 6 vulnerabilidades moderadas** que arrastra `firebase-admin` en dependencias transitivas, cuando el SDK publique la corrección ([D-015](../DECISIONS.md)).
-4. **Los clientes:** Web, Mobile e IoTSensor, cada uno en su repo. Ahí falta el 100%.
+4. **Los clientes:** Web y Mobile están implementados y conectados (ver sus `docs/DECISIONS.md`). IoTSensor tiene que migrar a MQTT según [`IOT-MQTT.md`](../IOT-MQTT.md) (D-026).
 
 > **Los dos comandos de verificación son parte del despliegue, no herramientas de una vez.** `db:verificar-privilegios` y `push:diagnostico` salen con código 1 cuando la configuración no sirve, así que encadenarlos al pipeline convierte un error de credenciales en un despliegue fallido en vez de en una funcionalidad que calla y no anda.
 

@@ -12,6 +12,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
+import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ChangePasswordDto } from '../usuarios/dto/change-password.dto';
 import { Public } from '../../common/decorators/public.decorator';
 import { AnyRole } from '../../common/decorators/any-role.decorator';
@@ -35,7 +36,20 @@ export class AuthController {
     return this.authService.login(dto, ip);
   }
 
-  @AnyRole()
+  /**
+   * Renueva la sesión (D-023). Es pública porque se llama justamente cuando el
+   * access token venció; la credencial es el refresh token del body. El límite
+   * por IP frena la prueba de tokens al azar, que con 256 bits es inútil igual.
+   */
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Public()
+  @HttpCode(HttpStatus.OK)
+  @Post('refresh')
+  refresh(@Body() dto: RefreshTokenDto, @Ip() ip: string) {
+    return this.authService.refresh(dto.refreshToken, ip);
+  }
+
+  @AnyRole({ incluyeAdministrador: true })
   @ApiBearerAuth('jwt')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -66,7 +80,7 @@ export class AuthController {
     return { message: 'Contraseña actualizada correctamente.' };
   }
 
-  @AnyRole()
+  @AnyRole({ incluyeAdministrador: true })
   @ApiBearerAuth('jwt')
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -79,6 +93,7 @@ export class AuthController {
       user.id,
       dto.currentPassword,
       dto.newPassword,
+      user.familiaId,
     );
   }
 }

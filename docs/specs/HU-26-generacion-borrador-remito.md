@@ -40,3 +40,4 @@ Para **iniciar el proceso de despacho de uva hacia la bodega para su revisión.*
 ## Notas / decisiones
 
 - Implementado en `src/modules/remitos`. Pendiente confirmar si el control de concurrencia (Optimistic Locking) está implementado en `cuarteles`/`remitos.service.ts`.
+  **Resuelto:** la generación del borrador toma un lock `FOR UPDATE` (`remitos.service.ts`); no usa optimistic locking. (revisión 2026-10-06)

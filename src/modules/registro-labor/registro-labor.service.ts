@@ -240,6 +240,8 @@ export class RegistroLaborService {
           costoUnitarioAlSync: costoLabor.costoUnitario,
           estadoSync: EstadoSync.SINCRONIZADO,
           errorMessage: null,
+          latitud: dto.latitud ?? null,
+          longitud: dto.longitud ?? null,
           createdAtLocal: dto.createdAtLocal
             ? new Date(dto.createdAtLocal)
             : new Date(),
