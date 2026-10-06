@@ -25,6 +25,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { LogAuditoriaModule } from './modules/log-auditoria/log-auditoria.module';
 import { TokenRecuperacionModule } from './modules/token-recuperacion/token-recuperacion.module';
 import { EmpresasModule } from './modules/empresas/empresas.module';
+import { IngestaMqttModule } from './modules/mqtt/ingesta-mqtt.module';
+import { MetasCosechaModule } from './modules/metas-cosecha/metas-cosecha.module';
 import { FincasModule } from './modules/fincas/fincas.module';
 import { CuartelesModule } from './modules/cuarteles/cuarteles.module';
 import { CatalogoItemModule } from './modules/catalogo-item/catalogo-item.module';
@@ -79,6 +81,8 @@ import { CampaniasModule } from './modules/campanias/campanias.module';
     LogAuditoriaModule,
     TokenRecuperacionModule,
     EmpresasModule,
+    IngestaMqttModule,
+    MetasCosechaModule,
     FincasModule,
     CuartelesModule,
     CatalogoItemModule,

@@ -89,6 +89,19 @@ export function validarEntorno(
   }
 
   // --- transportes opcionales ----------------------------------------------
+  // MQTT (D-026): opcional. Sin MQTT_URL la ingesta es solo HTTP; con ella,
+  // la API se autentica contra el broker y administra las credenciales de los
+  // sensores, así que necesita su usuario.
+  if (entorno.MQTT_URL) {
+    if (!/^mqtts?:\/\//.test(entorno.MQTT_URL)) {
+      invalidas.push(
+        `MQTT_URL="${entorno.MQTT_URL}" no empieza con mqtt:// ni mqtts://`,
+      );
+    }
+    requerida('MQTT_USUARIO');
+    requerida('MQTT_PASSWORD');
+  }
+
   const push = entorno.PUSH_TRANSPORT ?? 'log';
   if (!['log', 'fcm'].includes(push)) {
     invalidas.push(`PUSH_TRANSPORT="${push}" no es 'log' ni 'fcm'`);

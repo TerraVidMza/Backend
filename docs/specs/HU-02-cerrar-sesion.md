@@ -16,6 +16,8 @@
 >
 > **Criterios (2026-08-25):** el logout ya **invalida el token**: se firma con `jti` y el cierre de sesión lo registra en `token_revocado`, que la estrategia JWT consulta en cada request. Antes solo escribía auditoría y el token seguía sirviendo sus 8 horas.
 
+> **Refresh token (2026-10-05):** el logout también revoca el refresh token de la sesión (la familia que viaja en el claim `fam` del access token), así que después de cerrar sesión no se puede renovar. Cambiar la contraseña cierra las demás sesiones del usuario; restablecerla por mail las cierra todas. Ver [D-023](../DECISIONS.md#d-023--sesiones-con-refresh-token-rotativo-y-duración-configurable-por-empresa).
+
 ## Descripción
 
 Como **usuario autenticado**

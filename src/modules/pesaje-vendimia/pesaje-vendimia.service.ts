@@ -147,6 +147,8 @@ export class PesajeVendimiaService {
           estadoSync: EstadoSync.SINCRONIZADO,
           errorMessage: null,
           estado: EstadoPesaje.PENDIENTE_REMITO,
+          latitud: dto.latitud ?? null,
+          longitud: dto.longitud ?? null,
           createdAtLocal: dto.createdAtLocal
             ? new Date(dto.createdAtLocal)
             : new Date(),

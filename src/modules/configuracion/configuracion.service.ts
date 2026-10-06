@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 import { Configuracion } from './entities/configuracion.entity';
@@ -6,8 +6,14 @@ import { SetConfiguracionDto } from './dto/set-configuracion.dto';
 import {
   CLAVES_PREFERENCIAS,
   CLAVES_SECRETAS,
+  LIMITES_SESION,
   VALOR_ENMASCARADO,
 } from './configuracion.keys';
+
+export interface DuracionesSesion {
+  accessMinutos: number;
+  refreshDias: number;
+}
 
 /** El proyecto es de Mendoza; es el default sensato mientras no se configure. */
 export const ZONA_HORARIA_POR_DEFECTO = 'America/Argentina/Mendoza';
@@ -110,11 +116,35 @@ export class ConfiguracionService {
     return valor;
   }
 
+  /**
+   * Duración de las sesiones de la empresa (D-023). Un valor fuera de rango
+   * cargado a mano en la base se ignora y se usa el valor por defecto: una
+   * configuración rota no puede dejar a nadie sin poder iniciar sesión.
+   */
+  async getDuracionesSesion(empresaId: string): Promise<DuracionesSesion> {
+    const configs = await this.configuracionRepository.find({
+      where: { empresaId, clave: In(Object.keys(LIMITES_SESION)) },
+    });
+    const leer = (clave: keyof typeof LIMITES_SESION): number => {
+      const { min, max, porDefecto } = LIMITES_SESION[clave];
+      const valor = Number(configs.find((c) => c.clave === clave)?.valor);
+      return Number.isInteger(valor) && valor >= min && valor <= max
+        ? valor
+        : porDefecto;
+    };
+    return {
+      accessMinutos: leer('sesion_access_minutos'),
+      refreshDias: leer('sesion_refresh_dias'),
+    };
+  }
+
   async set(
     dto: SetConfiguracionDto,
     updatedById: string,
     empresaId: string,
   ): Promise<Configuracion> {
+    this.validarValor(dto);
+
     let config = await this.configuracionRepository.findOne({
       where: { clave: dto.clave, empresaId },
     });
@@ -128,6 +158,20 @@ export class ConfiguracionService {
     config.updatedById = updatedById;
     const guardada = await this.configuracionRepository.save(config);
     return this.enmascarar(guardada);
+  }
+
+  /** Validaciones por clave que el DTO genérico (clave + texto) no puede expresar. */
+  private validarValor(dto: SetConfiguracionDto): void {
+    if (dto.clave in LIMITES_SESION) {
+      const { min, max } =
+        LIMITES_SESION[dto.clave as keyof typeof LIMITES_SESION];
+      const valor = Number(dto.valor);
+      if (!/^\d+$/.test(dto.valor) || valor < min || valor > max) {
+        throw new BadRequestException(
+          `${dto.clave} debe ser un número entero entre ${min} y ${max}`,
+        );
+      }
+    }
   }
 
   private enmascarar(config: Configuracion): Configuracion {

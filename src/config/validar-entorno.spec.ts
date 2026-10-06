@@ -136,4 +136,27 @@ describe('validarEntorno', () => {
   it('devuelve el entorno intacto cuando es válido', () => {
     expect(validarEntorno(minimo)).toEqual(minimo);
   });
+
+  describe('MQTT (D-026)', () => {
+    it('sin MQTT_URL no exige nada: la ingesta queda solo por HTTP', () => {
+      expect(() => validarEntorno(minimo)).not.toThrow();
+    });
+
+    it('con MQTT_URL exige el usuario y la contraseña de la API', () => {
+      expect(() =>
+        validarEntorno({ ...minimo, MQTT_URL: 'mqtt://mqtt:1883' }),
+      ).toThrow(/MQTT_USUARIO/);
+    });
+
+    it('rechaza una URL que no es mqtt:// ni mqtts://', () => {
+      expect(() =>
+        validarEntorno({
+          ...minimo,
+          MQTT_URL: 'http://mqtt:1883',
+          MQTT_USUARIO: 'api',
+          MQTT_PASSWORD: 'x',
+        }),
+      ).toThrow(/MQTT_URL/);
+    });
+  });
 });

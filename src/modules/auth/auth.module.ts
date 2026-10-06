@@ -10,6 +10,7 @@ import { UsuariosModule } from '../usuarios/usuarios.module';
 import { TokenRecuperacionModule } from '../token-recuperacion/token-recuperacion.module';
 import { LogAuditoriaModule } from '../log-auditoria/log-auditoria.module';
 import { TokenRevocadoModule } from './token-revocado.module';
+import { ConfiguracionModule } from '../configuracion/configuracion.module';
 
 @Module({
   imports: [
@@ -17,16 +18,16 @@ import { TokenRevocadoModule } from './token-revocado.module';
     TokenRecuperacionModule,
     TokenRevocadoModule,
     LogAuditoriaModule,
+    ConfiguracionModule,
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
+      // La vigencia de cada token sale de la configuración de su empresa
+      // (D-023) y se pasa al firmar; este valor es solo la red de seguridad.
       useFactory: (configService: ConfigService) => ({
         secret: configService.get<string>('JWT_SECRET'),
-        signOptions: {
-          expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ??
-            '8h') as StringValue,
-        },
+        signOptions: { expiresIn: '15m' as StringValue },
       }),
     }),
   ],

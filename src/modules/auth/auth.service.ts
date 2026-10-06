@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Injectable,
@@ -19,6 +20,9 @@ import { LoginDto } from './dto/login.dto';
 import { RolNombre } from '../../common/enums/rol.enum';
 import { MailService } from '../../common/mail/mail.service';
 import { TokenRevocadoService } from './token-revocado.service';
+import { RefreshTokenService } from './refresh-token.service';
+import { ConfiguracionService } from '../configuracion/configuracion.service';
+import { permisosDe, tienePermiso } from '../../common/permisos/permisos';
 
 const MAX_INTENTOS = 5;
 const BLOQUEO_MINUTOS = 15;
@@ -49,6 +53,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly mailService: MailService,
     private readonly tokenRevocadoService: TokenRevocadoService,
+    private readonly refreshTokenService: RefreshTokenService,
+    private readonly configuracionService: ConfiguracionService,
   ) {}
 
   async login(dto: LoginDto, ipAddress?: string) {
@@ -94,6 +100,21 @@ export class AuthService {
     if (!usuario.activo) {
       throw new UnauthorizedException('Tu cuenta está desactivada');
     }
+    if (usuario.empresa && !usuario.empresa.activa) {
+      throw new UnauthorizedException('Tu empresa está desactivada');
+    }
+
+    // La app de campo solo la usa quien puede registrar labores o pesajes
+    // (D-024). Se valida después de la contraseña, como la cuenta desactivada,
+    // para no revelar nada a quien no tiene credenciales.
+    if (
+      dto.cliente === 'movil' &&
+      !tienePermiso(usuario.rol.nombreRol as RolNombre, 'appMovil')
+    ) {
+      throw new ForbiddenException(
+        'Tu rol no tiene acceso a la app móvil. Ingresá desde la versión web.',
+      );
+    }
 
     await this.usuariosService.registrarAccesoExitoso(usuario.id);
     await this.logAuditoriaService.registrar({
@@ -104,13 +125,54 @@ export class AuthService {
       ipAddress,
     });
 
-    return this.buildTokenResponse(
+    const { sesion } = await this.emitirSesion(
       usuario.id,
       usuario.email,
       usuario.rol.nombreRol as RolNombre,
       usuario.empresaId,
       usuario.debeCambiarPassword,
     );
+    return sesion;
+  }
+
+  /**
+   * Renueva la sesión con un refresh token (D-023).
+   *
+   * El token presentado se consume y se entrega uno nuevo de la misma familia
+   * junto con un access token nuevo. El rol y el estado del usuario se leen de
+   * la base, igual que en cada request: un usuario desactivado no renueva.
+   */
+  async refresh(refreshToken: string, ipAddress?: string) {
+    const consumido = await this.refreshTokenService.consumir(refreshToken);
+
+    const usuario = await this.usuariosService.findById(consumido.usuarioId);
+    if (!usuario || !usuario.activo || usuario.empresa?.activa === false) {
+      await this.refreshTokenService.revocarFamilia(consumido.familiaId);
+      throw new UnauthorizedException('Usuario inactivo o inexistente');
+    }
+
+    const { sesion, refreshTokenId } = await this.emitirSesion(
+      usuario.id,
+      usuario.email,
+      usuario.rol.nombreRol as RolNombre,
+      usuario.empresaId,
+      usuario.debeCambiarPassword,
+      consumido.familiaId,
+    );
+    await this.refreshTokenService.marcarReemplazo(
+      consumido.id,
+      refreshTokenId,
+    );
+
+    await this.logAuditoriaService.registrar({
+      actorId: usuario.id,
+      accion: 'RENOVAR_SESION',
+      entidad: 'usuarios',
+      entidadId: usuario.id,
+      ipAddress,
+    });
+
+    return sesion;
   }
 
   /**
@@ -121,9 +183,20 @@ export class AuthService {
    * ya robado ni contra una terminal compartida.
    */
   async logout(
-    usuario: { id: string; jti: string; expiraEn: Date | null },
+    usuario: {
+      id: string;
+      jti: string;
+      expiraEn: Date | null;
+      familiaId?: string | null;
+    },
     ipAddress?: string,
   ): Promise<void> {
+    // La sesión completa: sin esto el refresh token seguiría renovando
+    // access tokens después de "cerrar sesión" (D-023).
+    if (usuario.familiaId) {
+      await this.refreshTokenService.revocarFamilia(usuario.familiaId);
+    }
+
     if (usuario.jti) {
       // Sin `exp` se usa la vigencia configurada como cota: la fila se puede
       // purgar recién cuando el token no pueda seguir siendo aceptado.
@@ -199,6 +272,9 @@ export class AuthService {
     }
     const passwordHash = await bcrypt.hash(newPassword, saltRounds());
     await this.usuariosService.setPasswordHash(usuarioId, passwordHash);
+    // Quien restablece la contraseña puede estar recuperando una cuenta
+    // comprometida: se cierran todas las sesiones abiertas.
+    await this.refreshTokenService.revocarDeUsuario(usuarioId);
     await this.logAuditoriaService.registrar({
       actorId: usuarioId,
       accion: 'RESET_PASSWORD',
@@ -211,6 +287,7 @@ export class AuthService {
     usuarioId: string,
     currentPassword: string,
     newPassword: string,
+    familiaIdActual?: string | null,
   ): Promise<void> {
     const usuario = await this.usuariosService.findById(usuarioId);
     if (!usuario) {
@@ -225,6 +302,11 @@ export class AuthService {
     }
     const passwordHash = await bcrypt.hash(newPassword, saltRounds());
     await this.usuariosService.setPasswordHash(usuarioId, passwordHash);
+    // Las otras sesiones se cierran; la de quien la cambió sigue (D-023).
+    await this.refreshTokenService.revocarDeUsuario(
+      usuarioId,
+      familiaIdActual ?? undefined,
+    );
     await this.logAuditoriaService.registrar({
       actorId: usuarioId,
       accion: 'CAMBIO_PASSWORD',
@@ -233,18 +315,58 @@ export class AuthService {
     });
   }
 
-  private buildTokenResponse(
+  /**
+   * Emite el par access + refresh con las duraciones de la empresa (D-023).
+   * Sin `familiaId` abre una sesión nueva; con él, la continúa.
+   */
+  private async emitirSesion(
     sub: string,
     email: string,
     rol: RolNombre,
     empresaId: string,
     debeCambiarPassword: boolean,
+    familiaId?: string,
   ) {
-    // `jti` identifica este token concreto para poder revocarlo (HU-02).
-    const payload = { sub, email, rol, empresaId, jti: crypto.randomUUID() };
+    const duraciones =
+      await this.configuracionService.getDuracionesSesion(empresaId);
+    const refresh = await this.refreshTokenService.emitir(
+      sub,
+      duraciones.refreshDias,
+      familiaId,
+    );
+
+    // `jti` identifica este token concreto para poder revocarlo (HU-02) y
+    // `fam` la sesión, para que el logout corte también el refresh token.
+    const payload = {
+      sub,
+      email,
+      rol,
+      empresaId,
+      jti: crypto.randomUUID(),
+      fam: refresh.familiaId,
+    };
+    const expiresIn = duraciones.accessMinutos * 60;
+
     return {
-      accessToken: this.jwtService.sign(payload),
-      user: { id: sub, email, rol, empresaId, debeCambiarPassword },
+      sesion: {
+        accessToken: this.jwtService.sign(payload, { expiresIn }),
+        /** Segundos de vida del access token: el cliente renueva antes de que venza. */
+        expiresIn,
+        refreshToken: refresh.token,
+        refreshExpiresAt: refresh.expiraEn.toISOString(),
+        user: {
+          id: sub,
+          email,
+          rol,
+          empresaId,
+          debeCambiarPassword,
+          // Lo que el usuario puede hacer, para que la Web y la app decidan qué
+          // mostrar sin una tabla propia (D-024).
+          permisos: permisosDe(rol),
+        },
+      },
+      /** Para enlazar la rotación; no viaja al cliente. */
+      refreshTokenId: refresh.id,
     };
   }
 }

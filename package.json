@@ -38,7 +38,8 @@
     "prepare": "husky || exit 0",
     "test:cov:e2e": "jest --config ./test/jest-e2e.json --coverage",
     "db:rotar-password": "ts-node -r tsconfig-paths/register src/database/scripts/rotar-password.ts",
-    "db:rotar-password:dist": "node dist/database/scripts/rotar-password.js"
+    "db:rotar-password:dist": "node dist/database/scripts/rotar-password.js",
+    "test:cov:total": "jest --config ./jest.cobertura.config.js --coverage --runInBand"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.1",
@@ -60,6 +61,7 @@
     "dotenv": "^17.4.2",
     "firebase-admin": "^14.4.0",
     "helmet": "^8.3.0",
+    "mqtt": "^5.16.0",
     "nodemailer": "^10.0.9",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",

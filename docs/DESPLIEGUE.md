@@ -155,13 +155,13 @@ npm run db:verificar-privilegios
 
 # 4. Datos iniciales (roles de usuario, catálogos).
 #    El seed levanta un contexto Nest completo: AuthModule exige JWT_SECRET
-#    y JWT_REFRESH_SECRET aunque el seed solo inserte filas.
+#    aunque el seed solo inserte filas.
 #
 #    SEED_PROPIETARIO_PASSWORD es obligatoria con NODE_ENV=production: sin
 #    ella el seed no arranca. La contraseña de desarrollo está publicada en
 #    el README, y esta es la cuenta que puede crear todas las demás. El
 #    Propietario entra obligado a cambiarla en el primer acceso.
-SEED_PROPIETARIO_EMAIL='<correo del dueño>' SEED_PROPIETARIO_PASSWORD='<contraseña generada>' npm run seed
+SEED_PROPIETARIO_EMAIL='<correo del dueño>' SEED_PROPIETARIO_PASSWORD='<contraseña generada>' \nSEED_ADMIN_EMAIL='<correo del administrador>' SEED_ADMIN_PASSWORD='<otra contraseña generada>' npm run seed
 
 cp .env.desarrollo .env                   # volver a desarrollo
 ```
@@ -181,7 +181,6 @@ crear_secreto() { printf '%s' "$2" | gcloud secrets create "$1" --data-file=- ; 
 
 crear_secreto DB_PASSWORD         '<la DB_APP_PASSWORD de la sección 5>'
 crear_secreto JWT_SECRET          "$(openssl rand -base64 48)"
-crear_secreto JWT_REFRESH_SECRET  "$(openssl rand -base64 48)"
 crear_secreto IOT_API_KEY         "$(openssl rand -hex 32)"
 ```
 
@@ -218,7 +217,7 @@ MIEMBRO="serviceAccount:$SA@$PROJECT.iam.gserviceaccount.com"
 gcloud projects add-iam-policy-binding $PROJECT \
   --member="$MIEMBRO" --role="roles/cloudsql.client"
 
-for S in DB_PASSWORD JWT_SECRET JWT_REFRESH_SECRET IOT_API_KEY; do
+for S in DB_PASSWORD JWT_SECRET IOT_API_KEY; do
   gcloud secrets add-iam-policy-binding $S \
     --member="$MIEMBRO" --role="roles/secretmanager.secretAccessor"
 done
@@ -249,8 +248,6 @@ DB_DATABASE=terravid;\
 DB_USERNAME=terravid_app;\
 DB_SYNCHRONIZE=false;\
 BCRYPT_SALT_ROUNDS=12;\
-JWT_EXPIRES_IN=8h;\
-JWT_REFRESH_EXPIRES_IN=7d;\
 TRUST_PROXY_HOPS=1;\
 MAIL_TRANSPORT=log;\
 PUSH_TRANSPORT=log;\
@@ -262,7 +259,6 @@ LECTURAS_RETENCION_DIAS=30" \
   --set-secrets="\
 DB_PASSWORD=DB_PASSWORD:latest,\
 JWT_SECRET=JWT_SECRET:latest,\
-JWT_REFRESH_SECRET=JWT_REFRESH_SECRET:latest,\
 IOT_API_KEY=IOT_API_KEY:latest"
 ```
 
@@ -676,8 +672,8 @@ DB_APP_PASSWORD='<contraseña-larga-generada>' npm run db:rol-app
 npm run db:verificar-privilegios
 
 # El seed levanta un contexto Nest completo, así que AuthModule exige
-# JWT_SECRET y JWT_REFRESH_SECRET aunque solo vaya a insertar filas. Sin
-# ellas falla con "JwtStrategy requires a secret or key", que no sugiere
+# JWT_SECRET aunque solo vaya a insertar filas. Sin
+# él falla con "JwtStrategy requires a secret or key", que no sugiere
 # que lo que falta sea una variable de entorno.
 # SEED_PROPIETARIO_PASSWORD es obligatoria con NODE_ENV=production: sin ella
 # el seed no arranca. La de desarrollo está publicada en el README, y esta es
@@ -1003,3 +999,63 @@ Tres señales de que la VM dejó de alcanzar:
 El camino de salida es el cuerpo de este documento, que ya está escrito: la imagen es la misma y el `.env.app` tiene las mismas variables. Cambia dónde vive el contenedor.
 
 Lo que **no** se lleva es la mitad de la entrega continua que corre en la VM: el `actualizar.sh` da por sentado que hay una máquina persistente con Docker, un checkout de git y los `.env` en disco. En Cloud Run el despliegue lo empuja el CI (`gcloud run deploy`) y las migraciones vuelven a correrse desde una máquina de desarrollo por el proxy, porque no hay dónde guardar la credencial de DDL. La mitad de GitHub Actions —tests, build, publicar la imagen— se reusa tal cual.
+
+
+## Administrador de plataforma (D-025)
+
+El **Administrador de plataforma** da de alta las empresas cliente y su primer
+Propietario desde la Web (*Empresas*). No pertenece a ninguna empresa cliente y
+no ve sus datos.
+
+- La migración `EmpresasYAdministrador` crea el rol y la columna
+  `empresas.es_plataforma`. La empresa de plataforma la crea el seed.
+- Para crear el Administrador en una instancia existente, volver a correr el
+  seed con `SEED_ADMIN_EMAIL` y `SEED_ADMIN_PASSWORD`. Es idempotente: no toca
+  lo que ya existe, y el Administrador entra obligado a cambiar la contraseña.
+
+```bash
+SEED_ADMIN_EMAIL='<correo>' SEED_ADMIN_PASSWORD='<contraseña generada>' npm run seed
+```
+
+- Una empresa desactivada desde *Empresas* corta a todos sus usuarios en la
+  request siguiente: no pueden iniciar ni renovar sesión.
+
+
+## Broker MQTT (D-026)
+
+La telemetría puede entrar por MQTT con TLS además de por HTTP. Es opcional: sin
+estos pasos la VM despliega igual que antes.
+
+1. **Firewall:** abrir el **TCP 8883** hacia la VM (regla de GCP
+   `allow-mqtts`, igual que la de 443).
+2. **`.env` de la infraestructura** (el que lee Compose):
+
+   ```bash
+   COMPOSE_PROFILES=mqtt
+   MQTT_ADMIN_USUARIO=terravid-api
+   MQTT_ADMIN_PASSWORD=<generada: openssl rand -base64 32>
+   ```
+
+   Se usan **solo la primera vez**, para crear en el broker el usuario con el
+   que la API lo administra.
+3. **`.env.app`** (el de la API), con los mismos valores:
+
+   ```bash
+   MQTT_URL=mqtt://mqtt:1883
+   MQTT_USUARIO=terravid-api
+   MQTT_PASSWORD=<la misma de MQTT_ADMIN_PASSWORD>
+   MQTT_URL_PUBLICA=mqtts://terravid-api.duckdns.org:8883
+   ```
+4. `docker compose -f docker-compose.prod.yml up -d`. El broker toma el
+   certificado de Caddy (mismo dominio que la API), así que Caddy tiene que
+   haberlo obtenido antes.
+5. Desde la Web, en cada sensor, **Generar credencial MQTT** y cargarla en el
+   nodo. Contrato completo en [`IOT-MQTT.md`](IOT-MQTT.md).
+
+**Renovación del certificado:** `actualizar.sh` compara la fecha del
+certificado de Caddy con la del arranque del broker y lo reinicia cuando hay
+uno nuevo. Los sensores se reconectan solos.
+
+**Datos del broker:** usuarios y roles viven en el volumen `mqtt_data`
+(`dynamic-security.json`). Si se pierde, hay que regenerar las credenciales de
+todos los sensores desde la Web.

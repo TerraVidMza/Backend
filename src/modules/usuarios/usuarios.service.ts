@@ -17,7 +17,7 @@ import { CreateUsuarioDto } from './dto/create-usuario.dto';
 import { UpdateUsuarioDto } from './dto/update-usuario.dto';
 import { UpdatePerfilDto } from './dto/update-perfil.dto';
 import { ListarUsuariosDto } from './dto/listar-usuarios.dto';
-import { RolNombre } from '../../common/enums/rol.enum';
+import { RolNombre, ROLES_DE_EMPRESA } from '../../common/enums/rol.enum';
 import {
   armarResultado,
   calcularPaginacion,
@@ -123,6 +123,8 @@ export class UsuariosService {
     if (existente) {
       throw new ConflictException('Ya existe un usuario con ese email');
     }
+    // Antes solo `update()` validaba el rol: el alta aceptaba cualquier rolId.
+    await this.verificarRolAsignable(dto.rolId);
 
     const esTemporal = !dto.password;
     const passwordPlano = dto.password ?? this.generarPasswordTemporal();
@@ -234,7 +236,9 @@ export class UsuariosService {
       throw new NotFoundException('El rol indicado no existe.');
     }
 
-    const asignables = Object.values(RolNombre) as string[];
+    // Solo roles de empresa: un Propietario no puede crear administradores de
+    // plataforma (D-025).
+    const asignables = ROLES_DE_EMPRESA as readonly string[];
     if (!asignables.includes(rol.nombreRol)) {
       throw new BadRequestException(
         `El rol "${rol.nombreRol}" no es asignable. Roles válidos: ${asignables.join(', ')}.`,

@@ -13,6 +13,8 @@ export interface JwtPayload {
   empresaId: string;
   /** Identificador del token: lo que se revoca al cerrar sesión (HU-02). */
   jti: string;
+  /** Familia de refresh tokens de la sesión (D-023). Ausente en tokens viejos. */
+  fam?: string;
   /** Vencimiento en segundos Unix, puesto por `jsonwebtoken`. */
   exp?: number;
 }
@@ -25,6 +27,8 @@ export interface AuthenticatedUser {
   /** Necesarios para revocar este token exacto en el logout. */
   jti: string;
   expiraEn: Date | null;
+  /** Sesión (familia de refresh tokens) a la que pertenece el token (D-023). */
+  familiaId: string | null;
 }
 
 @Injectable()
@@ -52,7 +56,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     const usuario = await this.usuariosService.findById(payload.sub);
-    if (!usuario || !usuario.activo) {
+    // Una empresa desactivada corta a todos sus usuarios en la request
+    // siguiente, sin esperar a que venzan los tokens (D-025).
+    if (!usuario || !usuario.activo || usuario.empresa?.activa === false) {
       throw new UnauthorizedException('Usuario inactivo o inexistente');
     }
 
@@ -65,6 +71,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       empresaId: usuario.empresaId,
       jti: payload.jti,
       expiraEn: payload.exp ? new Date(payload.exp * 1000) : null,
+      familiaId: payload.fam ?? null,
     };
   }
 }

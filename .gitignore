@@ -55,3 +55,4 @@ openapi.json
 # de otro directorio, y asi no termina versionado por accidente.
 coverage-e2e/
 coverage/
+coverage-total/
