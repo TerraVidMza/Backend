@@ -61,7 +61,7 @@ La causa de fondo es que **no existe ninguna fuente de ingreso en el modelo de d
 
 **Pendiente de definir:** si el ingreso se registra por remito aprobado (liquidación de bodega) o como precio por kg y variedad. Hasta que exista, el cálculo actual **no debe publicarse como margen**.
 
-**Estado:** 🟡 Decidido, no implementado.
+**Estado:** ✅ Implementado por D-010 (liquidación de bodega por remito).
 
 ---
 

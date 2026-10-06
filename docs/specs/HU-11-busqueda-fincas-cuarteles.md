@@ -40,3 +40,4 @@ Para **encontrar rápidamente la entidad que necesito operar sin tener que recor
 ## Notas / decisiones
 
 - Pendiente confirmar en `fincas.service.ts` / `cuarteles.service.ts` si ya soportan query params de búsqueda/filtro/orden, o si falta agregarlos.
+  **Resuelto:** `GET /cuarteles/buscar` acepta búsqueda, filtros, orden y paginación. (revisión 2026-10-06)

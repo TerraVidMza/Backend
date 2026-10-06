@@ -26,7 +26,7 @@ ERP agrícola para la trazabilidad integral desde la plantación hasta la vendim
 
 ## Requisitos
 
-- Node.js 20+
+- Node.js 24 (`.nvmrc`)
 - Docker Desktop (o una instancia de PostgreSQL con PostGIS accesible)
 
 ## Puesta en marcha
@@ -121,7 +121,8 @@ Sin token, el diagnóstico manda contra uno inválido a propósito. Suena raro p
 ### Pruebas
 
 ```bash
-npm test              # 207 tests unitarios, con umbrales de cobertura por archivo
+npm test              # tests unitarios, con umbrales de cobertura por archivo
+npm run test:cov:total # unit + e2e combinados, mínimo 70 % de líneas (D-028)
 npm run test:e2e      # perimetro de la app + integracion contra la base real
 npm run test:smoke    # 185 casos end-to-end contra la API y la base reales
 ```
@@ -151,7 +152,7 @@ endpoint nuevo es documentar su DTO.
 
 ## Estructura de módulos
 
-Los 24 módulos del backend están construidos y exponen sus endpoints REST. El detalle funcional de cada Historia de Usuario (criterios de aceptación, endpoints, pantalla de Figma, estado real de implementación) vive en [`docs/specs/`](docs/specs/README.md).
+Los módulos del backend están construidos y exponen sus endpoints REST. El detalle funcional de cada Historia de Usuario (criterios de aceptación, endpoints, pantalla de Figma, estado real de implementación) vive en [`docs/specs/`](docs/specs/README.md).
 
 | Módulo | HUs cubiertas | Descripción |
 |---|---|---|
