@@ -676,3 +676,21 @@ dependencias simuladas; los e2e, el camino real contra PostgreSQL.
   entidad.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-029 — Dónde vive cada parte en producción: la VM para el backend, Firebase para los estáticos
+
+**Contexto:** la Web estaba en Firebase Hosting y la PWA de Mobile en la VM, servida por Caddy. Además, la VM (proyecto de GCP `terravid`) y Firebase (proyecto `terravid-24041`) están en proyectos y cuentas de Google distintas, lo que obligaba a trabajar en varios lugares. Se evaluó llevar todo a Firebase o todo a servicios administrados de Google Cloud.
+
+**Decisión:**
+
+- **Backend, PostgreSQL y Mosquitto siguen en la VM** (e2-micro, Docker Compose). Firebase no aloja Postgres ni un broker MQTT, y ni Firebase Hosting ni Cloud Run aceptan TCP directo, que el broker necesita en el 8883. La API mantiene una suscripción fija al broker, que no encaja con instancias que se apagan sin tráfico. Cloud SQL y un broker administrado cuestan más que la e2-micro, que entra en la capa gratuita.
+- **Los estáticos van a Firebase Hosting**, en el mismo proyecto: la Web y, desde M-014 (repo Mobile), la PWA en el sitio `terravid-mobile`. Saca a nginx/Caddy de servir archivos en una VM de 1 GB y deja las dos interfaces con el mismo mecanismo de despliegue.
+- `CORS_ORIGIN` lista los dos orígenes de navegador: `https://terravid-24041.web.app` y `https://terravid-mobile.web.app`. El APK no lo necesita.
+- El bloque `terravid-mobile.duckdns.org` del Caddyfile queda con la última copia de la PWA, sin actualizarse: la base local de la PWA depende del dominio y quien la tenga instalada ahí debe poder sincronizar lo pendiente.
+- Se registró la app Android `com.terravidmza.mobile` en Firebase para las notificaciones push del APK.
+
+**Después de la entrega:** consolidar todo en un solo proyecto de GCP (agregar Firebase al proyecto `terravid` y volver a desplegar la Web y la PWA ahí) y, mientras tanto, dar a cada cuenta acceso al proyecto de la otra. Un entorno de staging sería un segundo stack de Compose en la misma VM más los *preview channels* de Firebase Hosting.
+
+**Estado:** ✅ Vigente.

@@ -11,7 +11,7 @@ ERP agrícola para la trazabilidad integral desde la plantación hasta la vendim
 | [`Backend`](https://github.com/TerraVidMza/Backend) (este repo) | API REST — NestJS + TypeORM + PostgreSQL/PostGIS |
 | [`Web`](https://github.com/TerraVidMza/Web) | Frontend web de oficina (Dashboard, finanzas, ABMs, mapas) |
 | [`Mobile`](https://github.com/TerraVidMza/Mobile) | App móvil offline-first para campo (React Native / Expo) |
-| [`IoTSensor`](https://github.com/TerraVidMza/IoTSensor) | Firmware de los nodos de telemetría (ESP32) |
+| [`IoTSensor`](https://github.com/TerraVidMza/IoTSensor) | Firmware de los nodos de telemetría (ESP32 y ESP8266) |
 
 > Cómo se comunican estos 4 componentes entre sí está detallado en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
