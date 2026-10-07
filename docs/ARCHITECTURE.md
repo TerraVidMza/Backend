@@ -16,19 +16,25 @@ graph LR
   subgraph Clientes
     WEB["Web (React + Vite)<br/>oficina"]
     MOB["Mobile (Expo)<br/>APK + PWA, offline-first"]
-    IOT["Nodos IoT (ESP32)"]
+    IOT["Nodos IoT (ESP32 / ESP8266)"]
+  end
+
+  subgraph FB["Firebase (proyecto terravid-24041)"]
+    HOST["Hosting<br/>Web + PWA"]
+    FCM["Cloud Messaging"]
   end
 
   subgraph VM["VM de Google Cloud (Docker Compose)"]
-    CADDY["Caddy<br/>TLS + reverse proxy<br/>+ estáticos de la PWA"]
+    CADDY["Caddy<br/>TLS + reverse proxy"]
     API["API NestJS 11"]
     MQTT["Mosquitto 2<br/>dynamic security"]
     DB[("PostgreSQL 16")]
   end
 
-  FCM["Firebase Cloud Messaging"]
   SMTP["SMTP de la empresa"]
 
+  HOST -. "estáticos" .-> WEB
+  HOST -. "estáticos" .-> MOB
   WEB -- "HTTPS / REST + JWT" --> CADDY
   MOB -- "HTTPS / REST + JWT<br/>sync por lotes" --> CADDY
   IOT -- "MQTTS :8883<br/>credencial por sensor" --> MQTT
@@ -45,8 +51,8 @@ graph LR
 | API | Backend | NestJS 11, TypeORM, PostgreSQL 16 | Imagen Docker en Artifact Registry; la VM la toma sola (D-019) |
 | Broker MQTT | Backend (`deploy/mosquitto`) | Eclipse Mosquitto 2 + dynamic security | Mismo compose, profile `mqtt` (D-026) |
 | Web | Web | React 19, Vite, TanStack Query, shadcn/ui | Firebase Hosting |
-| Mobile | Mobile | Expo SDK 52, React Native, SQLite (expo-sqlite / sql.js) | APK por EAS Build y PWA servida por Caddy (M-012) |
-| Nodos IoT | IoTSensor | ESP32 | Firmware; contrato en [`IOT-MQTT.md`](IOT-MQTT.md) |
+| Mobile | Mobile | Expo SDK 52, React Native, SQLite (expo-sqlite / sql.js) | APK por EAS Build (M-012) y PWA en Firebase Hosting (M-014) |
+| Nodos IoT | IoTSensor | ESP32 o ESP8266 (NodeMCU), DHT22/DHT11 | Firmware; contrato en [`IOT-MQTT.md`](IOT-MQTT.md) |
 
 ---
 
@@ -117,6 +123,16 @@ lectura una vez por instancia. Ahí sí conviene una cola con lock distribuido
 | **CI** (GitHub Actions) | tsc, eslint, unit, e2e contra una base efímera, cobertura combinada ≥ 70 % (D-028), smoke | PostgreSQL de servicio del job |
 | **Producción** | VM `e2-micro` de Google Cloud: `deploy/docker-compose.prod.yml` (db, api, caddy, mqtt) | PostgreSQL en el mismo compose, backup diario a Cloud Storage |
 
-Dominios actuales: `terravid-api.duckdns.org` (API y broker MQTT) y
-`terravid-mobile.duckdns.org` (PWA). El dominio definitivo será `terravid.com`.
-El procedimiento de despliegue está en [`DESPLIEGUE.md`](DESPLIEGUE.md).
+Dónde vive cada cosa en producción (D-029):
+
+| Qué | Dónde | URL |
+|---|---|---|
+| API y broker MQTT | VM `terravid` (proyecto de GCP `terravid`, e2-micro, us-central1-a) | `terravid-api.duckdns.org` |
+| Web | Firebase Hosting, proyecto `terravid-24041` | `terravid-24041.web.app` |
+| PWA de Mobile | Firebase Hosting, sitio `terravid-mobile` del mismo proyecto | `terravid-mobile.web.app` |
+| APK | EAS Build, proyecto `@sergixfarias/terravid-mobile` | enlace de cada build |
+| Notificaciones push | Firebase Cloud Messaging, proyecto `terravid-24041` | — |
+
+La copia anterior de la PWA en `terravid-mobile.duckdns.org` (Caddy en la VM)
+ya no se actualiza. El dominio definitivo será `terravid.com`. El
+procedimiento de despliegue está en [`DESPLIEGUE.md`](DESPLIEGUE.md).
