@@ -48,6 +48,10 @@
 		level INFO
 	}
 }
+# Copia anterior de la PWA (D-029). Desde M-014 la PWA se publica en Firebase
+# Hosting (terravid-mobile.web.app) y /opt/terravid/mobile ya no se actualiza.
+# Queda para que quien la tenga instalada sincronice lo pendiente: la base
+# local de la PWA depende del dominio. Se puede quitar cuando nadie la use.
 terravid-mobile.duckdns.org {
     root * /srv/mobile
     # PWA de Mobile (M-011): el service worker y el index se revalidan

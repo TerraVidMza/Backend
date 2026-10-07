@@ -281,7 +281,7 @@ gcloud run services logs tail $SERVICE --region=$REGION
 
 ## 9. Conectar el frontend y los nodos IoT
 
-**Frontend.** Su base URL apunta a `https://<tu-url>/api`. Si el dominio del frontend cambia, hay que actualizar `CORS_ORIGIN` y `APP_URL`; el segundo es el que arma los enlaces de los mails de recuperación de contraseña (HU-03), así que un valor viejo genera links rotos.
+**Frontend.** Su base URL apunta a `https://<tu-url>/api`. Si el dominio del frontend cambia, hay que actualizar `CORS_ORIGIN` y `APP_URL`; el segundo es el que arma los enlaces de los mails de recuperación de contraseña (HU-03), así que un valor viejo genera links rotos. `CORS_ORIGIN` admite varios orígenes separados por coma; en producción son dos, la Web y la PWA de Mobile, las dos en Firebase Hosting (`https://terravid-24041.web.app,https://terravid-mobile.web.app`, D-029). Después de cambiarlo hay que recrear el contenedor (`docker compose -f docker-compose.prod.yml up -d --force-recreate api`): un `restart` no vuelve a leer `.env.app`.
 
 **Nodos ESP32.** Cloud Run solo habla HTTPS, sin fallback a HTTP. En el firmware:
 
