@@ -249,6 +249,9 @@ describe('Recorrido de la API (e2e, D-028)', () => {
 
     it('correlación, recomendaciones y comparación de campañas', async () => {
       // Labores en el mismo período para que haya pares que correlacionar.
+      // El tipo de labor se resuelve antes de armar el pedido: otro request
+      // dentro de `.send()` cierra el servidor efímero de supertest (D-030).
+      const tipoLaborId = await primerTipoLabor();
       for (let i = 1; i <= 10; i++) {
         await api()
           .post('/api/registro-labor')
@@ -256,7 +259,7 @@ describe('Recorrido de la API (e2e, D-028)', () => {
           .send({
             localUuid: crypto.randomUUID(),
             cuartelId: ctx.cuartelId,
-            tipoLaborId: await primerTipoLabor(),
+            tipoLaborId,
             fecha: dias(-i * 3),
             cantidad: i,
             insumos: [],
