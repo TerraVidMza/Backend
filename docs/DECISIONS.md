@@ -676,3 +676,27 @@ dependencias simuladas; los e2e, el camino real contra PostgreSQL.
   entidad.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-030 — supertest 7.3 y `@types/uuid` en el grupo de herramientas de desarrollo
+
+**Contexto:** el PR #56 de Dependabot (grupo `herramientas-de-desarrollo`)
+rompió el e2e `recorrido-api` con `TypeError: Cannot read properties of null
+(reading 'address')`. Desde la 7.3, cuando se le pasa un servidor que no está
+escuchando, supertest lo levanta en un puerto efímero por cada `request()` y lo
+cierra cuando termina el último pedido pendiente. El test armaba un pedido y,
+dentro de su `.send({...})`, esperaba `primerTipoLabor()`, que hace otro pedido:
+ese segundo terminaba primero, cerraba el servidor y el primero quedaba sin
+dirección. En el mismo grupo, `@types/uuid` pasaba a la 11.0.0, que es un
+paquete vacío y deprecado: `uuid` 14 ya trae sus propios tipos.
+
+**Decisión:**
+
+- El tipo de labor se resuelve antes del ciclo de pedidos. Regla para los e2e:
+  no anidar un `request()` dentro de la construcción de otro; los valores que
+  dependen de la API se obtienen antes.
+- Se elimina `@types/uuid` de `devDependencies`; al no figurar en
+  `package.json`, Dependabot deja de proponerlo.
+
+**Estado:** ✅ Vigente.
