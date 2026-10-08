@@ -112,7 +112,6 @@ services:
       # para el mismo dominio.
       - caddy_data:/data
       - caddy_config:/config
-      - /opt/terravid/mobile:/srv/mobile
     logging: *logging
 
   mqtt:
