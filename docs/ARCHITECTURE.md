@@ -133,8 +133,8 @@ Dónde vive cada cosa en producción (D-029):
 | APK | EAS Build, proyecto `@sergixfarias/terravid-mobile` | enlace de cada build |
 | Notificaciones push | Firebase Cloud Messaging, proyecto `terravid-24041` | — |
 
-La PWA vieja en `terravid-mobile.duckdns.org` está dada de baja: Caddy
-redirige ese dominio a `terravid-mobile.web.app` (D-032). El dominio definitivo será `terravid.com`. El
+El dominio de la PWA vieja, `terravid-mobile.duckdns.org`, ya no existe
+(D-032). El dominio definitivo será `terravid.com`. El
 procedimiento de despliegue está en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 
 Los dos proyectos de Google (`terravid` y `terravid-24041`) tienen como Owner

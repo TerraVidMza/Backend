@@ -48,28 +48,3 @@
 		level INFO
 	}
 }
-# PWA vieja, dada de baja (D-032). La PWA se publica en Firebase Hosting
-# (M-014); este dominio solo manda a quien entre por acá al sitio nuevo.
-terravid-mobile.duckdns.org {
-	# Quien la tenga instalada recibe este service worker en la próxima
-	# visita con red: borra la caché offline, se desregistra y recarga la
-	# pestaña, que cae en la redirección de abajo. Un service worker no se
-	# puede redirigir, por eso se sirve acá.
-	handle /sw.js {
-		header Content-Type "application/javascript"
-		header Cache-Control "no-cache"
-		respond `self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => {
-	event.waitUntil((async () => {
-		await self.registration.unregister();
-		for (const clave of await caches.keys()) await caches.delete(clave);
-		for (const cliente of await self.clients.matchAll({ type: 'window' })) cliente.navigate(cliente.url);
-	})());
-});
-` 200
-	}
-
-	handle {
-		redir https://terravid-mobile.web.app{uri} permanent
-	}
-}
