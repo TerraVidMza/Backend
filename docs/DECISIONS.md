@@ -688,7 +688,7 @@ dependencias simuladas; los e2e, el camino real contra PostgreSQL.
 - **Backend, PostgreSQL y Mosquitto siguen en la VM** (e2-micro, Docker Compose). Firebase no aloja Postgres ni un broker MQTT, y ni Firebase Hosting ni Cloud Run aceptan TCP directo, que el broker necesita en el 8883. La API mantiene una suscripción fija al broker, que no encaja con instancias que se apagan sin tráfico. Cloud SQL y un broker administrado cuestan más que la e2-micro, que entra en la capa gratuita.
 - **Los estáticos van a Firebase Hosting**, en el mismo proyecto: la Web y, desde M-014 (repo Mobile), la PWA en el sitio `terravid-mobile`. Saca a nginx/Caddy de servir archivos en una VM de 1 GB y deja las dos interfaces con el mismo mecanismo de despliegue.
 - `CORS_ORIGIN` lista los dos orígenes de navegador: `https://terravid-24041.web.app` y `https://terravid-mobile.web.app`. El APK no lo necesita.
-- El bloque `terravid-mobile.duckdns.org` del Caddyfile queda con la última copia de la PWA, sin actualizarse: la base local de la PWA depende del dominio y quien la tenga instalada ahí debe poder sincronizar lo pendiente.
+- El bloque `terravid-mobile.duckdns.org` del Caddyfile queda con la última copia de la PWA, sin actualizarse: la base local de la PWA depende del dominio y quien la tenga instalada ahí debe poder sincronizar lo pendiente. *Reemplazado por D-032: el dominio ahora redirige al sitio de Firebase.*
 - Se registró la app Android `com.terravidmza.mobile` en Firebase para las notificaciones push del APK.
 
 **Después de la entrega:** consolidar todo en un solo proyecto de GCP (agregar Firebase al proyecto `terravid` y volver a desplegar la Web y la PWA ahí) y, mientras tanto, dar a cada cuenta acceso al proyecto de la otra. Un entorno de staging sería un segundo stack de Compose en la misma VM más los *preview channels* de Firebase Hosting.
@@ -734,3 +734,22 @@ paquete vacío y deprecado: `uuid` 14 ya trae sus propios tipos.
 **Alternativa descartada:** `roles/editor` + `roles/resourcemanager.projectIamAdmin`, que se pueden dar por CLI sin invitación. Dejan afuera parte de la facturación y obligan a sumar roles a medida que aparecen permisos faltantes.
 
 **Después de la entrega:** sigue en pie consolidar todo en un solo proyecto (D-029). Con el acceso cruzado, cualquiera de las dos cuentas puede hacer la migración.
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-032 — Baja de la PWA vieja en `terravid-mobile.duckdns.org`
+
+**Contexto:** desde M-014 (repo Mobile) la PWA se publica en Firebase Hosting (`https://terravid-mobile.web.app`). D-029 dejó la copia anterior en la VM, servida por Caddy desde `/opt/terravid/mobile`, para que quien la tuviera instalada pudiera sincronizar lo pendiente. La migración terminó y esa copia ya no se usa.
+
+**Decisión:** el bloque `terravid-mobile.duckdns.org` del Caddyfile deja de servir archivos.
+
+- Toda ruta responde **301** a la misma ruta en `https://terravid-mobile.web.app`, así los marcadores y los enlaces viejos siguen funcionando.
+- `/sw.js` es la excepción: un service worker no se puede redirigir, así que Caddy responde uno que borra la caché, se desregistra y recarga la pestaña. Quien tenga la PWA vieja instalada lo recibe en la próxima visita con red y cae en la redirección. Lo que no se haya sincronizado desde ese dominio queda en el navegador y no pasa al sitio nuevo.
+- `docker-compose.prod.yml` ya no monta `/opt/terravid/mobile` en Caddy. El directorio se borra a mano en la VM.
+- `CORS_ORIGIN` queda con los dos orígenes de Firebase de D-029; si en la VM todavía figura `https://terravid-mobile.duckdns.org`, se saca.
+
+**Cuándo quitar el bloque:** cuando ya no entre tráfico por ese dominio (`grep terravid-mobile.duckdns.org` en el log de Caddy). Hay que mantener el subdominio de DuckDNS mientras exista el bloque: sin DNS, Caddy no renueva el certificado.
+
+**Estado:** ✅ Vigente.
