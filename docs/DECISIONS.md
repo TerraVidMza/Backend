@@ -694,3 +694,21 @@ dependencias simuladas; los e2e, el camino real contra PostgreSQL.
 **Después de la entrega:** consolidar todo en un solo proyecto de GCP (agregar Firebase al proyecto `terravid` y volver a desplegar la Web y la PWA ahí) y, mientras tanto, dar a cada cuenta acceso al proyecto de la otra. Un entorno de staging sería un segundo stack de Compose en la misma VM más los *preview channels* de Firebase Hosting.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-031 — Acceso cruzado entre las dos cuentas de Google: Owner en los dos proyectos
+
+**Contexto:** la VM vive en el proyecto de GCP `terravid` y Firebase en `terravid-24041`, cada uno con una cuenta de Google distinta como único Owner (D-029). Para revisar la VM había que entrar con una cuenta y para Firebase con la otra. D-029 dejaba pendiente dar a cada cuenta acceso al proyecto de la otra hasta consolidar.
+
+**Decisión:** cada cuenta es **Owner** de los dos proyectos. Owner cubre la consola de GCP (VM, IAM, Cloud Storage, Workload Identity) y la de Firebase (Hosting, Cloud Messaging, apps), así que alcanza con un solo rol.
+
+- Google no deja asignar Owner a una cuenta nueva por `gcloud`/API: `terravid` está en una organización y devuelve `ORG_MUST_INVITE_EXTERNAL_OWNERS`, y `terravid-24041`, sin organización, devuelve `SOLO_MUST_INVITE_OWNERS`. Hay que invitar desde la consola (IAM en GCP o *Usuarios y permisos* en Firebase), y la cuenta invitada tiene que aceptar el mail.
+- La organización de `terravid` no restringe dominios (`iam.allowedPolicyMemberDomains` en `ALLOW`), por eso se acepta una Gmail de afuera.
+- Se verificó con `gcloud projects get-iam-policy` usando cada cuenta en los dos proyectos, listando la VM de `terravid` con la cuenta de Firebase y los sitios de Hosting de `terravid-24041` con la cuenta de GCP.
+
+**Alternativa descartada:** `roles/editor` + `roles/resourcemanager.projectIamAdmin`, que se pueden dar por CLI sin invitación. Dejan afuera parte de la facturación y obligan a sumar roles a medida que aparecen permisos faltantes.
+
+**Después de la entrega:** sigue en pie consolidar todo en un solo proyecto (D-029). Con el acceso cruzado, cualquiera de las dos cuentas puede hacer la migración.
+
+**Estado:** ✅ Vigente.
