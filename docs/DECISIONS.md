@@ -691,7 +691,7 @@ dependencias simuladas; los e2e, el camino real contra PostgreSQL.
 - El bloque `terravid-mobile.duckdns.org` del Caddyfile queda con la última copia de la PWA, sin actualizarse: la base local de la PWA depende del dominio y quien la tenga instalada ahí debe poder sincronizar lo pendiente. *Reemplazado por D-032: el dominio ahora redirige al sitio de Firebase.*
 - Se registró la app Android `com.terravidmza.mobile` en Firebase para las notificaciones push del APK.
 
-**Después de la entrega:** consolidar todo en un solo proyecto de GCP (agregar Firebase al proyecto `terravid` y volver a desplegar la Web y la PWA ahí) y, mientras tanto, dar a cada cuenta acceso al proyecto de la otra. Un entorno de staging sería un segundo stack de Compose en la misma VM más los *preview channels* de Firebase Hosting.
+**Después de la entrega:** consolidar todo en un solo proyecto de GCP (agregar Firebase al proyecto `terravid` y volver a desplegar la Web y la PWA ahí) y, mientras tanto, dar a cada cuenta acceso al proyecto de la otra. *Actualización:* la consolidación se adelantó y se hizo antes de la entrega (D-033). Un entorno de staging sería un segundo stack de Compose en la misma VM más los *preview channels* de Firebase Hosting.
 
 **Estado:** ✅ Vigente.
 
@@ -751,5 +751,31 @@ paquete vacío y deprecado: `uuid` 14 ya trae sus propios tipos.
 - `CORS_ORIGIN` queda con los dos orígenes de Firebase de D-029; si en la VM todavía figura `https://terravid-mobile.duckdns.org`, se saca.
 
 **Baja completa (2026-10-08):** el dominio dejó de usarse, así que se sacó el bloque del Caddyfile (con la redirección y el `sw.js` de baja) y se borró el subdominio en DuckDNS. Caddy deja de renovar ese certificado; el que quedó en `caddy_data` vence solo y no molesta. `terravid-api.duckdns.org` sigue igual: es la API y el broker MQTT.
+
+**Estado:** ✅ Vigente.
+
+---
+
+## D-033 — Un solo proyecto de Google Cloud: `terravid`
+
+**Contexto:** la VM, Artifact Registry y Workload Identity Federation estaban en el proyecto `terravid`, y la Web, la PWA y FCM en el proyecto de Firebase `terravid-24041`, de otra cuenta y sin facturación. D-029 dejó la unificación para después de la entrega; se decidió adelantarla para defender el sistema ya unificado.
+
+**Decisión:** todo queda en `terravid`. Se le agregó Firebase al proyecto en vez de mudar la VM al de Firebase: la VM, su IP, el registro de imágenes, WIF y los certificados de la API y de MQTT no se pueden mover entre proyectos, mientras que dos sitios estáticos y una app de FCM se recrean en minutos.
+
+| Qué | Antes (`terravid-24041`) | Ahora (`terravid`) |
+|---|---|---|
+| Web | `terravid-24041.web.app` | `terravid.web.app` (sitio por defecto) |
+| PWA | `terravid-mobile.web.app` | `terravid-app.web.app` |
+| App Android para FCM | `com.terravidmza.mobile` | la misma, registrada de nuevo |
+| Despliegue de Web y PWA | clave JSON en un secret | WIF con la cuenta `despliegue-firebase` |
+| Push desde la API | clave del `firebase-adminsdk` | cuenta de servicio de la VM, sin clave |
+
+- **Push sin clave.** La organización de `terravid` tiene activa `iam.disableServiceAccountKeyCreation`, así que no se puede bajar el JSON del service account de Firebase. `PushService` ahora acepta solo `FIREBASE_PROJECT_ID`: sin `FIREBASE_CLIENT_EMAIL` ni `FIREBASE_PRIVATE_KEY` usa `applicationDefault()`, que en la VM toma la cuenta de servicio por defecto desde el servidor de metadatos (los contenedores de Docker lo alcanzan). Esa cuenta tiene el scope `cloud-platform` y recibió `roles/firebasecloudmessaging.admin`. El modo con clave sigue funcionando igual; si vino solo una de las dos variables de la clave, el push queda deshabilitado y el diagnóstico dice cuál falta. `npm run push:diagnostico` distingue además la falta del rol de envío (`cloudmessaging.messages.create`) de la API apagada.
+- **Despliegue sin claves.** La cuenta `despliegue-firebase` tiene solo `roles/firebasehosting.admin` y `roles/serviceusage.serviceUsageConsumer`, y solo la pueden usar los repos Web y Mobile a través del pool `github` que ya usaba el backend (W-030 y M-015).
+- **Variables de la VM** (`/opt/backend/deploy/.env.app`): `CORS_ORIGIN=https://terravid.web.app,https://terravid-app.web.app` más los dos orígenes viejos mientras dura el 301; `APP_URL=https://terravid.web.app`; `PUSH_TRANSPORT=fcm`, `FIREBASE_PROJECT_ID=terravid` y `FIREBASE_CLIENT_EMAIL` y `FIREBASE_PRIVATE_KEY` vacías. Después hay que recrear el contenedor `api`.
+- **Corte:** se despliegan la Web y la PWA nuevas, se actualiza la VM, los sitios viejos pasan a responder **301** a los nuevos y se compila un APK nuevo, que registra sus tokens en `terravid`. Los APK anteriores dejan de recibir push hasta que se actualicen.
+- **Baja del proyecto viejo:** el 301 queda 7 días; después se borra `terravid-24041` (Google lo conserva 30 días más por si hubiera que recuperarlo) y se sacan de `CORS_ORIGIN` los orígenes viejos.
+
+**Costo asumido:** la base local de la PWA depende del origen. Al cambiar de dirección, quien la tenga instalada empieza con una base vacía: **antes del corte hay que sincronizar los pendientes** o sacar un respaldo (M-008 del repo Mobile).
 
 **Estado:** ✅ Vigente.
