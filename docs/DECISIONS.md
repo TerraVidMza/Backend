@@ -697,6 +697,30 @@ dependencias simuladas; los e2e, el camino real contra PostgreSQL.
 
 ---
 
+## D-030 — supertest 7.3 y `@types/uuid` en el grupo de herramientas de desarrollo
+
+**Contexto:** el PR #56 de Dependabot (grupo `herramientas-de-desarrollo`)
+rompió el e2e `recorrido-api` con `TypeError: Cannot read properties of null
+(reading 'address')`. Desde la 7.3, cuando se le pasa un servidor que no está
+escuchando, supertest lo levanta en un puerto efímero por cada `request()` y lo
+cierra cuando termina el último pedido pendiente. El test armaba un pedido y,
+dentro de su `.send({...})`, esperaba `primerTipoLabor()`, que hace otro pedido:
+ese segundo terminaba primero, cerraba el servidor y el primero quedaba sin
+dirección. En el mismo grupo, `@types/uuid` pasaba a la 11.0.0, que es un
+paquete vacío y deprecado: `uuid` 14 ya trae sus propios tipos.
+
+**Decisión:**
+
+- El tipo de labor se resuelve antes del ciclo de pedidos. Regla para los e2e:
+  no anidar un `request()` dentro de la construcción de otro; los valores que
+  dependen de la API se obtienen antes.
+- Se elimina `@types/uuid` de `devDependencies`; al no figurar en
+  `package.json`, Dependabot deja de proponerlo.
+
+**Estado:** ✅ Vigente.
+
+---
+
 ## D-031 — Acceso cruzado entre las dos cuentas de Google: Owner en los dos proyectos
 
 **Contexto:** la VM vive en el proyecto de GCP `terravid` y Firebase en `terravid-24041`, cada uno con una cuenta de Google distinta como único Owner (D-029). Para revisar la VM había que entrar con una cuenta y para Firebase con la otra. D-029 dejaba pendiente dar a cada cuenta acceso al proyecto de la otra hasta consolidar.
@@ -710,5 +734,3 @@ dependencias simuladas; los e2e, el camino real contra PostgreSQL.
 **Alternativa descartada:** `roles/editor` + `roles/resourcemanager.projectIamAdmin`, que se pueden dar por CLI sin invitación. Dejan afuera parte de la facturación y obligan a sumar roles a medida que aparecen permisos faltantes.
 
 **Después de la entrega:** sigue en pie consolidar todo en un solo proyecto (D-029). Con el acceso cruzado, cualquiera de las dos cuentas puede hacer la migración.
-
-**Estado:** ✅ Vigente.
