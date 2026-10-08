@@ -750,6 +750,6 @@ paquete vacío y deprecado: `uuid` 14 ya trae sus propios tipos.
 - `docker-compose.prod.yml` ya no monta `/opt/terravid/mobile` en Caddy. El directorio se borra a mano en la VM.
 - `CORS_ORIGIN` queda con los dos orígenes de Firebase de D-029; si en la VM todavía figura `https://terravid-mobile.duckdns.org`, se saca.
 
-**Cuándo quitar el bloque:** cuando ya no entre tráfico por ese dominio (`grep terravid-mobile.duckdns.org` en el log de Caddy). Hay que mantener el subdominio de DuckDNS mientras exista el bloque: sin DNS, Caddy no renueva el certificado.
+**Baja completa (2026-10-08):** el dominio dejó de usarse, así que se sacó el bloque del Caddyfile (con la redirección y el `sw.js` de baja) y se borró el subdominio en DuckDNS. Caddy deja de renovar ese certificado; el que quedó en `caddy_data` vence solo y no molesta. `terravid-api.duckdns.org` sigue igual: es la API y el broker MQTT.
 
 **Estado:** ✅ Vigente.
