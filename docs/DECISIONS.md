@@ -734,3 +734,5 @@ paquete vacío y deprecado: `uuid` 14 ya trae sus propios tipos.
 **Alternativa descartada:** `roles/editor` + `roles/resourcemanager.projectIamAdmin`, que se pueden dar por CLI sin invitación. Dejan afuera parte de la facturación y obligan a sumar roles a medida que aparecen permisos faltantes.
 
 **Después de la entrega:** sigue en pie consolidar todo en un solo proyecto (D-029). Con el acceso cruzado, cualquiera de las dos cuentas puede hacer la migración.
+
+**Estado:** ✅ Vigente.
