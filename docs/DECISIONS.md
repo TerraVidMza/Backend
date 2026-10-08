@@ -776,6 +776,8 @@ paquete vacío y deprecado: `uuid` 14 ya trae sus propios tipos.
 - **Corte:** se despliegan la Web y la PWA nuevas, se actualiza la VM, los sitios viejos pasan a responder **301** a los nuevos y se compila un APK nuevo, que registra sus tokens en `terravid`. Los APK anteriores dejan de recibir push hasta que se actualicen.
 - **Baja del proyecto viejo:** el 301 queda 7 días; después se borra `terravid-24041` (Google lo conserva 30 días más por si hubiera que recuperarlo) y se sacan de `CORS_ORIGIN` los orígenes viejos.
 
+**Incidente del corte (2026-10-08):** al pasar la VM a `PUSH_TRANSPORT=fcm` sin clave, la API no arrancó (Caddy devolvió 502): `validarEntorno` seguía exigiendo `FIREBASE_CLIENT_EMAIL` y `FIREBASE_PRIVATE_KEY` con `fcm`, y el PR que agregó el modo sin clave no lo cambió. Se volvió a `PUSH_TRANSPORT=log` para recuperar el servicio y se corrigió el validador con la misma regla que `resolverCredenciales`: con `fcm` exige el proyecto, y la clave solo si vino una de sus dos partes. Ahora hay un test con la configuración exacta de producción.
+
 **Costo asumido:** la base local de la PWA depende del origen. Al cambiar de dirección, quien la tenga instalada empieza con una base vacía: **antes del corte hay que sincronizar los pendientes** o sacar un respaldo (M-008 del repo Mobile).
 
 **Estado:** ✅ Vigente.
