@@ -776,6 +776,14 @@ paquete vacío y deprecado: `uuid` 14 ya trae sus propios tipos.
 - **Corte:** se despliegan la Web y la PWA nuevas, se actualiza la VM, los sitios viejos pasan a responder **301** a los nuevos y se compila un APK nuevo, que registra sus tokens en `terravid`. Los APK anteriores dejan de recibir push hasta que se actualicen.
 - **Baja del proyecto viejo:** el 301 queda 7 días; después se borra `terravid-24041` (Google lo conserva 30 días más por si hubiera que recuperarlo) y se sacan de `CORS_ORIGIN` los orígenes viejos.
 
+**Redirección de los sitios viejos (publicada el 2026-10-08, se borra el proyecto desde el 2026-10-15):** `terravid-24041.web.app` va a `terravid.web.app` y `terravid-mobile.web.app` a `terravid-app.web.app`, conservando la ruta y el query string. La única excepción es `/sw.js`, que sirve el mismo service worker de baja que D-032: borra la caché, se desregistra y recarga la pestaña, que cae en el 301. Un service worker no se puede redirigir, y sin esto la PWA instalada seguiría abriendo la copia vieja desde la caché. No toca IndexedDB: si apareciera alguien con pendientes, alcanza con volver a desplegar el sitio viejo sin el 301 para que sincronice. Firebase aplica los redirects antes que los archivos y su motor de regex (RE2) no tiene lookahead, así que la excepción es una regex que matchea toda ruta salvo `/sw.js`:
+
+```
+^/(?P<ruta>(|[^s].*|s|s[^w].*|sw|sw[^.].*|sw\.|sw\.[^j].*|sw\.j|sw\.j[^s].*|sw\.js.+))$  ->  https://<sitio nuevo>/:ruta  (301)
+```
+
+Se probó primero en un canal de preview del proyecto viejo. Como esa configuración no vive en ningún repo (el proyecto se borra), queda registrada acá.
+
 **Incidente del corte (2026-10-08):** al pasar la VM a `PUSH_TRANSPORT=fcm` sin clave, la API no arrancó (Caddy devolvió 502): `validarEntorno` seguía exigiendo `FIREBASE_CLIENT_EMAIL` y `FIREBASE_PRIVATE_KEY` con `fcm`, y el PR que agregó el modo sin clave no lo cambió. Se volvió a `PUSH_TRANSPORT=log` para recuperar el servicio y se corrigió el validador con la misma regla que `resolverCredenciales`: con `fcm` exige el proyecto, y la clave solo si vino una de sus dos partes. Ahora hay un test con la configuración exacta de producción.
 
 **Costo asumido:** la base local de la PWA depende del origen. Al cambiar de dirección, quien la tenga instalada empieza con una base vacía: **antes del corte hay que sincronizar los pendientes** o sacar un respaldo (M-008 del repo Mobile).
