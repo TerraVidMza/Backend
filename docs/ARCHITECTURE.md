@@ -136,3 +136,7 @@ Dónde vive cada cosa en producción (D-029):
 La copia anterior de la PWA en `terravid-mobile.duckdns.org` (Caddy en la VM)
 ya no se actualiza. El dominio definitivo será `terravid.com`. El
 procedimiento de despliegue está en [`DESPLIEGUE.md`](DESPLIEGUE.md).
+
+Los dos proyectos de Google (`terravid` y `terravid-24041`) tienen como Owner
+a las mismas dos cuentas, así que cualquiera de las dos administra la VM y
+Firebase (D-031).
