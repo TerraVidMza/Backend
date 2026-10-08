@@ -186,7 +186,7 @@ crear_secreto IOT_API_KEY         "$(openssl rand -hex 32)"
 
 La clave IoT que se genera acá es la que va a los nodos ESP32 en el header `X-Api-Key`. Anotala aparte: se necesita al flashear el firmware.
 
-Si se activan mails reales (`MAIL_TRANSPORT=smtp`) y push real (`PUSH_TRANSPORT=fcm`), agregá `SMTP_PASS` y `FIREBASE_PRIVATE_KEY`.
+Si se activan mails reales (`MAIL_TRANSPORT=smtp`), agregá `SMTP_PASS`. El push real (`PUSH_TRANSPORT=fcm`) no necesita secreto: va con `FIREBASE_PROJECT_ID` y la cuenta de servicio del entorno (D-033).
 
 > **El correo tiene otra trampa, y es peor porque no deja rastro.** `MailService.resolverSmtp()` le da prioridad a la configuración de la empresa guardada en la tabla `configuracion` sobre las variables de entorno —es la base del multi-tenant: cada empresa puede tener su propio SMTP—. El seed sembraba ahí `smtp_from = TerraVid <no-reply@terravid.demo>`, un dominio inexistente, y ese valor **pisa a `MAIL_FROM`**. El resultado es el peor modo de falla posible: el relay acepta el mensaje en el protocolo SMTP, lo descarta después por remitente no autorizado, y la aplicación reporta éxito —`MailService` solo registra algo si hay excepción o si falta el host—. No llega ningún correo y los logs están limpios.
 >
@@ -281,7 +281,7 @@ gcloud run services logs tail $SERVICE --region=$REGION
 
 ## 9. Conectar el frontend y los nodos IoT
 
-**Frontend.** Su base URL apunta a `https://<tu-url>/api`. Si el dominio del frontend cambia, hay que actualizar `CORS_ORIGIN` y `APP_URL`; el segundo es el que arma los enlaces de los mails de recuperación de contraseña (HU-03), así que un valor viejo genera links rotos. `CORS_ORIGIN` admite varios orígenes separados por coma; en producción son dos, la Web y la PWA de Mobile, las dos en Firebase Hosting (`https://terravid-24041.web.app,https://terravid-mobile.web.app`, D-029). Después de cambiarlo hay que recrear el contenedor (`docker compose -f docker-compose.prod.yml up -d --force-recreate api`): un `restart` no vuelve a leer `.env.app`.
+**Frontend.** Su base URL apunta a `https://<tu-url>/api`. Si el dominio del frontend cambia, hay que actualizar `CORS_ORIGIN` y `APP_URL`; el segundo es el que arma los enlaces de los mails de recuperación de contraseña (HU-03), así que un valor viejo genera links rotos. `CORS_ORIGIN` admite varios orígenes separados por coma; en producción son dos, la Web y la PWA de Mobile, las dos en Firebase Hosting del proyecto `terravid` (`https://terravid.web.app,https://terravid-app.web.app`, D-029 y D-033). `APP_URL` es `https://terravid.web.app`. Después de cambiarlo hay que recrear el contenedor (`docker compose -f docker-compose.prod.yml up -d --force-recreate api`): un `restart` no vuelve a leer `.env.app`.
 
 **Nodos ESP32.** Cloud Run solo habla HTTPS, sin fallback a HTTP. En el firmware:
 
@@ -416,7 +416,7 @@ Requiere `billingbudgets.googleapis.com`, que se habilita en [A.3](#a3-requisito
 - Las variables del [§3](#3-proyecto-variables-y-apis) definidas, y las APIs habilitadas — de esa lista, para este camino hacen falta `compute.googleapis.com`, `artifactregistry.googleapis.com` y `storage.googleapis.com`.
 
 ```bash
-PROJECT=terravid-prod
+PROJECT=terravid
 ZONA=us-central1-a
 REGION=us-central1
 VM=terravid

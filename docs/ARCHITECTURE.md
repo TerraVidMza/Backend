@@ -19,7 +19,7 @@ graph LR
     IOT["Nodos IoT (ESP32 / ESP8266)"]
   end
 
-  subgraph FB["Firebase (proyecto terravid-24041)"]
+  subgraph FB["Firebase (proyecto terravid)"]
     HOST["Hosting<br/>Web + PWA"]
     FCM["Cloud Messaging"]
   end
@@ -123,20 +123,20 @@ lectura una vez por instancia. Ahí sí conviene una cola con lock distribuido
 | **CI** (GitHub Actions) | tsc, eslint, unit, e2e contra una base efímera, cobertura combinada ≥ 70 % (D-028), smoke | PostgreSQL de servicio del job |
 | **Producción** | VM `e2-micro` de Google Cloud: `deploy/docker-compose.prod.yml` (db, api, caddy, mqtt) | PostgreSQL en el mismo compose, backup diario a Cloud Storage |
 
-Dónde vive cada cosa en producción (D-029):
+Dónde vive cada cosa en producción (D-029, D-033). Todo está en un solo proyecto de Google Cloud, `terravid`:
 
 | Qué | Dónde | URL |
 |---|---|---|
 | API y broker MQTT | VM `terravid` (proyecto de GCP `terravid`, e2-micro, us-central1-a) | `terravid-api.duckdns.org` |
-| Web | Firebase Hosting, proyecto `terravid-24041` | `terravid-24041.web.app` |
-| PWA de Mobile | Firebase Hosting, sitio `terravid-mobile` del mismo proyecto | `terravid-mobile.web.app` |
+| Web | Firebase Hosting, sitio por defecto | `terravid.web.app` |
+| PWA de Mobile | Firebase Hosting, sitio `terravid-app` | `terravid-app.web.app` |
 | APK | EAS Build, proyecto `@sergixfarias/terravid-mobile` | enlace de cada build |
-| Notificaciones push | Firebase Cloud Messaging, proyecto `terravid-24041` | — |
+| Notificaciones push | Firebase Cloud Messaging, con la cuenta de servicio de la VM (sin clave) | — |
 
 El dominio de la PWA vieja, `terravid-mobile.duckdns.org`, ya no existe
 (D-032). El dominio definitivo será `terravid.com`. El
 procedimiento de despliegue está en [`DESPLIEGUE.md`](DESPLIEGUE.md).
 
-Los dos proyectos de Google (`terravid` y `terravid-24041`) tienen como Owner
-a las mismas dos cuentas, así que cualquiera de las dos administra la VM y
-Firebase (D-031).
+Las dos cuentas de Google del equipo son Owner de `terravid` (D-031). El
+proyecto anterior de Firebase, `terravid-24041`, solo redirige con un 301 a
+las direcciones nuevas durante 7 días y después se borra (D-033).

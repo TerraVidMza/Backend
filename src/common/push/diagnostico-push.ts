@@ -1,8 +1,9 @@
 import 'reflect-metadata';
 import { config as cargarEnv } from 'dotenv';
-import { cert, deleteApp, initializeApp } from 'firebase-admin/app';
+import { deleteApp, initializeApp } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 import {
+  credencialDe,
   diagnosticarCredenciales,
   modoFcm,
   resolverCredenciales,
@@ -73,13 +74,19 @@ async function diagnosticar(): Promise<void> {
   if (problema.faltantes.length > 0) {
     console.log(`  FALLA  faltan: ${problema.faltantes.join(', ')}`);
     console.log(
-      '         Salen del JSON del service account: project_id, client_email y private_key.',
+      problema.modo === 'adc'
+        ? '         Sin clave alcanza con FIREBASE_PROJECT_ID (el ID del proyecto de Firebase).'
+        : '         Con clave van las tres, del mismo JSON del service account: project_id, client_email y private_key.',
     );
     process.exit(1);
   }
-  console.log(`  OK     las tres variables están definidas`);
+  console.log(
+    problema.modo === 'adc'
+      ? '  OK     FIREBASE_PROJECT_ID definido, sin clave: se usa la cuenta de servicio del entorno'
+      : '  OK     las tres variables están definidas',
+  );
 
-  if (problema.claveMalFormada) {
+  if (problema.modo === 'clave' && problema.claveMalFormada) {
     console.log(
       '  FALLA  FIREBASE_PRIVATE_KEY no parece una clave PEM completa',
     );
@@ -91,7 +98,9 @@ async function diagnosticar(): Promise<void> {
     );
     process.exit(1);
   }
-  console.log('  OK     FIREBASE_PRIVATE_KEY tiene forma de clave PEM');
+  if (problema.modo === 'clave') {
+    console.log('  OK     FIREBASE_PRIVATE_KEY tiene forma de clave PEM');
+  }
 
   // --- 3. Inicialización del SDK
   const credenciales = resolverCredenciales();
@@ -104,7 +113,10 @@ async function diagnosticar(): Promise<void> {
 
   // Nombre propio para no chocar con la app por defecto si algo más la creó.
   const app = initializeApp(
-    { credential: cert(credenciales) },
+    {
+      credential: credencialDe(credenciales),
+      projectId: credenciales.projectId,
+    },
     'diagnostico-terravid',
   );
   console.log(`  OK     SDK inicializado (proyecto ${credenciales.projectId})`);
@@ -250,6 +262,19 @@ export function interpretar(error: unknown, conTokenReal: boolean): Veredicto {
       detalle: 'Firebase rechazó las credenciales.',
       sugerencia:
         'Revisá que las tres variables salgan del MISMO JSON y que la clave no esté truncada. Si la rotaste, la vieja deja de servir.',
+    };
+  }
+
+  // Autenticó, pero la cuenta no tiene permiso de envío. Es el caso típico
+  // sin clave: la cuenta de servicio de la VM necesita su rol (D-033). Va
+  // antes que el de la API apagada, que también llega como PERMISSION_DENIED.
+  if (/cloudmessaging\.messages\.create/i.test(mensaje)) {
+    return {
+      credencialesOk: false,
+      entregado: false,
+      detalle: 'La cuenta autenticó, pero no tiene permiso para enviar push.',
+      sugerencia:
+        'Darle roles/firebasecloudmessaging.admin en el proyecto de Firebase a la cuenta de servicio que se está usando.',
     };
   }
 
