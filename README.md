@@ -98,7 +98,10 @@ El orden completo para producción —crear la instancia, migrar, crear el rol, 
 
 ### Push a móviles (Firebase)
 
-`PUSH_TRANSPORT=log` escribe el envío en consola y alcanza para desarrollo. Para mandar de verdad hacen falta las credenciales del service account (Firebase → ⚙️ Configuración del proyecto → **Cuentas de servicio** → *Generar nueva clave privada*), que van a `.env`:
+`PUSH_TRANSPORT=log` escribe el envío en consola y alcanza para desarrollo. Para mandar de verdad hay dos caminos ([D-033](docs/DECISIONS.md)):
+
+- **Sin clave** (el de producción): `PUSH_TRANSPORT=fcm` y `FIREBASE_PROJECT_ID=terravid`, nada más. El SDK usa las credenciales por defecto del entorno: en la VM, su cuenta de servicio, que tiene `roles/firebasecloudmessaging.admin`; en una PC, las de `gcloud auth application-default login`. La organización de `terravid` no deja crear claves de cuentas de servicio.
+- **Con clave**, para un proyecto de Firebase que sí lo permita: las credenciales del service account (Firebase → ⚙️ Configuración del proyecto → **Cuentas de servicio** → *Generar nueva clave privada*), que van a `.env`:
 
 ```bash
 PUSH_TRANSPORT=fcm

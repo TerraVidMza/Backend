@@ -3,10 +3,11 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository } from 'typeorm';
 // firebase-admin v14 expone la API modular: el namespace `admin.*` de las
 // versiones viejas ya no existe.
-import { App, cert, getApp, getApps, initializeApp } from 'firebase-admin/app';
+import { App, getApp, getApps, initializeApp } from 'firebase-admin/app';
 import { getMessaging, SendResponse } from 'firebase-admin/messaging';
 import { DeviceToken } from '../../modules/notificaciones/entities/device-token.entity';
 import {
+  credencialDe,
   modoFcm,
   resolverCredenciales,
   VARIABLES_FIREBASE,
@@ -60,7 +61,9 @@ export class PushService implements OnModuleInit {
   /**
    * Inicializa el SDK una sola vez. Las credenciales salen de variables de
    * entorno y no de un archivo JSON en el repo: el service account es un
-   * secreto, y un `firebase-key.json` commiteado es el accidente clásico.
+   * secreto, y un `firebase-key.json` commiteado es el accidente clásico. En
+   * producción ni siquiera hay clave: con solo `FIREBASE_PROJECT_ID` se usa la
+   * cuenta de servicio de la VM (D-033).
    *
    * **No lanza si las credenciales faltan o están mal.** Un problema de push no
    * puede impedir que la API levante; queda deshabilitado y avisado en el log.
@@ -71,7 +74,7 @@ export class PushService implements OnModuleInit {
     const credenciales = resolverCredenciales();
     if (!credenciales) {
       this.logger.warn(
-        `PUSH_TRANSPORT=fcm pero faltan ${VARIABLES_FIREBASE.join(', ')}: el push queda deshabilitado.`,
+        `PUSH_TRANSPORT=fcm pero falta FIREBASE_PROJECT_ID, o vino solo una de ${VARIABLES_FIREBASE.slice(1).join(' y ')}: el push queda deshabilitado.`,
       );
       return;
     }
@@ -79,9 +82,12 @@ export class PushService implements OnModuleInit {
     try {
       this.app = getApps().length
         ? getApp()
-        : initializeApp({ credential: cert(credenciales) });
+        : initializeApp({
+            credential: credencialDe(credenciales),
+            projectId: credenciales.projectId,
+          });
       this.logger.log(
-        `Firebase Cloud Messaging inicializado (${credenciales.projectId}).`,
+        `Firebase Cloud Messaging inicializado (${credenciales.projectId}, ${credenciales.modo === 'adc' ? 'cuenta de servicio del entorno' : 'clave'}).`,
       );
     } catch (error) {
       this.logger.error(
