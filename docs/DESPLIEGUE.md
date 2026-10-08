@@ -931,6 +931,8 @@ sudo systemctl start terravid-deploy      # sin esperar el próximo tic
 
 Una corrida sin novedades dice `sin cambios (<sha>)` y no toca nada.
 
+Si el paso *Autenticar contra Google Cloud* falla con `failed to generate Google Cloud federated token` y una página HTML de **403 de Google** ("Your client does not have permission to get URL `/v1/token`"), es un rechazo puntual del servicio de tokens, no un problema de configuración: un error de Workload Identity real responde en JSON y dice qué falló (`invalid_target`, `unauthorized_client`, condición de atributos). Basta con volver a correr el job (`gh run rerun <id> --failed`). Pasó el 2026-10-07 en el run 37683245877; el reintento salió bien y los `main` siguientes también. Si se repite, hay que revisar que el provider `terravidmza` siga `ACTIVE` y que la cuenta `despliegue-github` conserve `roles/iam.workloadIdentityUser` para `TerraVidMza/Backend` (comandos de la instalación de arriba).
+
 ### Volver atrás
 
 Lo intenta solo: si la API no responde en 90 segundos, vuelve a la imagen anterior y anota el digest que falló en `/var/lib/terravid/imagen-fallida` para no reintentarlo cada dos minutos. Sin eso, una versión rota en `main` dejaría a producción oscilando entre arrancar y morir.
