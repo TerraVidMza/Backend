@@ -48,18 +48,28 @@
 		level INFO
 	}
 }
-# Copia anterior de la PWA (D-029). Desde M-014 la PWA se publica en Firebase
-# Hosting (terravid-mobile.web.app) y /opt/terravid/mobile ya no se actualiza.
-# Queda para que quien la tenga instalada sincronice lo pendiente: la base
-# local de la PWA depende del dominio. Se puede quitar cuando nadie la use.
+# PWA vieja, dada de baja (D-032). La PWA se publica en Firebase Hosting
+# (M-014); este dominio solo manda a quien entre por acá al sitio nuevo.
 terravid-mobile.duckdns.org {
-    root * /srv/mobile
-    # PWA de Mobile (M-011): el service worker y el index se revalidan
-    # siempre; los bundles tienen hash en el nombre y se cachean un año.
-    @sin_cache path /sw.js /index.html /manifest.json /
-    header @sin_cache Cache-Control "no-cache"
-    @con_hash path /_expo/static/*
-    header @con_hash Cache-Control "public, max-age=31536000, immutable"
-    try_files {path} {path}/ /index.html
-    file_server
+	# Quien la tenga instalada recibe este service worker en la próxima
+	# visita con red: borra la caché offline, se desregistra y recarga la
+	# pestaña, que cae en la redirección de abajo. Un service worker no se
+	# puede redirigir, por eso se sirve acá.
+	handle /sw.js {
+		header Content-Type "application/javascript"
+		header Cache-Control "no-cache"
+		respond `self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
+	event.waitUntil((async () => {
+		await self.registration.unregister();
+		for (const clave of await caches.keys()) await caches.delete(clave);
+		for (const cliente of await self.clients.matchAll({ type: 'window' })) cliente.navigate(cliente.url);
+	})());
+});
+` 200
+	}
+
+	handle {
+		redir https://terravid-mobile.web.app{uri} permanent
+	}
 }
