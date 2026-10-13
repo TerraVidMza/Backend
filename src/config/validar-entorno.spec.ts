@@ -92,12 +92,35 @@ describe('validarEntorno', () => {
   });
 
   describe('transportes condicionales', () => {
-    it('con PUSH_TRANSPORT=fcm exige las tres credenciales', () => {
+    it('con PUSH_TRANSPORT=fcm exige el proyecto', () => {
       expect(() =>
         validarEntorno({ ...minimo, PUSH_TRANSPORT: 'fcm' }),
-      ).toThrow(
-        /FIREBASE_PROJECT_ID.*FIREBASE_CLIENT_EMAIL.*FIREBASE_PRIVATE_KEY/s,
-      );
+      ).toThrow(/FIREBASE_PROJECT_ID/);
+    });
+
+    // Es la configuración de producción (D-033): sin clave, con la cuenta de
+    // servicio de la VM. Exigir la clave acá dejó a la API sin arrancar.
+    it('con PUSH_TRANSPORT=fcm arranca solo con el proyecto, sin clave', () => {
+      expect(() =>
+        validarEntorno({
+          ...produccion,
+          PUSH_TRANSPORT: 'fcm',
+          FIREBASE_PROJECT_ID: 'terravid',
+          FIREBASE_CLIENT_EMAIL: '',
+          FIREBASE_PRIVATE_KEY: '',
+        }),
+      ).not.toThrow();
+    });
+
+    it('con media clave exige la parte que falta', () => {
+      expect(() =>
+        validarEntorno({
+          ...minimo,
+          PUSH_TRANSPORT: 'fcm',
+          FIREBASE_PROJECT_ID: 'terravid',
+          FIREBASE_PRIVATE_KEY: 'clave',
+        }),
+      ).toThrow(/Faltan: FIREBASE_CLIENT_EMAIL$/m);
     });
 
     it('con PUSH_TRANSPORT=log no exige ninguna', () => {
