@@ -30,17 +30,25 @@ const BLOQUEO_MINUTOS = 15;
 /** Cota superior para la purga cuando el token no trae `exp`. */
 const VIGENCIA_MAXIMA_TOKEN_MS = 24 * 60 * 60 * 1000;
 
+function saltRounds(): number {
+  return parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '12', 10);
+}
+
 /**
  * Hash de una contraseña que no corresponde a ninguna cuenta. Se compara contra
  * él cuando el email no existe, para que el login tarde lo mismo exista o no la
  * cuenta y no se pueda enumerar usuarios midiendo el tiempo de respuesta.
+ *
+ * Se genera al arrancar con una clave aleatoria en vez de vivir en el código:
+ * un hash bcrypt versionado es un secreto más para el analizador (SonarCloud lo
+ * marcaba BLOCKER, D-035), y así su costo es siempre el de `BCRYPT_SALT_ROUNDS`.
+ * Con un costo fijo de 12 y la variable en otro valor, la diferencia de tiempo
+ * volvía a delatar si la cuenta existía.
  */
-const HASH_DUMMY =
-  '$2b$12$stKYE0dgRWfR.AsqRU73LOa9wn80sxrWVM8nVqe1J130OOoOWqxby';
-
-function saltRounds(): number {
-  return parseInt(process.env.BCRYPT_SALT_ROUNDS ?? '12', 10);
-}
+const HASH_DUMMY = bcrypt.hashSync(
+  crypto.randomBytes(32).toString('hex'),
+  saltRounds(),
+);
 
 @Injectable()
 export class AuthService {

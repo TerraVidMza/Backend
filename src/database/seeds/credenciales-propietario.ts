@@ -13,7 +13,9 @@ export interface CredencialesPropietario {
 
 /** Usuario y contraseña de demostración. Solo fuera de producción. */
 export const EMAIL_DEMO = 'propietario@terravid.demo';
-export const PASSWORD_DEMO = 'Terravid123!';
+// NOSONAR: clave pública de la base de demostración, documentada en el README.
+// No es un secreto: en producción `credencialesDelPropietario` la rechaza.
+export const PASSWORD_DEMO = 'Terravid123!'; // NOSONAR
 
 /**
  * De dónde salen las credenciales del primer Propietario.
