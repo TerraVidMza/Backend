@@ -1,4 +1,4 @@
-import { interpretar } from './diagnostico-push';
+import { comandoParaRepetir, interpretar } from './diagnostico-push';
 import {
   diagnosticarCredenciales,
   modoFcm,
@@ -114,6 +114,23 @@ describe('diagnóstico de push — interpretación del error', () => {
       expect(v.credencialesOk).toBe(false);
       expect(v.detalle).toContain('vaya/sorpresa');
     });
+  });
+});
+
+describe('comando sugerido para repetir el diagnóstico', () => {
+  // En la VM no hay npm: sugerirlo ahí fue lo que motivó esto.
+  it('desde el compilado sugiere el comando del contenedor', () => {
+    expect(
+      comandoParaRepetir('/app/dist/common/push/diagnostico-push.js', 'abc'),
+    ).toBe(
+      'docker compose -f docker-compose.prod.yml exec api node dist/common/push/diagnostico-push.js abc',
+    );
+  });
+
+  it('desde ts-node sugiere el script de npm', () => {
+    expect(
+      comandoParaRepetir('/repo/src/common/push/diagnostico-push.ts', 'abc'),
+    ).toBe('npm run push:diagnostico -- abc');
   });
 });
 
