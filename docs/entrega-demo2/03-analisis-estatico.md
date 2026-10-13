@@ -134,8 +134,32 @@ sonar.cpd.exclusions=src/database/migrations/**,src/database/seeds/**
 
 Los tres repositorios se importan en SonarCloud (organización `TerraVidMza`) en modo *Automatic Analysis*, que lee el `.sonarcloud.properties` de cada repositorio. Desde ese momento SonarCloud analiza `main` y cada PR en cada push y aplica la Quality Gate *Sonar way*. Requiere que los repositorios sean públicos: antes de publicarlos se revisó el historial completo con **gitleaks**, sin secretos reales (los 7 hallazgos eran contraseñas de ejemplo en tests y marcadores en la documentación).
 
-<!-- SONARCLOUD: capturas del dashboard de cada proyecto -->
-> Capturas del panel de SonarCloud (Backend, Web, Mobile): *se agregan al completarse el primer análisis.*
+Paneles públicos:
+- https://sonarcloud.io/summary/overall?id=TerraVidMza_Backend
+- https://sonarcloud.io/summary/overall?id=TerraVidMza_Web
+- https://sonarcloud.io/summary/overall?id=TerraVidMza_Mobile
+
+La organización se llama `terravid`.
+
+**Primer análisis (13/10/2026, `main`):**
+
+| Proyecto | Líneas | Security | Reliability | Maintainability | Duplicación | Quality Gate |
+|---|---:|---|---|---|---:|---|
+| Backend | 14k | **E** (2 issues) | A (35) | A (91) | 1,0 % | ✅ Passed |
+| Web | 16k | A (0) | **D** (6) | A (108) | 0,9 % | ✅ Passed |
+| Mobile | 6,4k | C (2) | C (50) | A (86) | 5,7 % | ✅ Passed |
+
+![SonarCloud Backend, primer análisis](img/analisis/sonarcloud-backend-antes.png)
+![SonarCloud Web, primer análisis](img/analisis/sonarcloud-web-antes.png)
+![SonarCloud Mobile, primer análisis](img/analisis/sonarcloud-mobile-antes.png)
+
+Qué hay detrás de cada calificación baja:
+
+- **Backend, Security E:** hay un BLOCKER, `secrets:S8215`, porque `auth.service.ts` tiene un hash bcrypt fijo, `HASH_DUMMY`. Ese hash iguala el tiempo de login cuando el email no existe. El otro hallazgo es `S2068`, la contraseña de la base de demostración.
+- **Web, Reliability D:** dos bugs críticos `S2871`, ambos un `.sort()` sin comparador sobre textos.
+- **Mobile, Reliability C:** 29 avisos `S9383` de promesas sin `await` ni `.catch`. Son llamadas «dispara y olvida» desde manejadores de React Native.
+- **Mobile, Security C:** un aviso `S2245`, por `Math.random` en el *jitter* de reintentos. No es un uso criptográfico.
+- El resto de los hallazgos están en tests y workflows: contraseñas de fixtures, actions sin SHA fijo y `--ignore-scripts`.
 
 ---
 
@@ -175,6 +199,24 @@ Los tres repositorios se importan en SonarCloud (organización `TerraVidMza`) en
 | 2.ª | corregida | original | 111 | 0 | 290 de 290 |
 | Última | corregida | corregido | **0** | **0** | 290 de 290 |
 
+### Problema 4: secreto en el código del login (SonarCloud BLOCKER, Backend)
+
+- **Hallazgo:** `HASH_DUMMY` era un hash bcrypt fijo en `auth.service.ts`. SonarCloud lo clasifica como secreto filtrado (`secrets:S8215`, BLOCKER) y por eso el backend tenía **Security E**.
+- **Problema adicional:** el costo de ese hash estaba fijo en 12. Si `BCRYPT_SALT_ROUNDS` tomaba otro valor, el login con un email inexistente tardaba distinto que con uno existente, y volvía a delatar qué cuentas existen. Esa es justamente la protección que el hash buscaba dar.
+- **Corrección (D-035):** se genera al arrancar con `bcrypt.hashSync(crypto.randomBytes(32), saltRounds())`. `PASSWORD_DEMO` se marcó `NOSONAR` con su justificación, porque es la clave pública de la base de demostración y producción la rechaza.
+
+### Problema 5: orden incorrecto de textos (SonarCloud CRITICAL, Web)
+
+- **Hallazgo:** dos `.sort()` sin comparador (`S2871`), en la comparación de campañas y en el detalle de auditoría. JavaScript ordena por código UTF-16, así que «Área» queda después de «zona».
+- **Corrección (W-033):** se reemplazaron por `.sort((a, b) => a.localeCompare(b))`.
+
+### Cuadro antes y después (SonarCloud)
+
+| Proyecto | Indicador | Primer análisis | Después de las correcciones |
+|---|---|---|---|
+| Backend | Security | **E** · 1 BLOCKER + 1 MAJOR | <!--DESPUES-B--> *se completa con el análisis de `main` tras el merge* |
+| Web | Reliability | **D** · 2 CRITICAL | <!--DESPUES-W--> *ídem* |
+
 ### Cuadro global (los tres repositorios)
 
 | Repositorio | Errores (1.ª corrida) | Advertencias (1.ª) | Errores (última) | Advertencias (última) |
@@ -192,4 +234,6 @@ Los tres repositorios se importan en SonarCloud (organización `TerraVidMza`) en
 | Vulnerabilidades en dependencias de Mobile (Expo SDK, React Native, `tar`, `shell-quote`) | Alta | No se corrigen antes de la entrega | Se probó `npm audit fix`: la app compilaba y Jest pasaba, pero la exportación web **fallaba**, porque eliminaba `query-string`, que necesita `expo-router`. Por eso se descartó. Se corrigen con la actualización del SDK de Expo, planificada después de la defensa. |
 | Vulnerabilidades en Backend y Web (`handlebars`, `proxy-addr`, `axios`) | Crítica/alta, transitivas | Se corrigen por Dependabot | Dependabot está activo en los repositorios y abre PRs semanales agrupados. Cada PR pasa CI antes del merge, que despliega. No se forzó `npm audit fix` sin pasar por ese circuito, porque un merge a `main` publica en producción. |
 | 6 advertencias `only-export-components` en Web | Baja | Aceptadas | Solo afectan el *fast refresh* en desarrollo. Se resuelven moviendo constantes y hooks a archivos propios cuando se toquen esos módulos. |
+| Mobile: 29 promesas sin manejar (`S9383`, Reliability C) | Media | Corrección después de la entrega | Son llamadas a funciones `async` desde manejadores de `onPress` y `useEffect`. Los errores ya se capturan dentro de cada función, pero falta el `void` explícito o el `.catch`. Se corrigen junto con la actualización del SDK de Expo, para no tocar 10 pantallas antes de la defensa. |
+| Hallazgos en tests y workflows (contraseñas de fixtures, actions sin SHA fijo, `--ignore-scripts`) | Baja | Planificado | Las contraseñas de los tests son datos de prueba. Fijar las actions por SHA y usar `--ignore-scripts` en el CI endurece la cadena de suministro y queda en el backlog. |
 | Mobile sin linter propio | Media | Cubierto por SonarCloud y `tsc` estricto | Agregar oxlint con la misma configuración que la Web. |

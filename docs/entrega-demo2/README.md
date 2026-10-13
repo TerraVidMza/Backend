@@ -33,7 +33,7 @@ La versión consolidada en un solo archivo es **`TerraVid-Demo2-Etapa6.pdf`**, q
   - ESLint en el Backend pasó de 2 errores a 0. Al corregir la configuración, aparecieron y se corrigieron 111 problemas que antes quedaban ocultos.
   - oxlint en la Web: 0 errores.
   - `tsc` estricto en los tres repositorios: 0 errores.
-  - SonarCloud quedó configurado en los tres repositorios.
+  - SonarCloud quedó configurado en los tres repositorios, con la Quality Gate aprobada. Se corrigieron sus hallazgos críticos: Security E en el Backend por un secreto en el código y Reliability D en la Web por dos `.sort()` sin comparador.
 - **Pruebas:**
   - 9 de 9 aprobadas: 4 funcionales, 2 de integración y 3 de seguridad.
   - Se encontró y corrigió un defecto (DEF-01, recomendaciones agronómicas).
