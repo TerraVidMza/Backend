@@ -1,0 +1,37 @@
+flowchart LR
+  subgraph USR["Usuarios y dispositivos"]
+    WEB["Web SPA<br/>React 19 + Vite<br/>(oficina: Propietario, Agrónomo, Auditor)"]
+    APK["App Android (APK)<br/>Expo / React Native<br/>SQLite local, offline-first"]
+    PWA["PWA Mobile<br/>Expo web + sql.js<br/>IndexedDB, offline-first"]
+    IOT["Nodo IoT<br/>NodeMCU ESP8266 + DHT11<br/>temperatura y humedad ambiente"]
+  end
+
+  subgraph FB["Firebase (proyecto GCP terravid)"]
+    HOST["Firebase Hosting<br/>terravid.web.app<br/>terravid-app.web.app"]
+    FCM["Firebase Cloud<br/>Messaging"]
+  end
+
+  subgraph VM["VM Google Compute Engine e2-micro - Docker Compose"]
+    CADDY["Caddy 2<br/>TLS Let's Encrypt<br/>reverse proxy :443"]
+    API["API REST<br/>NestJS 11 / Node 24<br/>:8080"]
+    MQTT["Eclipse Mosquitto 2<br/>dynamic security<br/>:8883 TLS"]
+    DB[("PostgreSQL 16")]
+  end
+
+  SMTP["Servidor SMTP<br/>de la empresa"]
+  GCS[("Cloud Storage<br/>backups")]
+
+  HOST -- "HTTPS: archivos estáticos" --> WEB
+  HOST -- "HTTPS: archivos estáticos" --> PWA
+  WEB -- "HTTPS / REST + JWT" --> CADDY
+  APK -- "HTTPS / REST + JWT<br/>sync por lotes" --> CADDY
+  PWA -- "HTTPS / REST + JWT<br/>sync por lotes" --> CADDY
+  IOT -- "MQTT sobre TLS :8883<br/>credencial por sensor" --> MQTT
+  IOT -. "HTTPS + X-Api-Key<br/>respaldo" .-> CADDY
+  CADDY -- "HTTP interno" --> API
+  MQTT -- "MQTT :1883 red interna<br/>suscripción a lecturas" --> API
+  API -- "SQL / TypeORM" --> DB
+  API -- "FCM HTTP v1<br/>credenciales ADC de la VM" --> FCM
+  FCM -- "push" --> APK
+  API -- "SMTP" --> SMTP
+  DB -. "pg_dump diario" .-> GCS
