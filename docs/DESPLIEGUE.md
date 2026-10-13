@@ -333,7 +333,7 @@ Lo mínimo para poder decir que está en producción y no solo desplegado:
 
 - [ ] `GET /api` devuelve 401, y el login con un usuario del seed devuelve un JWT.
 - [ ] El endpoint de ingesta IoT acepta una lectura con la `X-Api-Key` correcta y la rechaza sin ella.
-- [ ] `npm run push:diagnostico` pasa, si se activó FCM.
+- [ ] El diagnóstico de push pasa, si se activó FCM. En la VM no hay npm: `docker compose -f docker-compose.prod.yml exec api node dist/common/push/diagnostico-push.js`.
 - [ ] Un presupuesto con alerta por mail al 50 %, 90 % y 100 % en *Facturación → Presupuestos*. Es lo que evita la sorpresa de fin de mes.
 - [ ] Una verificación de tiempo de actividad en Cloud Monitoring contra `/api`, esperando 401.
 - [ ] Los logs de las 3 AM del día siguiente muestran las tres purgas: confirma que el cron in-process efectivamente corre en Cloud Run.

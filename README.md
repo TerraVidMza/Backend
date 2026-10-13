@@ -119,6 +119,12 @@ npm run push:diagnostico              # valida las credenciales contra Firebase
 npm run push:diagnostico -- <token>   # además envía a un dispositivo real
 ```
 
+En producción la imagen no trae npm: el mismo diagnóstico se corre compilado, dentro del contenedor y desde `/opt/backend/deploy`:
+
+```bash
+docker compose -f docker-compose.prod.yml exec api node dist/common/push/diagnostico-push.js [<token>]
+```
+
 Sin token, el diagnóstico manda contra uno inválido a propósito. Suena raro pero es la prueba que sirve: **si Firebase rechaza el token, es porque autenticó la petición** y llegó hasta mirar el destinatario. Con credenciales malas el error aparecería antes. Esa distinción es todo lo que se puede saber mientras la app móvil no exista.
 
 ### Pruebas
