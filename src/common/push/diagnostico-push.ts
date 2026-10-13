@@ -16,6 +16,9 @@ import {
  *     npm run push:diagnostico                # sin token: valida credenciales
  *     npm run push:diagnostico -- <token>     # con token: envía de verdad
  *
+ * En producción la imagen no trae npm ni ts-node: se corre el compilado dentro
+ * del contenedor (ver `comandoParaRepetir`).
+ *
  * **Intenta la operación en vez de leer la configuración**, igual que
  * `db:verificar-privilegios`. Mirar las variables de entorno diría que están
  * puestas; solo un envío real dice si Firebase las acepta.
@@ -29,6 +32,20 @@ import {
  *
  * Sale con código 1 si la configuración no sirve, para encadenarlo al despliegue.
  */
+
+/**
+ * Cómo volver a correr este diagnóstico desde donde se lo está corriendo.
+ *
+ * El mensaje final sugiere repetirlo con un token real. En la VM, sugerir
+ * `npm run` es mandar a correr algo que no existe: la imagen solo tiene el
+ * compilado. Si el archivo que corre es `.js`, viene de `dist/` y se sugiere
+ * el comando del contenedor; si es `.ts`, es ts-node en desarrollo.
+ */
+export function comandoParaRepetir(archivo: string, token: string): string {
+  return archivo.endsWith('.js')
+    ? `docker compose -f docker-compose.prod.yml exec api node dist/common/push/diagnostico-push.js ${token}`
+    : `npm run push:diagnostico -- ${token}`;
+}
 
 const TOKEN_INVALIDO_DE_PRUEBA =
   'token-de-diagnostico-que-no-existe-en-firebase';
@@ -158,9 +175,8 @@ async function diagnosticar(): Promise<void> {
   console.log(
     'Credenciales verificadas: Firebase acepta este service account.',
   );
-  console.log(
-    'Falta probar con un token de dispositivo real:  npm run push:diagnostico -- <token>',
-  );
+  console.log('Falta probar con un token de dispositivo real:');
+  console.log(`  ${comandoParaRepetir(__filename, '<token>')}`);
 }
 
 /**
