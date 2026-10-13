@@ -1,0 +1,14 @@
+{
+  "PRU-03": {
+    "dialogo": "Labor guardada\n\nEl registro se guardó en el teléfono y se sincroniza automáticamente.",
+    "backend": "[]"
+  },
+  "PRU-04": {
+    "dialogo": "Pesaje guardado\n\nEl pesaje se guardó en el teléfono y se sincroniza automáticamente.",
+    "backend": "[]"
+  },
+  "PRU-05": {
+    "obtenido": "La labor Poda registrada en la app móvil figura en el historial del cuartel en la Web.",
+    "estado": "Aprobada"
+  }
+}

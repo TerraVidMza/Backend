@@ -1,0 +1,24 @@
+gantt
+    title Puesta en producción (ejemplo con D = 01/02/2027)
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d/%m
+    section Preparación
+    A1 Relevamiento              :a1, 2027-01-18, 3d
+    A2 Entorno                   :a2, 2027-01-18, 3d
+    A3 Versión aprobada          :a3, 2027-01-20, 2d
+    A4 Despliegue                :a4, 2027-01-21, 2d
+    A5 Alta empresa              :a5, 2027-01-22, 1d
+    A6 Materiales                :a6, 2027-01-22, 3d
+    section Datos y usuarios
+    A7 Carga de datos            :a7, 2027-01-23, 4d
+    A8 Usuarios                  :a8, 2027-01-25, 2d
+    A9 Sensores                  :a9, 2027-01-25, 3d
+    section Validación
+    A10 Capacitación             :a10, 2027-01-25, 7d
+    A11 Pruebas en producción    :a11, 2027-01-28, 3d
+    A12 Go / no-go               :milestone, a12, 2027-01-31, 0d
+    section Operación
+    A13 Piloto + soporte         :a13, 2027-02-01, 8d
+    A14 Evaluación               :a14, 2027-02-08, 4d
+    A15 Expansión por fases      :a15, 2027-02-11, 21d
+    A16 Cierre                   :milestone, a16, 2027-03-03, 0d
