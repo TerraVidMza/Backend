@@ -6,7 +6,10 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['eslint.config.mjs'],
+    // La config plana de ESLint no lee .gitignore: sin estas entradas, despues
+    // de un `nest build` o de `npm run test:cov` analiza el JS compilado y los
+    // reportes de cobertura, y la corrida pasa de 0 a miles de errores ajenos.
+    ignores: ['eslint.config.mjs', 'dist/**', 'coverage*/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
@@ -19,7 +22,13 @@ export default tseslint.config(
       },
       sourceType: 'commonjs',
       parserOptions: {
-        projectService: true,
+        // Los .js/.mjs sueltos (configuracion de jest, smoke test) no entran en
+        // tsconfig.json porque no se compilan. Sin esta lista ESLint no los
+        // encuentra en el proyecto y aborta el archivo con un "Parsing error",
+        // que contaba como error y ademas dejaba esos archivos sin analizar.
+        projectService: {
+          allowDefaultProject: ['jest.cobertura.config.js', 'test/smoke.mjs'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
@@ -39,6 +48,13 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-argument': 'error',
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
+  },
+
+  {
+    // JavaScript plano no tiene tipos: las reglas "unsafe-*" lo marcan todo
+    // como `any`. Se analizan con las reglas comunes, sin las que usan tipos.
+    files: ['**/*.js', '**/*.mjs'],
+    ...tseslint.configs.disableTypeChecked,
   },
 
   {

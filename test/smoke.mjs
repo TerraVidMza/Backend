@@ -76,7 +76,11 @@ const login = await req('POST', '/auth/login', {
 });
 check('login devuelve 200', login.status === 200, login);
 token = login.body?.accessToken ?? login.body?.access_token ?? '';
-check('login devuelve un token', token.length > 0, Object.keys(login.body ?? {}));
+check(
+  'login devuelve un token',
+  token.length > 0,
+  Object.keys(login.body ?? {}),
+);
 check(
   'la respuesta del login no filtra passwordHash',
   !JSON.stringify(login.body ?? {}).includes('passwordHash'),
@@ -95,8 +99,14 @@ const escalada = await req('PATCH', '/usuarios/me', {
   nombre: 'Sergio',
   rolId: '00000000-0000-0000-0000-000000000000',
 });
-check('PATCH /me con rolId es rechazado (400)', escalada.status === 400, escalada);
-const perfilOk = await req('PATCH', '/usuarios/me', { nombre: 'Propietario Demo' });
+check(
+  'PATCH /me con rolId es rechazado (400)',
+  escalada.status === 400,
+  escalada,
+);
+const perfilOk = await req('PATCH', '/usuarios/me', {
+  nombre: 'Propietario Demo',
+});
 check('PATCH /me solo con nombre funciona', perfilOk.status === 200, perfilOk);
 check(
   'el perfil devuelto no incluye passwordHash',
@@ -109,7 +119,11 @@ seccion('F0-8 · RBAC fail-closed y F0-3 · ingesta IoT');
 const sinToken = await fetch(`${API}/usuarios`).then((r) => r.status);
 check('sin token da 401', sinToken === 401, sinToken);
 const conToken = await req('GET', '/usuarios');
-check('Propietario lista usuarios (200)', conToken.status === 200, conToken.status);
+check(
+  'Propietario lista usuarios (200)',
+  conToken.status === 200,
+  conToken.status,
+);
 
 const ingestSinClave = await fetch(`${API}/lecturas-iot`, {
   method: 'POST',
@@ -121,7 +135,11 @@ const ingestSinClave = await fetch(`${API}/lecturas-iot`, {
     sensorTimestamp: new Date().toISOString(),
   }),
 });
-check('ingesta sin X-Api-Key es rechazada', ingestSinClave.status === 401, ingestSinClave.status);
+check(
+  'ingesta sin X-Api-Key es rechazada',
+  ingestSinClave.status === 401,
+  ingestSinClave.status,
+);
 
 // ------------------------------------------------------ F0-4 multi-tenant
 seccion('F0-4 · aislamiento multi-tenant');
@@ -170,16 +188,18 @@ const tipoLaborId = tipoLabor.body?.id;
 
 const uuidLabor = crypto.randomUUID();
 // Fecha anterior a la vigencia del costo inicial: no hay costo aplicable.
-const laborVieja = await req('POST', '/registro-labor/sync', { registros: [
-  {
-    localUuid: uuidLabor,
-    cuartelId,
-    tipoLaborId,
-    fecha: diaRelativo(-30),
-    cantidad: 5,
-    insumos: [],
-  },
-] });
+const laborVieja = await req('POST', '/registro-labor/sync', {
+  registros: [
+    {
+      localUuid: uuidLabor,
+      cuartelId,
+      tipoLaborId,
+      fecha: diaRelativo(-30),
+      cantidad: 5,
+      insumos: [],
+    },
+  ],
+});
 check(
   'labor anterior al costo vigente queda en ERROR, no en $0',
   laborVieja.body?.[0]?.estado === 'error',
@@ -193,32 +213,36 @@ check(
 );
 
 seccion('F1-1 bis · el mismo local_uuid se reprocesa tras corregir');
-const laborHoy = await req('POST', '/registro-labor/sync', { registros: [
-  {
-    localUuid: uuidLabor,
-    cuartelId,
-    tipoLaborId,
-    fecha: hoy(),
-    cantidad: 5,
-    insumos: [],
-  },
-] });
+const laborHoy = await req('POST', '/registro-labor/sync', {
+  registros: [
+    {
+      localUuid: uuidLabor,
+      cuartelId,
+      tipoLaborId,
+      fecha: hoy(),
+      cantidad: 5,
+      insumos: [],
+    },
+  ],
+});
 check(
   'reintento con el mismo uuid ahora sincroniza',
   laborHoy.body?.[0]?.estado === 'sincronizado',
   laborHoy.body,
 );
 
-const laborRepetida = await req('POST', '/registro-labor/sync', { registros: [
-  {
-    localUuid: uuidLabor,
-    cuartelId,
-    tipoLaborId,
-    fecha: hoy(),
-    cantidad: 5,
-    insumos: [],
-  },
-] });
+const laborRepetida = await req('POST', '/registro-labor/sync', {
+  registros: [
+    {
+      localUuid: uuidLabor,
+      cuartelId,
+      tipoLaborId,
+      fecha: hoy(),
+      cantidad: 5,
+      insumos: [],
+    },
+  ],
+});
 check(
   'un tercer envío es idempotente (no duplica)',
   laborRepetida.body?.[0]?.yaExistia === true,
@@ -231,7 +255,11 @@ const retro = await req('POST', `/tipos-labor/${tipoLaborId}/costos`, {
   costoUnitario: 18000,
   validFrom: '2020-01-01',
 });
-check('costo con validFrom de 2020 es rechazado (400)', retro.status === 400, retro);
+check(
+  'costo con validFrom de 2020 es rechazado (400)',
+  retro.status === 400,
+  retro,
+);
 const futuro = await req('POST', `/tipos-labor/${tipoLaborId}/costos`, {
   costoUnitario: 18000,
   validFrom: diaRelativo(15),
@@ -260,9 +288,17 @@ check('cuadrilla creada', cuadrilla.status === 201, cuadrilla);
 const cuadrillaId = cuadrilla.body?.id;
 
 const uuidPesaje = crypto.randomUUID();
-const pesajeSinTarifa = await req('POST', '/pesajes-vendimia/sync', { pesajes: [
-  { localUuid: uuidPesaje, cuadrillaId, cuartelId, fecha: hoy(), kgTotales: 1200 },
-] });
+const pesajeSinTarifa = await req('POST', '/pesajes-vendimia/sync', {
+  pesajes: [
+    {
+      localUuid: uuidPesaje,
+      cuadrillaId,
+      cuartelId,
+      fecha: hoy(),
+      kgTotales: 1200,
+    },
+  ],
+});
 check(
   'pesaje sin tarifa queda en ERROR',
   pesajeSinTarifa.body?.[0]?.estado === 'error',
@@ -273,9 +309,17 @@ await req('POST', `/cuadrillas/${cuadrillaId}/tarifas`, {
   tarifaPorKg: 25.5,
   validFrom: hoy(),
 });
-const pesajeConTarifa = await req('POST', '/pesajes-vendimia/sync', { pesajes: [
-  { localUuid: uuidPesaje, cuadrillaId, cuartelId, fecha: hoy(), kgTotales: 1200 },
-] });
+const pesajeConTarifa = await req('POST', '/pesajes-vendimia/sync', {
+  pesajes: [
+    {
+      localUuid: uuidPesaje,
+      cuadrillaId,
+      cuartelId,
+      fecha: hoy(),
+      kgTotales: 1200,
+    },
+  ],
+});
 check(
   'con tarifa vigente el pesaje sincroniza',
   pesajeConTarifa.body?.[0]?.estado === 'sincronizado',
@@ -293,7 +337,10 @@ check(
 );
 
 seccion('F1-8 · máquina de estados del cuartel');
-const estado1 = await req('GET', `/pesajes-vendimia/cuartel/${cuartelId}/estado-cosecha`);
+const estado1 = await req(
+  'GET',
+  `/pesajes-vendimia/cuartel/${cuartelId}/estado-cosecha`,
+);
 check(
   'el primer pesaje pasa el cuartel a en_cosecha',
   estado1.body?.estado === 'en_cosecha',
@@ -310,7 +357,11 @@ check(
     const n = remito.body?.numeroRemito ?? '';
     const prefijo = 'REM-' + new Date().getFullYear() + '-';
     const correlativo = n.slice(prefijo.length);
-    return n.startsWith(prefijo) && correlativo.length === 5 && /^[0-9]+$/.test(correlativo);
+    return (
+      n.startsWith(prefijo) &&
+      correlativo.length === 5 &&
+      /^[0-9]+$/.test(correlativo)
+    );
   })(),
   remito.body?.numeroRemito,
 );
@@ -321,7 +372,9 @@ check(
 );
 const remitoId = remito.body?.id;
 
-const segundoBorrador = await req('POST', '/remitos/generar-borrador', { cuartelId });
+const segundoBorrador = await req('POST', '/remitos/generar-borrador', {
+  cuartelId,
+});
 check(
   'un segundo borrador del mismo cuartel da 409',
   segundoBorrador.status === 409,
@@ -332,14 +385,25 @@ seccion('F1-13 · el rechazo deja los pesajes en observado');
 const motivoCorto = await req('POST', `/remitos/${remitoId}/rechazar`, {
   motivoRechazo: 'no',
 });
-check('motivo de rechazo de menos de 10 caracteres es rechazado', motivoCorto.status === 400, motivoCorto);
+check(
+  'motivo de rechazo de menos de 10 caracteres es rechazado',
+  motivoCorto.status === 400,
+  motivoCorto,
+);
 
 const rechazo = await req('POST', `/remitos/${remitoId}/rechazar`, {
   motivoRechazo: 'Kilos mal cargados por la cuadrilla',
 });
-check('rechazo aceptado', rechazo.status === 200 || rechazo.status === 201, rechazo);
+check(
+  'rechazo aceptado',
+  rechazo.status === 200 || rechazo.status === 201,
+  rechazo,
+);
 
-const estado2 = await req('GET', `/pesajes-vendimia/cuartel/${cuartelId}/estado-cosecha`);
+const estado2 = await req(
+  'GET',
+  `/pesajes-vendimia/cuartel/${cuartelId}/estado-cosecha`,
+);
 check(
   'los pesajes rechazados quedan observados, no vuelven al pool',
   Number(estado2.body?.kgObservados) === 1200 &&
@@ -352,7 +416,9 @@ check(
   estado2.body?.estado,
 );
 
-const remitoTrasRechazo = await req('POST', '/remitos/generar-borrador', { cuartelId });
+const remitoTrasRechazo = await req('POST', '/remitos/generar-borrador', {
+  cuartelId,
+});
 check(
   'un remito nuevo no reincluye los pesajes observados sin revisión',
   remitoTrasRechazo.status === 400,
@@ -369,26 +435,39 @@ const sensor = await req('POST', '/sensores', {
 check('sensor creado', sensor.status === 201, sensor);
 const sensorId = sensor.body?.id;
 
-await req('PUT', `/sensores/${sensorId}/umbral`, { umbralMinimo: 20, umbralMaximo: 80 });
-const borrado = await req('PUT', `/sensores/${sensorId}/umbral`, { umbralMinimo: null });
+await req('PUT', `/sensores/${sensorId}/umbral`, {
+  umbralMinimo: 20,
+  umbralMaximo: 80,
+});
+const borrado = await req('PUT', `/sensores/${sensorId}/umbral`, {
+  umbralMinimo: null,
+});
 check(
   'null borra el mínimo y conserva el máximo omitido',
-  borrado.body?.umbralMinimo === null && Number(borrado.body?.umbralMaximo) === 80,
+  borrado.body?.umbralMinimo === null &&
+    Number(borrado.body?.umbralMaximo) === 80,
   borrado.body,
 );
 
 // ------------------------------------------------------------- F1-9 margen
 seccion('F1-9 · no se publica un margen bruto falso');
-const margen = await req('GET', `/registro-labor/cuartel/${cuartelId}/margen-bruto`);
+const margen = await req(
+  'GET',
+  `/registro-labor/cuartel/${cuartelId}/margen-bruto`,
+);
 check(
   'margenBruto viene en null y marcado como no disponible',
-  margen.body?.margenBruto === null && margen.body?.margenBrutoDisponible === false,
+  margen.body?.margenBruto === null &&
+    margen.body?.margenBrutoDisponible === false,
   margen.body,
 );
 
 // ------------------------------------------------------ F0-7 config secretos
 seccion('F0-7 · las claves secretas de configuración se enmascaran');
-await req('PUT', '/configuracion', { clave: 'smtp_pass', valor: 'super-secreta-123' });
+await req('PUT', '/configuracion', {
+  clave: 'smtp_pass',
+  valor: 'super-secreta-123',
+});
 const config = await req('GET', '/configuracion');
 const smtpPass = (config.body ?? []).find?.((c) => c.clave === 'smtp_pass');
 check(
@@ -585,8 +664,8 @@ const configSembrada = await req('GET', '/configuracion');
 const claves = new Set((configSembrada.body ?? []).map((c) => c.clave));
 check(
   'el seed cargó las claves de configuración que HU-33 y HU-36 necesitan',
-  ['support_email', 'zona_horaria', 'moneda', 'nombre_organizacion'].every((c) =>
-    claves.has(c),
+  ['support_email', 'zona_horaria', 'moneda', 'nombre_organizacion'].every(
+    (c) => claves.has(c),
   ),
   [...claves],
 );
@@ -614,7 +693,11 @@ const tokenDescartable = sesion.body?.accessToken;
 const antesDelLogout = await fetch(`${API}/usuarios/me`, {
   headers: { Authorization: `Bearer ${tokenDescartable}` },
 });
-check('el token sirve antes del logout', antesDelLogout.status === 200, antesDelLogout.status);
+check(
+  'el token sirve antes del logout',
+  antesDelLogout.status === 200,
+  antesDelLogout.status,
+);
 
 const logout = await fetch(`${API}/auth/logout`, {
   method: 'POST',
@@ -682,10 +765,15 @@ const loginAdmin = await req('POST', '/auth/login', {
   email: 'admin@terravid.demo',
   password: 'Terravid123!',
 });
-check('el Administrador inicia sesión', loginAdmin.status === 200, loginAdmin.status);
+check(
+  'el Administrador inicia sesión',
+  loginAdmin.status === 200,
+  loginAdmin.status,
+);
 check(
   'sus permisos son solo perfil y empresas',
-  JSON.stringify(loginAdmin.body?.user?.permisos) === JSON.stringify(['perfil', 'empresas']),
+  JSON.stringify(loginAdmin.body?.user?.permisos) ===
+    JSON.stringify(['perfil', 'empresas']),
   loginAdmin.body?.user?.permisos,
 );
 const comoAdmin = (metodo, ruta) =>
@@ -694,7 +782,11 @@ const comoAdmin = (metodo, ruta) =>
     headers: { Authorization: `Bearer ${loginAdmin.body?.accessToken}` },
   });
 const empresasAdmin = await comoAdmin('GET', '/empresas');
-check('el Administrador lista empresas', empresasAdmin.status === 200, empresasAdmin.status);
+check(
+  'el Administrador lista empresas',
+  empresasAdmin.status === 200,
+  empresasAdmin.status,
+);
 const dashAdmin = await comoAdmin('GET', '/dashboard/indicadores');
 check(
   '@AnyRole no incluye al Administrador: dashboard 403',
@@ -704,7 +796,11 @@ check(
 const perfilAdmin = await comoAdmin('GET', '/usuarios/me');
 check('pero sí ve su perfil', perfilAdmin.status === 200, perfilAdmin.status);
 const empresasProp = await req('GET', '/empresas');
-check('un Propietario no lista empresas (403)', empresasProp.status === 403, empresasProp.status);
+check(
+  'un Propietario no lista empresas (403)',
+  empresasProp.status === 403,
+  empresasProp.status,
+);
 const rolesProp = await req('GET', '/roles');
 check(
   'el Propietario no puede asignar el rol Administrador',
@@ -716,7 +812,11 @@ const movilAdmin = await req('POST', '/auth/login', {
   password: 'Terravid123!',
   cliente: 'movil',
 });
-check('el Administrador no entra a la app móvil (403)', movilAdmin.status === 403, movilAdmin.status);
+check(
+  'el Administrador no entra a la app móvil (403)',
+  movilAdmin.status === 403,
+  movilAdmin.status,
+);
 
 seccion('HU-05 · alta con contraseña temporal y correo de bienvenida');
 const nuevoEmail = `capataz.${RUN}@terravid.demo`;
@@ -727,7 +827,11 @@ const altaSinPassword = await req('POST', '/usuarios', {
   email: nuevoEmail,
   rolId: rolCapataz?.id,
 });
-check('el alta sin contraseña es aceptada', altaSinPassword.status === 201, altaSinPassword);
+check(
+  'el alta sin contraseña es aceptada',
+  altaSinPassword.status === 201,
+  altaSinPassword,
+);
 check(
   'el usuario queda marcado para cambiar la contraseña',
   altaSinPassword.body?.debeCambiarPassword === true,
@@ -842,10 +946,14 @@ check(
 );
 check(
   'un campo de orden no permitido es rechazado',
-  (await req('GET', '/cuarteles/buscar?ordenarPor=passwordHash')).status === 400,
+  (await req('GET', '/cuarteles/buscar?ordenarPor=passwordHash')).status ===
+    400,
   null,
 );
-const variedadesFinca = await req('GET', `/cuarteles/variedades?fincaId=${fincaId}`);
+const variedadesFinca = await req(
+  'GET',
+  `/cuarteles/variedades?fincaId=${fincaId}`,
+);
 check(
   'el endpoint de variedades devuelve solo las presentes en la finca',
   variedadesFinca.status === 200 &&
@@ -866,8 +974,8 @@ const loteGrande = Array.from({ length: 11 }, () => ({
 }));
 check(
   'un lote de más de 10 registros es rechazado',
-  (await req('POST', '/registro-labor/sync', { registros: loteGrande })).status ===
-    400,
+  (await req('POST', '/registro-labor/sync', { registros: loteGrande }))
+    .status === 400,
   null,
 );
 
@@ -949,8 +1057,7 @@ check(
 check(
   'el costo de labores no se infla por los insumos',
   (costeo.body?.cuarteles ?? []).every(
-    (c) =>
-      Math.abs(c.costoTotal - (c.costoLabores + c.costoInsumos)) < 0.01,
+    (c) => Math.abs(c.costoTotal - (c.costoLabores + c.costoInsumos)) < 0.01,
   ),
   costeo.body?.cuarteles?.[0],
 );
@@ -970,13 +1077,17 @@ check(
 
 // -------------------------------------------------------------------- IoT
 seccion('HU-19 · ingesta por código, sensor inactivo y rango físico');
-const claveIot = process.env.IOT_API_KEY ?? 'dev-iot-api-key-solo-para-desarrollo';
+const claveIot =
+  process.env.IOT_API_KEY ?? 'dev-iot-api-key-solo-para-desarrollo';
 const ingerir = (cuerpo) =>
   fetch(`${API}/lecturas-iot`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': claveIot },
     body: JSON.stringify(cuerpo),
-  }).then(async (r) => ({ status: r.status, body: await r.json().catch(() => null) }));
+  }).then(async (r) => ({
+    status: r.status,
+    body: await r.json().catch(() => null),
+  }));
 
 const sensorTemp = await req('POST', '/sensores', {
   fincaId,
@@ -1009,7 +1120,10 @@ check(
   ingestaAnomala.body,
 );
 
-const historialTemp = await req('GET', `/lecturas-iot/sensor/${sensorTemp.body?.id}`);
+const historialTemp = await req(
+  'GET',
+  `/lecturas-iot/sensor/${sensorTemp.body?.id}`,
+);
 check(
   'la lectura anómala no entra al historial',
   historialTemp.body?.total === 1,
@@ -1046,9 +1160,8 @@ check(
 );
 check(
   'renombrar un sensor al código de otro es rechazado (409)',
-  (
-    await req('PATCH', `/sensores/${sensor.body?.id}`, { codigo: codigoTemp })
-  ).status === 409,
+  (await req('PATCH', `/sensores/${sensor.body?.id}`, { codigo: codigoTemp }))
+    .status === 409,
   null,
 );
 
@@ -1117,7 +1230,10 @@ check(
 );
 
 seccion('HU-28 · estado de cosecha por finca');
-const estadoFinca = await req('GET', `/pesajes-vendimia/finca/${fincaId}/estado-cosecha`);
+const estadoFinca = await req(
+  'GET',
+  `/pesajes-vendimia/finca/${fincaId}/estado-cosecha`,
+);
 check(
   'devuelve una fila por cuartel con totales',
   estadoFinca.status === 200 &&
@@ -1183,7 +1299,11 @@ const catalogoPropio = await req('POST', '/catalogos', {
   tipo: 'variedad',
   nombre: `Bonarda ${RUN}`,
 });
-check('se puede crear un valor de catálogo', catalogoPropio.status === 201, catalogoPropio);
+check(
+  'se puede crear un valor de catálogo',
+  catalogoPropio.status === 201,
+  catalogoPropio,
+);
 check(
   'el valor queda asociado a la empresa del usuario',
   catalogoPropio.body?.empresaId !== undefined &&
@@ -1310,7 +1430,11 @@ check(
 );
 
 const aprobacion = await req('POST', `/remitos/${remitoVentaId}/aprobar`);
-check('remito aprobado', aprobacion.status === 200 || aprobacion.status === 201, aprobacion.status);
+check(
+  'remito aprobado',
+  aprobacion.status === 200 || aprobacion.status === 201,
+  aprobacion.status,
+);
 
 const liquidacion = await req('PUT', `/remitos/${remitoVentaId}/liquidacion`, {
   bodega: 'Bodega Smoke',
@@ -1339,12 +1463,16 @@ check(
   null,
 );
 
-const reliquidacion = await req('PUT', `/remitos/${remitoVentaId}/liquidacion`, {
-  bodega: 'Bodega Smoke',
-  kgAceptados: 1950,
-  precioPorKg: 300,
-  fecha: hoy(),
-});
+const reliquidacion = await req(
+  'PUT',
+  `/remitos/${remitoVentaId}/liquidacion`,
+  {
+    bodega: 'Bodega Smoke',
+    kgAceptados: 1950,
+    precioPorKg: 300,
+    fecha: hoy(),
+  },
+);
 check(
   'reliquidar el mismo remito corrige en vez de duplicar',
   reliquidacion.status === 200 &&
@@ -1415,7 +1543,9 @@ check(
   ).status === 404,
   null,
 );
-const limpiadas = await req('PUT', `/usuarios/${miId}/fincas`, { fincaIds: [] });
+const limpiadas = await req('PUT', `/usuarios/${miId}/fincas`, {
+  fincaIds: [],
+});
 check(
   'una lista vacía vuelve al comportamiento de "todas las fincas"',
   limpiadas.status === 200 && limpiadas.body?.length === 0,
@@ -1444,7 +1574,11 @@ const campaniaVieja = await req('POST', '/campanias', {
   fechaDesde: `${inicioVieja}-07-01`,
   fechaHasta: `${inicioVieja + 1}-06-30`,
 });
-check('se puede crear una campaña pasada', campaniaVieja.status === 201, campaniaVieja);
+check(
+  'se puede crear una campaña pasada',
+  campaniaVieja.status === 201,
+  campaniaVieja,
+);
 const campaniaViejaId = campaniaVieja.body?.id;
 
 check(
@@ -1470,7 +1604,11 @@ check(
   null,
 );
 const cerrada = await req('PATCH', `/campanias/${campaniaViejaId}/cerrar`);
-check('se puede cerrar una campaña', cerrada.body?.cerrada === true, cerrada.body);
+check(
+  'se puede cerrar una campaña',
+  cerrada.body?.cerrada === true,
+  cerrada.body,
+);
 check(
   'una campaña cerrada deja de ser "la actual"',
   (await req('GET', '/campanias/actual')).body?.id !== campaniaViejaId,
@@ -1487,7 +1625,10 @@ const cuartelViejo = await req('POST', '/cuarteles', {
   anioImplantacion: 2015,
 });
 const cuartelViejoId = cuartelViejo.body?.id;
-const bajaSinRegistros = await req('PATCH', `/cuarteles/${cuartelViejoId}/desactivar`);
+const bajaSinRegistros = await req(
+  'PATCH',
+  `/cuarteles/${cuartelViejoId}/desactivar`,
+);
 check(
   'un cuartel sin registros se da de baja',
   bajaSinRegistros.status === 200,
@@ -1565,8 +1706,10 @@ check(
   'los porcentajes suman 100 cuando hay cuarteles',
   tablero.body?.estadoCosechaGlobal?.total === 0 ||
     Math.abs(
-      tablero.body.estadoCosechaGlobal.porEstado.reduce((a, e) => a + e.porcentaje, 0) -
-        100,
+      tablero.body.estadoCosechaGlobal.porEstado.reduce(
+        (a, e) => a + e.porcentaje,
+        0,
+      ) - 100,
     ) < 0.5,
   tablero.body?.estadoCosechaGlobal,
 );
@@ -1597,7 +1740,11 @@ check(
 // Sin tilde: así lo siembra `RolNombre.AGRONOMO`. Buscarlo con tilde devolvía
 // `undefined`, el PATCH viajaba sin `rolId` y estos casos pasaban sin probar nada.
 const rolAgronomo = (roles.body ?? []).find((r) => r.nombreRol === 'Agronomo');
-check('el rol Agronomo existe en el catálogo', Boolean(rolAgronomo?.id), roles.body);
+check(
+  'el rol Agronomo existe en el catálogo',
+  Boolean(rolAgronomo?.id),
+  roles.body,
+);
 const cambioDeRol = await req('PATCH', `/usuarios/${usuarioRolId}`, {
   rolId: rolAgronomo?.id,
 });
@@ -1632,9 +1779,13 @@ await ingerir({
   unidad: '%',
   sensorTimestamp: new Date().toISOString(),
 });
-const umbralConAviso = await req('PUT', `/sensores/${sensorAviso.body?.id}/umbral`, {
-  umbralMinimo: 30,
-});
+const umbralConAviso = await req(
+  'PUT',
+  `/sensores/${sensorAviso.body?.id}/umbral`,
+  {
+    umbralMinimo: 30,
+  },
+);
 check(
   'avisa que la última lectura ya está por debajo del mínimo',
   typeof umbralConAviso.body?.aviso === 'string' &&
@@ -1646,9 +1797,13 @@ check(
   Number(umbralConAviso.body?.umbralMinimo) === 30,
   umbralConAviso.body,
 );
-const umbralSinAviso = await req('PUT', `/sensores/${sensorAviso.body?.id}/umbral`, {
-  umbralMinimo: 5,
-});
+const umbralSinAviso = await req(
+  'PUT',
+  `/sensores/${sensorAviso.body?.id}/umbral`,
+  {
+    umbralMinimo: 5,
+  },
+);
 check(
   'sin superación no hay aviso',
   umbralSinAviso.body?.aviso === null,
@@ -1661,7 +1816,11 @@ const altaToken = await req('POST', '/notificaciones/device-token', {
   token: tokenFalso,
   plataforma: 'android',
 });
-check('se registra el token del dispositivo', altaToken.status === 201, altaToken);
+check(
+  'se registra el token del dispositivo',
+  altaToken.status === 201,
+  altaToken,
+);
 check(
   'reenviar el mismo token no duplica (es idempotente)',
   (
@@ -1684,8 +1843,8 @@ check(
 );
 check(
   'la baja del token responde 204',
-  (await req('DELETE', '/notificaciones/device-token', { token: tokenFalso })).status ===
-    204,
+  (await req('DELETE', '/notificaciones/device-token', { token: tokenFalso }))
+    .status === 204,
   null,
 );
 
@@ -1729,11 +1888,17 @@ check(
 check(
   'el contador de no leídas subió',
   (despuesDeFallar.body?.noLeidas ?? 0) > (antesDeFallar.body?.noLeidas ?? 0),
-  { antes: antesDeFallar.body?.noLeidas, despues: despuesDeFallar.body?.noLeidas },
+  {
+    antes: antesDeFallar.body?.noLeidas,
+    despues: despuesDeFallar.body?.noLeidas,
+  },
 );
 
 seccion('HU-30 · recomendaciones persistidas y gate de 30 días');
-const recos = await req('GET', `/inteligencia-agronomica/recomendaciones/${cuartelId}`);
+const recos = await req(
+  'GET',
+  `/inteligencia-agronomica/recomendaciones/${cuartelId}`,
+);
 check(
   'el endpoint informa el gate de 30 días',
   recos.status === 200 && typeof recos.body?.diasConDatos === 'number',
@@ -1742,12 +1907,17 @@ check(
 check(
   'sin histórico suficiente informa cuántos días faltan',
   recos.body?.disponible === true ||
-    (recos.body?.diasFaltantes > 0 && String(recos.body?.mensaje).includes('Faltan')),
+    (recos.body?.diasFaltantes > 0 &&
+      String(recos.body?.mensaje).includes('Faltan')),
   { disponible: recos.body?.disponible, faltantes: recos.body?.diasFaltantes },
 );
 if (recos.body?.disponible && (recos.body.recomendaciones ?? []).length > 0) {
   const reco = recos.body.recomendaciones[0];
-  check('las recomendaciones tienen id (son accionables)', Boolean(reco.id), reco);
+  check(
+    'las recomendaciones tienen id (son accionables)',
+    Boolean(reco.id),
+    reco,
+  );
   check(
     'traen patrón detectado y acción sugerida',
     Boolean(reco.patronDetectado) && Boolean(reco.accionSugerida),
@@ -1759,8 +1929,9 @@ if (recos.body?.disponible && (recos.body.recomendaciones ?? []).length > 0) {
   );
   check(
     'reevaluar no duplica la recomendación activa',
-    (reevaluada.body?.recomendaciones ?? []).filter((r) => r.reglaId === reco.reglaId)
-      .length === 1,
+    (reevaluada.body?.recomendaciones ?? []).filter(
+      (r) => r.reglaId === reco.reglaId,
+    ).length === 1,
     reevaluada.body?.recomendaciones?.map((r) => r.reglaId),
   );
   const resuelta = await req(
@@ -1768,22 +1939,34 @@ if (recos.body?.disponible && (recos.body.recomendaciones ?? []).length > 0) {
     `/inteligencia-agronomica/recomendaciones/${reco.id}`,
     { estado: 'aplicada', nota: 'Aplicada desde el smoke test' },
   );
-  check('se puede marcar como aplicada', resuelta.body?.estado === 'aplicada', resuelta.body);
+  check(
+    'se puede marcar como aplicada',
+    resuelta.body?.estado === 'aplicada',
+    resuelta.body,
+  );
   check(
     'resolver dos veces la misma recomendación da 409',
     (
-      await req('PATCH', `/inteligencia-agronomica/recomendaciones/${reco.id}`, {
-        estado: 'descartada',
-      })
+      await req(
+        'PATCH',
+        `/inteligencia-agronomica/recomendaciones/${reco.id}`,
+        {
+          estado: 'descartada',
+        },
+      )
     ).status === 409,
     null,
   );
   check(
     'reabrir a "activa" no es un estado válido',
     (
-      await req('PATCH', `/inteligencia-agronomica/recomendaciones/${reco.id}`, {
-        estado: 'activa',
-      })
+      await req(
+        'PATCH',
+        `/inteligencia-agronomica/recomendaciones/${reco.id}`,
+        {
+          estado: 'activa',
+        },
+      )
     ).status === 400,
     null,
   );
@@ -1909,7 +2092,10 @@ check(
   { vacio: anioVacio.body?.total, sinFiltro: sinFiltroDeAnio.body?.total },
 );
 
-const anioBasura = await req('GET', '/cuarteles/buscar?anioImplantacion=2020abc');
+const anioBasura = await req(
+  'GET',
+  '/cuarteles/buscar?anioImplantacion=2020abc',
+);
 check(
   'un año con basura pegada da 400 en vez de tomar los primeros dígitos',
   anioBasura.status === 400,

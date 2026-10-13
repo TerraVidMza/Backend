@@ -789,3 +789,29 @@ Se probó primero en un canal de preview del proyecto viejo. Como esa configurac
 **Costo asumido:** la base local de la PWA depende del origen. Al cambiar de dirección, quien la tenga instalada empieza con una base vacía: **antes del corte hay que sincronizar los pendientes** o sacar un respaldo (M-008 del repo Mobile).
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-034 — Análisis estático: ESLint completo y SonarCloud en los tres repositorios
+
+**Contexto:** la Etapa 6 pide aplicar un analizador estático sobre el repositorio entregado, entregar su configuración comentada y mostrar el antes y el después de corregir problemas críticos. ESLint ya corría en el backend, pero `npx eslint .` terminaba siempre con 2 errores: `jest.cobertura.config.js` y `test/smoke.mjs` no están en `tsconfig.json` y el *project service* abortaba esos archivos con *Parsing error*. Es decir, el linter fallaba siempre y esos dos archivos nunca se habían analizado. Además, como la configuración plana de ESLint no lee `.gitignore`, después de un `nest build` también analizaba `dist/` y reportaba más de 17.000 errores ajenos al código fuente.
+
+**Decisión:**
+
+- `eslint.config.mjs`:
+  - Se agrega `allowDefaultProject` para los dos archivos JavaScript sueltos.
+  - Se aplica `disableTypeChecked` a `*.js`/`*.mjs`, porque sin tipos las reglas `unsafe-*` marcan todo como `any`.
+  - Se ignoran `dist/**` y `coverage*/**`.
+- Al empezar a analizarse, esos archivos mostraron 111 problemas:
+  - 110 de formato, corregidos con `eslint --fix`.
+  - Una regex mal escapada en la configuración de cobertura: `'^.+\.(t|j)s$'` llegaba a Jest como `^.+.(t|j)s$`, donde el punto acepta cualquier carácter. Ahora es `'^.+\.(t|j)s$'`.
+- Resultado: 2 → 0 errores, con 290 de 290 archivos analizados.
+- `.sonarcloud.properties` en Backend, Web y Mobile, en modo *Automatic Analysis*. Suma seguridad, duplicación, deuda técnica y Quality Gate por PR, y es el único análisis que cubre Mobile, que no tiene linter. Requiere repositorios públicos; antes de abrirlos se revisó todo el historial con gitleaks y no había secretos reales.
+- **No** se aplicó `npm audit fix`:
+  - En Mobile eliminaba `query-string`, que necesita `expo-router`: Jest pasaba, pero la exportación web fallaba.
+  - En Backend y Web el lockfile nuevo no se podía verificar sin reinstalar, y un merge a `main` despliega.
+  - Las vulnerabilidades quedan para Dependabot y para la actualización del SDK de Expo.
+
+Informe completo, con capturas y cuadro antes/después: [`entrega-demo2/03-analisis-estatico.md`](entrega-demo2/03-analisis-estatico.md).
+
+**Estado:** ✅ Vigente.

@@ -1,0 +1,40 @@
+{
+  "PRU-01": {
+    "obtenido": "Con clave incorrecta: \"Email o contraseña incorrectos\". Con clave correcta redirige a / (Dashboard).",
+    "estado": "Aprobada"
+  },
+  "PRU-02": {
+    "obtenido": "La finca se creó y aparece en el listado.",
+    "estado": "Aprobada"
+  },
+  "PRU-03": {
+    "error": "TimeoutError: locator.click: Timeout 30000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByText('Finca Los Viñedos').visible().last()\u001b[22m\n",
+    "backend": "[]"
+  },
+  "PRU-04": {
+    "error": "Error: locator.click: Error: strict mode violation: getByTestId('selector-finca').visible() resolved to 2 elements:\n    1) <button tabindex=\"0\" role=\"button\" type=\"button\" data-testid=\"selector-finca\" class=\"css-175oi2r r-1otgn73 r-1loqt21 r-bnwqim r-ctqt5z r-1udh08x\">…</button> aka getByTestId('selector-finca').first()\n    2) <button tabindex=\"0\" role=\"button\" type=\"button\" data-testid=\"selector-finca\" class=\"css-175oi2r r-1otgn73 r-1loqt21 r-bnwqim r-ctqt5z r-1udh08x\">…</button> aka getByRole('button', { name: 'Seleccionar Finca *' })\n\nCall log:\n\u001b[2m  - waiting for getByTestId('selector-finca').visible()\u001b[22m\n",
+    "backend": "[]"
+  },
+  "PRU-05": {
+    "obtenido": "La labor no aparece en la Web.",
+    "estado": "Fallida"
+  },
+  "PRU-06": {
+    "umbral": "200",
+    "ingesta": "201 {\"estado\":\"aceptada\",\"lectura\":{\"id\":\"15660532-224f-4af1-8418-e2dd9ab41325\",\"sensorId\":\"862133da-c7fd-49b3-8dd6-39d62a6a508b\",\"valor\":61.5,\"unidad\":\"%\",\"sensorTimestamp\":\"2026-10-13T13:50:46.943Z\",\"re",
+    "alertas": "[{\"id\":\"df7d5be8-8cf8-4b4e-a25d-5bd92172cafc\",\"sensorId\":\"862133da-c7fd-49b3-8dd6-39d62a6a508b\",\"sensor\":{\"id\":\"862133da-c7fd-49b3-8dd6-39d62a6a508b\",\"fincaId\":\"a48ee09b-2722-4a6f-b435-ee708390edca\",\"finca\":{\"id\":\"a48ee09b-2722-4a6f-b435-ee708390edca\",\"nombre\":\"Finca Los Viñedos\",\"ubicacion\":\"Luján ",
+    "sensor": "HUM-1-792"
+  },
+  "PRU-07": {
+    "obtenido": "URL final /; tabla de usuarios visible: false",
+    "estado": "Aprobada"
+  },
+  "PRU-08": {
+    "obtenido": "POST /api/usuarios (crear un Propietario) [Capataz] -> 403; PATCH /api/fincas/:id/desactivar [Capataz] -> 403; GET /api/log-auditoria [Capataz] -> 403; POST /api/usuarios [sin token] -> 401",
+    "estado": "Aprobada"
+  },
+  "PRU-09": {
+    "obtenido": "PWA: no ingresó; diálogo: -; API login cliente=movil -> 403 \"Tu rol no tiene acceso a la app móvil. Ingresá desde la versión web.\"",
+    "estado": "Aprobada"
+  }
+}

@@ -27,7 +27,8 @@ const ignorar = [
 const comun = {
   coveragePathIgnorePatterns: ignorar,
   moduleFileExtensions: ['js', 'json', 'ts'],
-  transform: { '^.+\.(t|j)s$': 'ts-jest' },
+  // `\\.` en el string para que la regex reciba `\.` (un punto literal).
+  transform: { '^.+\\.(t|j)s$': 'ts-jest' },
   testEnvironment: 'node',
 };
 

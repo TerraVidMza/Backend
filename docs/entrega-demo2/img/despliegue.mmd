@@ -1,0 +1,53 @@
+flowchart TB
+  subgraph DEV["Equipos de desarrollo (Windows)"]
+    IDE["Código fuente<br/>4 repositorios Git"]
+    EAS_CLI["eas-cli"]
+  end
+
+  subgraph GH["GitHub (organización TerraVidMza)"]
+    REPOS["Repos Backend, Web,<br/>Mobile, IoTSensor"]
+    GHA["GitHub Actions<br/>CI: tipos, lint, tests, e2e, cobertura"]
+  end
+
+  subgraph EXPO["Expo Application Services"]
+    EASB["EAS Build<br/>@sergixfarias/terravid-mobile"]
+  end
+
+  subgraph GCP["Google Cloud - proyecto terravid"]
+    WIF["Workload Identity<br/>Federation (OIDC)"]
+    AR["Artifact Registry<br/>imagen api :main y :sha"]
+    subgraph GCE["VM terravid - e2-micro - us-central1-a"]
+      TIMER["systemd timer<br/>terravid-deploy (cada 2 min)"]
+      subgraph COMPOSE["docker-compose.prod.yml"]
+        C_CADDY["caddy:2-alpine"]
+        C_API["api (NestJS)"]
+        C_MQTT["eclipse-mosquitto:2<br/>profile mqtt"]
+        C_DB[("postgres:16-alpine")]
+      end
+    end
+    GCS[("Cloud Storage<br/>backups de la base")]
+    subgraph FIREBASE["Firebase"]
+      H_WEB["Hosting: terravid.web.app"]
+      H_PWA["Hosting: terravid-app.web.app"]
+      FCM["Cloud Messaging"]
+    end
+  end
+
+  DNS["DuckDNS<br/>terravid-api.duckdns.org"]
+  PHONE["Teléfonos Android<br/>APK instalado por enlace"]
+  NODE["NodeMCU ESP8266<br/>en el cuartel"]
+
+  IDE -- "git push / Pull Request" --> REPOS
+  REPOS --> GHA
+  GHA -- "token OIDC" --> WIF
+  WIF -- "Backend: push de imagen" --> AR
+  WIF -- "Web y Mobile: firebase deploy" --> H_WEB
+  WIF --> H_PWA
+  TIMER -- "pull de :main, migra y levanta" --> AR
+  TIMER --> COMPOSE
+  C_DB -. "backup diario" .-> GCS
+  C_API --> FCM
+  EAS_CLI -- "eas build" --> EASB
+  EASB -- "enlace al .apk" --> PHONE
+  DNS -- "resuelve a la IP fija de la VM" --> GCE
+  NODE -- "MQTTS :8883" --> C_MQTT
