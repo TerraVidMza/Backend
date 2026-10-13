@@ -9,7 +9,7 @@
  *
  * Se valida a mano y no con un esquema de Joi o zod para no sumar una
  * dependencia por doce variables, y porque varias reglas de acá son condicionales
- * (`PUSH_TRANSPORT=fcm` exige tres credenciales más) y quedan más claras escritas.
+ * (`PUSH_TRANSPORT=fcm` exige el proyecto de Firebase) y quedan más claras escritas.
  */
 
 /** Falla al arrancar si el entorno no alcanza para levantar la aplicación. */
@@ -106,13 +106,15 @@ export function validarEntorno(
   if (!['log', 'fcm'].includes(push)) {
     invalidas.push(`PUSH_TRANSPORT="${push}" no es 'log' ni 'fcm'`);
   }
+  // FCM va sin clave en producción (D-033): con solo el proyecto, el SDK usa
+  // la cuenta de servicio de la VM. La clave es opcional, pero si vino una de
+  // sus dos partes tiene que venir la otra; es la misma regla que aplica
+  // `resolverCredenciales`. Exigir las tres tumbó la API al pasar a sin clave.
   if (push === 'fcm') {
-    for (const clave of [
-      'FIREBASE_PROJECT_ID',
-      'FIREBASE_CLIENT_EMAIL',
-      'FIREBASE_PRIVATE_KEY',
-    ]) {
-      requerida(clave);
+    requerida('FIREBASE_PROJECT_ID');
+    if (entorno.FIREBASE_CLIENT_EMAIL || entorno.FIREBASE_PRIVATE_KEY) {
+      requerida('FIREBASE_CLIENT_EMAIL');
+      requerida('FIREBASE_PRIVATE_KEY');
     }
   }
 
