@@ -815,3 +815,18 @@ Se probó primero en un canal de preview del proyecto viejo. Como esa configurac
 Informe completo, con capturas y cuadro antes/después: [`entrega-demo2/03-analisis-estatico.md`](entrega-demo2/03-analisis-estatico.md).
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-035 — Hallazgos de SonarCloud: hash dummy generado al arrancar
+
+**Contexto:** el primer análisis de SonarCloud (D-034) dio al backend **Security E**. La causa era un BLOCKER (`secrets:S8215`): el hash bcrypt fijo `HASH_DUMMY` en `auth.service.ts`, que se usa para que el login tarde lo mismo exista o no el email. El analizador no distingue ese hash de uno filtrado. Además tenía un problema propio: su costo estaba fijo en 12, así que con `BCRYPT_SALT_ROUNDS` en otro valor la diferencia de tiempo volvía a delatar si la cuenta existía.
+
+**Decisión:**
+
+- `HASH_DUMMY` se calcula al arrancar con `bcrypt.hashSync` sobre 32 bytes aleatorios y el costo de `saltRounds()`. No queda ningún secreto en el código y el tiempo de respuesta es siempre igual al de una contraseña real. El costo es un hash al iniciar el proceso, menos de 300 ms.
+- `PASSWORD_DEMO` (`S2068`) se marca `NOSONAR` con su justificación: es la clave pública de la base de demostración y producción la rechaza (`credencialesDelPropietario`).
+
+Los hallazgos de tests y workflows (contraseñas de fixtures, actions sin SHA fijo, `--ignore-scripts`) quedan registrados en `entrega-demo2/03-analisis-estatico.md` §5.
+
+**Estado:** ✅ Vigente.
