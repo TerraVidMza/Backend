@@ -214,8 +214,14 @@ Qué hay detrás de cada calificación baja:
 
 | Proyecto | Indicador | Primer análisis | Después de las correcciones |
 |---|---|---|---|
-| Backend | Security | **E** · 1 BLOCKER + 1 MAJOR | <!--DESPUES-B--> *se completa con el análisis de `main` tras el merge* |
-| Web | Reliability | **D** · 2 CRITICAL | <!--DESPUES-W--> *ídem* |
+| Backend | Security | **E** · 1 BLOCKER + 1 MAJOR | **A** · 0 issues (`main` 722ba9a) |
+| Web | Reliability | **D** · 2 CRITICAL | **A** · 0 bugs (`main` 21e842a) |
+| Mobile | Reliability / Security | C / C | Sin cambios: planificado (§5) |
+
+Las tres Quality Gates siguen aprobadas.
+
+![SonarCloud Backend, después de las correcciones](img/analisis/sonarcloud-backend-despues.png)
+![SonarCloud Web, después de las correcciones](img/analisis/sonarcloud-web-despues.png)
 
 ### Cuadro global (los tres repositorios)
 
