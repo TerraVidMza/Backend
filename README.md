@@ -193,7 +193,7 @@ Los módulos del backend están construidos y exponen sus endpoints REST. El det
 | `configuracion` | HU-33 | Parámetros generales (clave-valor): organización, moneda, unidades, zona horaria |
 | `catalogo-item` | HU-34 | Catálogos maestros genéricos: variedades, sistemas de conducción, estados de cuartel, unidades de medida |
 | `notificaciones` | HU-35 | Notificaciones in-app por rol y push a móviles (FCM) |
-| `ayuda` | HU-36 | Artículos de ayuda y tickets de soporte |
+| `ayuda` | HU-36 | Preguntas frecuentes de la empresa y tickets de soporte. El manual de usuario viaja con la Web y la app (D-036) |
 
 > El estado por HU (🟢 completa / 🟠 parcial / 🔴 incompleta), con el motivo puntual de cada una que no está cerrada, se lleva en [`docs/specs/README.md`](docs/specs/README.md). Las entidades siguen el diagrama de Entidad-Relación (Anexo 2 del documento maestro — ver [`docs/REFERENCES.md`](docs/REFERENCES.md)).
 

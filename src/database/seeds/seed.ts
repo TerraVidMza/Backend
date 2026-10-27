@@ -8,11 +8,6 @@ import { Empresa } from '../../modules/empresas/entities/empresa.entity';
 import { Usuario } from '../../modules/usuarios/entities/usuario.entity';
 import { CatalogoItem } from '../../modules/catalogo-item/entities/catalogo-item.entity';
 import { CATALOGOS_POR_DEFECTO } from '../../modules/catalogo-item/catalogos-por-defecto';
-import {
-  ArticuloAyuda,
-  ModuloAyuda,
-  TipoArticulo,
-} from '../../modules/ayuda/entities/articulo-ayuda.entity';
 import { Configuracion } from '../../modules/configuracion/entities/configuracion.entity';
 import { Campania } from '../../modules/campanias/entities/campania.entity';
 import { RolNombre } from '../../common/enums/rol.enum';
@@ -29,9 +24,6 @@ async function seed() {
   const usuarioRepo = app.get<Repository<Usuario>>(getRepositoryToken(Usuario));
   const catalogoRepo = app.get<Repository<CatalogoItem>>(
     getRepositoryToken(CatalogoItem),
-  );
-  const articuloAyudaRepo = app.get<Repository<ArticuloAyuda>>(
-    getRepositoryToken(ArticuloAyuda),
   );
   const configuracionRepo = app.get<Repository<Configuracion>>(
     getRepositoryToken(Configuracion),
@@ -149,62 +141,9 @@ async function seed() {
     }
   }
 
-  console.log('Sembrando artículos del Centro de Ayuda...');
-  const articulos: Array<{
-    tipo: TipoArticulo;
-    modulo: ModuloAyuda;
-    titulo: string;
-    contenido: string;
-    orden: number;
-  }> = [
-    {
-      tipo: TipoArticulo.MANUAL,
-      modulo: ModuloAyuda.AUTENTICACION,
-      titulo: 'Cómo iniciar sesión',
-      contenido:
-        'Ingresá tu email y contraseña en la pantalla de login. Si olvidaste tu contraseña, usá el enlace "Recuperar contraseña".',
-      orden: 1,
-    },
-    {
-      tipo: TipoArticulo.FAQ,
-      modulo: ModuloAyuda.AUTENTICACION,
-      titulo: '¿Qué pasa si fallo el login varias veces?',
-      contenido:
-        'Después de 5 intentos fallidos, la cuenta se bloquea temporalmente por 15 minutos por seguridad.',
-      orden: 1,
-    },
-    {
-      tipo: TipoArticulo.MANUAL,
-      modulo: ModuloAyuda.OPERACIONES,
-      titulo: 'Registrar una labor en modo offline',
-      contenido:
-        'La app móvil permite registrar labores sin conexión. Los registros se sincronizan automáticamente al recuperar señal, usando un identificador único para evitar duplicados.',
-      orden: 1,
-    },
-    {
-      tipo: TipoArticulo.MANUAL,
-      modulo: ModuloAyuda.VENDIMIA,
-      titulo: 'Generar un remito de vendimia',
-      contenido:
-        'Desde el cuartel con pesajes pendientes, generá un borrador de remito. El Propietario o Agrónomo debe aprobarlo o rechazarlo antes de liquidar.',
-      orden: 1,
-    },
-  ];
-
-  for (const articulo of articulos) {
-    const existente = await articuloAyudaRepo.findOne({
-      where: {
-        tipo: articulo.tipo,
-        modulo: articulo.modulo,
-        titulo: articulo.titulo,
-      },
-    });
-    if (!existente) {
-      await articuloAyudaRepo.save(
-        articuloAyudaRepo.create({ ...articulo, activo: true }),
-      );
-    }
-  }
+  // El Centro de Ayuda no se siembra (D-036): el manual de cada rol viaja con
+  // la Web y la app móvil, y `articulos_ayuda` queda para las preguntas
+  // frecuentes que cargue el Propietario.
 
   // HU-33. Ninguna de estas claves se sembraba, y varias funcionalidades las
   // leen: sin `support_email` el ticket de soporte nunca notificaba, y sin
