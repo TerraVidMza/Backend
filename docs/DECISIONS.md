@@ -830,3 +830,22 @@ Informe completo, con capturas y cuadro antes/después: [`entrega-demo2/03-anali
 Los hallazgos de tests y workflows (contraseñas de fixtures, actions sin SHA fijo, `--ignore-scripts`) quedan registrados en `entrega-demo2/03-analisis-estatico.md` §5.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-036 — Manual de usuario por rol dentro de la aplicación
+
+**Contexto:** el Centro de Ayuda (HU-36) leía el manual de la tabla `articulos_ayuda`. En producción la tabla estaba vacía, porque solo la llenaba el seed con cuatro artículos de ejemplo, y el usuario veía un centro de ayuda sin nada. Además, el modelo era de texto plano: no admitía capturas, títulos ni listas, y no distinguía roles. El manual completo existía solo como documento de la entrega (`entrega-demo2/04-manual-usuario-propietario.md`) y solo para el Propietario.
+
+**Decisión:**
+
+- El manual viaja **empaquetado con cada aplicación**, en Markdown con capturas, y no en la base. Se versiona con el código que describe, no depende de que alguien corra un seed y en el teléfono se lee sin señal.
+  - Web: un manual por rol en `Web/src/features/ayuda/manual/contenido/` (W-034).
+  - App móvil: el manual de campo en `Mobile/src/manual/contenido.ts` (M-022).
+- **Cada rol ve solo su manual**, con lo que su rol puede hacer: Propietario, Agrónomo, Capataz, Auditor y Administrador de plataforma. El del Capataz cubre la app móvil y lo que puede hacer en la Web.
+- Permiso nuevo **`manual`** para todos los roles, Administrador incluido. Igual que `appMovil`, no cubre un endpoint: decide qué muestra la Web. El Administrador sigue sin `ayuda`, porque los pedidos de soporte son por empresa y él no tiene una.
+- `articulos_ayuda` queda para las preguntas frecuentes que cargue cada empresa. El seed ya no siembra los cuatro artículos de ejemplo, y la migración `QuitarArticulosDeEjemplo1793126229412` los borra por título exacto de las bases donde existan. Un artículo cargado a mano no se toca.
+
+**Despliegue:** primero el Backend y después la Web. Una Web nueva con un backend viejo no recibe el permiso `manual` y oculta la sección Ayuda hasta el próximo inicio de sesión.
+
+**Estado:** ✅ Vigente.

@@ -771,9 +771,9 @@ check(
   loginAdmin.status,
 );
 check(
-  'sus permisos son solo perfil y empresas',
+  'sus permisos son solo perfil, manual y empresas',
   JSON.stringify(loginAdmin.body?.user?.permisos) ===
-    JSON.stringify(['perfil', 'empresas']),
+    JSON.stringify(['perfil', 'manual', 'empresas']),
   loginAdmin.body?.user?.permisos,
 );
 const comoAdmin = (metodo, ruta) =>
