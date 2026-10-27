@@ -38,10 +38,10 @@ type Handler = [Function, string];
 const TODOS = ROLES_DE_EMPRESA;
 
 /**
- * Qué handlers cubre cada permiso (D-024). Un permiso sin handlers propios
- * (`appMovil`) se verifica aparte.
+ * Qué handlers cubre cada permiso (D-024). Los permisos sin handlers propios
+ * (`appMovil`, `manual`) se verifican aparte.
  */
-const COBERTURA: Record<Exclude<Permiso, 'appMovil'>, Handler[]> = {
+const COBERTURA: Record<Exclude<Permiso, 'appMovil' | 'manual'>, Handler[]> = {
   dashboard: [[DashboardController, 'getIndicadores']],
   perfil: [
     [UsuariosController, 'findMe'],
@@ -259,6 +259,10 @@ describe('Tabla de permisos (D-024)', () => {
     expect(tienePermiso(RolNombre.CAPATAZ, 'appMovil')).toBe(true);
   });
 
+  it('todos los roles, Administrador incluido, leen el manual (D-036)', () => {
+    expect(ordenar(PERMISOS.manual)).toEqual(ordenar(Object.values(RolNombre)));
+  });
+
   it('permisosDe devuelve solo los del rol', () => {
     const auditor = permisosDe(RolNombre.AUDITOR);
     expect(auditor).toContain('logAuditoria');
@@ -271,7 +275,11 @@ describe('Tabla de permisos (D-024)', () => {
     );
   });
 
-  it('el Administrador de plataforma solo administra empresas y su perfil', () => {
-    expect(permisosDe(RolNombre.ADMINISTRADOR)).toEqual(['perfil', 'empresas']);
+  it('el Administrador de plataforma solo administra empresas, su perfil y lee el manual', () => {
+    expect(permisosDe(RolNombre.ADMINISTRADOR)).toEqual([
+      'perfil',
+      'manual',
+      'empresas',
+    ]);
   });
 });

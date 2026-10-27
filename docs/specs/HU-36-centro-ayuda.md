@@ -14,6 +14,8 @@
 
 > **Auditoría (2026-08-24):** el envío de email está implementado pero nunca se ejecuta porque las claves SMTP no están seedeadas. Los tickets no se filtran por empresa. Ver [plan de mejoras](PLAN-MEJORAS.md).
 >
+> **Manual por rol (2026-10-27, D-036):** el manual dejó de leerse de `articulos_ayuda`, que en producción estaba vacía. Ahora viaja con cada aplicación, uno por rol y con capturas: la Web lo muestra en **Ayuda → Manual de usuario** con índice y buscador, y la app móvil en la pestaña **Ayuda**, legible sin señal y con el formulario de pedido de ayuda. `articulos_ayuda` queda para las preguntas frecuentes de cada empresa, con la marca «Actualizado». Sigue pendiente el cacheo de la Web en un Service Worker: la Web no es PWA.
+>
 > **Fase 2 (2026-08-24):** el envío del ticket dejó de armar su propio transport y usa `MailService`, que resuelve el SMTP por empresa y cae a variables de entorno (F2-4). Con `support_email` ya seedeado, el correo efectivamente sale.
 
 ## Descripción
@@ -42,3 +44,4 @@ Para **resolver dudas de uso sin necesidad de contactar al equipo técnico.**
 ## Notas / decisiones
 
 - Implementado en `src/modules/ayuda` (`articulos-ayuda.service.ts` + `ticket-soporte.service.ts`).
+- Manual de usuario: `Web/src/features/ayuda/manual/contenido/<rol>.md` y `Mobile/src/manual/contenido.ts` (D-036). El permiso `manual` decide quién ve la sección.

@@ -5,6 +5,8 @@ Aplicación Web · https://terravid.web.app
 Versión del manual: 13/10/2026
 
 **Proyecto Final — UTN FRM — Etapa 6**
+
+> **Nota (27/10/2026):** este es el manual tal como se entregó en la Demo 2. La versión vigente, con un manual por cada rol (Propietario, Agrónomo, Capataz, Auditor y Administrador de plataforma) y capturas actualizadas, está dentro de la aplicación, en **Ayuda → Manual de usuario**. Sus fuentes están en `Web/src/features/ayuda/manual/contenido/` y `Mobile/src/manual/contenido.ts` (D-036).
 Integrantes: Paula Alvarado · Sergio Farias
 
 ---

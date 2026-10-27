@@ -31,6 +31,12 @@ export const PERMISOS = {
   campanias: TODOS,
   /** `AyudaController.findArticulos` / `crearTicket` (HU-36). */
   ayuda: TODOS,
+  /**
+   * Leer el manual de usuario. No cubre un endpoint: el manual viaja con la
+   * Web y la app (D-036). Incluye al Administrador, que también lo necesita
+   * y no tiene empresa para pedir soporte.
+   */
+  manual: [...ROLES_DE_EMPRESA, ADMINISTRADOR],
 
   /** Lectura de fincas y cuarteles; incluye al Auditor (D-021). */
   fincas: [PROPIETARIO, AGRONOMO, CAPATAZ, AUDITOR],
