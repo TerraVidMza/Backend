@@ -113,4 +113,19 @@ export class SensoresController {
     await this.alcance.verificarSensor(id, user.empresaId);
     return this.sensoresService.desactivar(id);
   }
+
+  @Patch(':id/activar')
+  @Auditar({
+    accion: 'ACTIVAR_SENSOR',
+    entidad: 'sensor',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
+  async activar(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.alcance.verificarSensor(id, user.empresaId);
+    return this.sensoresService.activar(id);
+  }
 }

@@ -82,6 +82,13 @@ export class InsumosService {
     return this.insumoRepository.save(insumo);
   }
 
+  /** Reactiva un insumo dado de baja. Idempotente. */
+  async activar(id: string, empresaId: string): Promise<Insumo> {
+    const insumo = await this.findById(id, empresaId);
+    insumo.activo = true;
+    return this.insumoRepository.save(insumo);
+  }
+
   async setCosto(
     insumoId: string,
     dto: SetCostoInsumoDto,

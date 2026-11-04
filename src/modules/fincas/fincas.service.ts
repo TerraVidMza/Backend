@@ -127,4 +127,14 @@ export class FincasService {
     finca.activa = false;
     return this.fincaRepository.save(finca);
   }
+
+  /**
+   * Reactiva una finca dada de baja. Idempotente. Los cuarteles que tenía no se
+   * reactivan solos: la baja no cascadeaba, así que cada uno conserva su estado.
+   */
+  async activar(id: string, empresaId: string): Promise<Finca> {
+    const finca = await this.findById(id, empresaId);
+    finca.activa = true;
+    return this.fincaRepository.save(finca);
+  }
 }

@@ -203,6 +203,23 @@ export class CuartelesService {
     return this.cuartelRepository.save(cuartel);
   }
 
+  /**
+   * Reactiva un cuartel dado de baja. Idempotente. Exige que su finca esté
+   * activa: un cuartel activo colgando de una finca de baja quedaría invisible
+   * en los listados pero seguiría aceptando labores y pesajes (el mismo problema
+   * que la baja de finca evita con un 409).
+   */
+  async activar(id: string): Promise<Cuartel> {
+    const cuartel = await this.findById(id);
+    if (!cuartel.finca.activa) {
+      throw new ConflictException(
+        'La finca del cuartel está dada de baja. Reactivala primero.',
+      );
+    }
+    cuartel.activo = true;
+    return this.cuartelRepository.save(cuartel);
+  }
+
   /** Cuarteles activos por finca, para el contador del listado (HU-08). */
   async contarActivosPorFinca(
     fincaIds: string[],

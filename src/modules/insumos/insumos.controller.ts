@@ -105,4 +105,18 @@ export class InsumosController {
   ) {
     return this.insumosService.desactivar(id, user.empresaId);
   }
+
+  @Patch(':id/activar')
+  @Auditar({
+    accion: 'ACTIVAR_INSUMO',
+    entidad: 'insumo',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO)
+  activar(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.insumosService.activar(id, user.empresaId);
+  }
 }

@@ -102,4 +102,18 @@ export class FincasController {
   ) {
     return this.fincasService.desactivar(id, user.empresaId);
   }
+
+  @Patch(':id/activar')
+  @Auditar({
+    accion: 'ACTIVAR_FINCA',
+    entidad: 'finca',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO)
+  activar(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.fincasService.activar(id, user.empresaId);
+  }
 }
