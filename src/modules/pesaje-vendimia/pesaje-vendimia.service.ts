@@ -1,8 +1,14 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { PesajeVendimia } from './entities/pesaje-vendimia.entity';
 import { CreatePesajeDto } from './dto/create-pesaje.dto';
+import { CorregirPesajeDto } from './dto/corregir-pesaje.dto';
 import { CuadrillasService } from '../cuadrillas/cuadrillas.service';
 import { EstadoSync } from '../../common/enums/estado-sync.enum';
 import { EstadoPesaje } from './entities/estado-pesaje.enum';
@@ -69,6 +75,72 @@ export class PesajeVendimiaService {
       throw new NotFoundException('Pesaje no encontrado');
     }
     return pesaje;
+  }
+
+  /**
+   * Pesajes observados de la empresa, con su cuartel, su cuadrilla y el remito
+   * que los rechazó (para mostrar el motivo a quien tiene que corregirlos).
+   */
+  async findObservados(empresaId: string): Promise<PesajeVendimia[]> {
+    return this.pesajeRepository.find({
+      where: {
+        estado: EstadoPesaje.OBSERVADO,
+        estadoSync: EstadoSync.SINCRONIZADO,
+        cuartel: { finca: { empresaId } },
+      },
+      relations: { cuadrilla: true, cuartel: { finca: true }, remito: true },
+      order: { fecha: 'DESC' },
+    });
+  }
+
+  /**
+   * Corrige un pesaje `observado` tras el rechazo de su remito y lo devuelve al
+   * circuito (`pendiente_remito`), listo para el próximo borrador.
+   *
+   * Solo vale para pesajes observados: uno en remito o liquidado ya forma parte
+   * de un documento aprobado o en revisión, y editarlo cambiaría kilos y dinero
+   * por debajo de él. Como la tarifa se congela al registrar, si cambia la
+   * cuadrilla, la fecha o los kilos se vuelve a buscar la tarifa vigente y se
+   * recalcula la liquidación. Se conserva `remitoId`: es la trazabilidad al
+   * remito que lo rechazó, y el próximo borrador lo reemplaza.
+   */
+  async corregir(
+    id: string,
+    dto: CorregirPesajeDto,
+    empresaId: string,
+  ): Promise<PesajeVendimia> {
+    const pesaje = await this.findById(id, empresaId);
+
+    if (pesaje.estado !== EstadoPesaje.OBSERVADO) {
+      throw new BadRequestException(
+        'Solo se puede corregir un pesaje observado: es el que quedó así tras el rechazo de un remito.',
+      );
+    }
+
+    const cuadrillaId = dto.cuadrillaId ?? pesaje.cuadrillaId;
+    const fecha = dto.fecha ? dto.fecha.slice(0, 10) : pesaje.fecha;
+    const kgTotales = dto.kgTotales ?? Number(pesaje.kgTotales);
+
+    const tarifa = await this.cuadrillasService.getTarifaVigente(
+      cuadrillaId,
+      fecha,
+    );
+    if (!tarifa) {
+      throw new BadRequestException(
+        `La cuadrilla no tiene tarifa vigente a la fecha ${fecha}.`,
+      );
+    }
+
+    await this.pesajeRepository.update(pesaje.id, {
+      cuadrillaId,
+      fecha,
+      kgTotales,
+      tarifaUtilizada: tarifa.tarifaPorKg,
+      montoLiquidacion: this.calcularLiquidacion(tarifa.tarifaPorKg, kgTotales),
+      inconsistenciaCatalogo: await this.cuadrillaDeBaja(cuadrillaId),
+      estado: EstadoPesaje.PENDIENTE_REMITO,
+    });
+    return this.findById(id, empresaId);
   }
 
   /**

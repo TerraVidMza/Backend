@@ -312,6 +312,72 @@ describe('Circuito de remitos (integración)', () => {
     });
   });
 
+  describe('corrección de pesajes observados', () => {
+    const rechazarConUnPesaje = async (kg: number): Promise<string> => {
+      const id = await pesar(kg);
+      const remito = await remitos.generarBorrador(
+        ctx.cuartelId,
+        ctx.usuarioId,
+      );
+      await remitos.rechazar(remito.id, ctx.usuarioId, 'motivo', ctx.empresaId);
+      return id;
+    };
+
+    it('corregir los kilos recalcula la liquidación y lo devuelve al circuito', async () => {
+      const id = await rechazarConUnPesaje(1000);
+
+      const corregido = await pesajes.corregir(
+        id,
+        { kgTotales: 800 },
+        ctx.empresaId,
+      );
+
+      expect(corregido.estado).toBe(EstadoPesaje.PENDIENTE_REMITO);
+      expect(Number(corregido.kgTotales)).toBe(800);
+      // Tarifa de 20 por kg (ver `beforeEach`).
+      expect(Number(corregido.montoLiquidacion)).toBe(16000);
+    });
+
+    it('el pesaje corregido entra al próximo borrador', async () => {
+      const id = await rechazarConUnPesaje(1000);
+      await pesajes.corregir(id, { kgTotales: 800 }, ctx.empresaId);
+
+      const nuevo = await remitos.generarBorrador(ctx.cuartelId, ctx.usuarioId);
+
+      expect(Number(nuevo.totalKg)).toBe(800);
+    });
+
+    it('los observados se listan con el motivo del rechazo y desaparecen al corregirse', async () => {
+      const id = await rechazarConUnPesaje(1000);
+
+      const antes = await pesajes.findObservados(ctx.empresaId);
+      expect(antes.map((p) => p.id)).toContain(id);
+      expect(antes.find((p) => p.id === id)?.remito?.motivoRechazo).toBe(
+        'motivo',
+      );
+
+      await pesajes.corregir(id, { kgTotales: 900 }, ctx.empresaId);
+      const despues = await pesajes.findObservados(ctx.empresaId);
+      expect(despues.map((p) => p.id)).not.toContain(id);
+    });
+
+    it('un pesaje que no está observado no se puede corregir', async () => {
+      const id = await pesar(1000);
+
+      await expect(
+        pesajes.corregir(id, { kgTotales: 800 }, ctx.empresaId),
+      ).rejects.toThrow(/observado/i);
+    });
+
+    it('no corrige pesajes de otra empresa', async () => {
+      const id = await rechazarConUnPesaje(1000);
+
+      await expect(
+        pesajes.corregir(id, { kgTotales: 800 }, randomUUID()),
+      ).rejects.toThrow(/no encontrado/i);
+    });
+  });
+
   describe('liquidación de la bodega (HU-25, D-010)', () => {
     const aprobarRemito = async (): Promise<string> => {
       await pesar(1000);
