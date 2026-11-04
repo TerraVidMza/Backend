@@ -20,9 +20,13 @@ Ninguno de los cinco requiere administrar un sistema operativo: no hay servidor 
 
 **La alternativa evaluada**, con el procedimiento completo en el [Apéndice A](#apéndice-a--alternativa-de-bajo-costo-vm-e2-micro-del-nivel-gratuito), es una VM `e2-micro` de Compute Engine con `docker compose` —la API y Postgres en la misma máquina, igual que en desarrollo—. Entra en el nivel gratuito permanente de Google, así que gana si el presupuesto es cero, pero HTTPS, backups y parches quedan a cargo del equipo, y las regiones gratuitas están en Estados Unidos (unos 150 ms extra desde Mendoza).
 
-### No hace falta PostGIS
+### PostGIS: hace falta desde D-037
 
-El [`docker-compose.yml`](../docker-compose.yml) de desarrollo usa la imagen `postgis/postgis`, así que la suposición natural es que la base de producción necesita la extensión. No la necesita: el centroide de los cuarteles está modelado como dos columnas `decimal(10,7)` —decisión deliberada, documentada en `cuartel.entity.ts`— y la única extensión que piden las migraciones es `btree_gist`, que Cloud SQL soporta de fábrica. Una instancia PostgreSQL común alcanza.
+Hasta D-037 la base de producción **no necesitaba PostGIS**: la ubicación de fincas y cuarteles eran dos columnas `decimal(10,7)` y la única extensión que pedían las migraciones era `btree_gist`. Desde la migración `PoligonosPostgis` (polígonos de fincas y cuarteles, [D-037](DECISIONS.md#d-037--polígonos-de-fincas-y-cuarteles-con-postgis)) **sí hace falta**: la migración ejecuta `CREATE EXTENSION postgis`.
+
+- **VM con Docker (Apéndice A):** `deploy/docker-compose.prod.yml` usa `postgres:16-alpine`, que no la trae. Hay que pasar a `postgis/postgis:16-3.4-alpine` **antes** de desplegar una versión que incluya esa migración. Si no, `actualizar.sh` falla en el paso de migrar y corta antes de levantar la imagen nueva: la versión vieja sigue sirviendo, pero no se puede desplegar. Usar la variante *alpine*, no la Debian: cambiar de libc altera el orden de colación y puede invalidar índices de texto. Hacer backup (`pg_dump`) y ensayar sobre una copia antes.
+- **Cloud SQL (camino principal):** no hay que cambiar de imagen; Cloud SQL para PostgreSQL soporta PostGIS y la migración, que corre con las credenciales de administración, la habilita sola.
+- **Desarrollo:** `docker-compose.yml` ya usa `postgis/postgis`, sin cambios.
 
 ---
 

@@ -9,6 +9,11 @@ import { Finca } from './entities/finca.entity';
 import { CreateFincaDto } from './dto/create-finca.dto';
 import { UpdateFincaDto } from './dto/update-finca.dto';
 import { CuartelesService } from '../cuarteles/cuarteles.service';
+import { GeoService } from '../../common/geo/geo.service';
+import {
+  ConAdvertencias,
+  conAdvertencias,
+} from '../../common/geo/advertencias';
 
 @Injectable()
 export class FincasService {
@@ -16,6 +21,7 @@ export class FincasService {
     @InjectRepository(Finca)
     private readonly fincaRepository: Repository<Finca>,
     private readonly cuartelesService: CuartelesService,
+    private readonly geoService: GeoService,
   ) {}
 
   /**
@@ -58,13 +64,19 @@ export class FincasService {
     return finca;
   }
 
-  create(
+  /**
+   * Alta de finca (HU-08). Con `poligono`, las hectáreas y el punto del mapa se
+   * derivan de él (ver `GeoService.derivar`).
+   */
+  async create(
     dto: CreateFincaDto,
     createdById: string,
     empresaId: string,
   ): Promise<Finca> {
+    const derivados = await this.geoService.derivar(dto, null, 'finca');
     const finca = this.fincaRepository.create({
       ...dto,
+      ...derivados,
       empresaId,
       createdById,
       activa: true,
@@ -72,14 +84,27 @@ export class FincasService {
     return this.fincaRepository.save(finca);
   }
 
+  /**
+   * Edición de finca (HU-08). Si cambia el contorno, devuelve una advertencia
+   * (no un error) cuando algún cuartel con polígono queda fuera de él.
+   */
   async update(
     id: string,
     dto: UpdateFincaDto,
     empresaId: string,
-  ): Promise<Finca> {
+  ): Promise<ConAdvertencias<Finca>> {
     const finca = await this.findById(id, empresaId);
-    Object.assign(finca, dto);
-    return this.fincaRepository.save(finca);
+    const derivados = await this.geoService.derivar(dto, finca, 'finca');
+    Object.assign(finca, dto, derivados);
+    const guardada = await this.fincaRepository.save(finca);
+
+    const advertencia = dto.poligono
+      ? await this.geoService.advertenciaCuartelesFueraDelContorno(
+          id,
+          dto.poligono,
+        )
+      : null;
+    return conAdvertencias(guardada, [advertencia]);
   }
 
   /**
