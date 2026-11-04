@@ -1,4 +1,5 @@
-import { IsOptional, IsString, Length } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
 
 /**
  * Filtro del listado de fincas (HU-08, HU-11).
@@ -14,4 +15,10 @@ export class ListarFincasDto {
   @IsString()
   @Length(1, 100)
   search?: string;
+
+  /** `true` lista las dadas de baja, para poder reactivarlas. Por defecto, las activas. */
+  @IsOptional()
+  @Transform(({ value }) => value === 'true' || value === true)
+  @IsBoolean()
+  inactivas?: boolean;
 }

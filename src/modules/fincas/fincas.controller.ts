@@ -50,7 +50,11 @@ export class FincasController {
     @CurrentUser() user: AuthenticatedUser,
     @Query() query: ListarFincasDto,
   ) {
-    return this.fincasService.findAll(user.empresaId, query.search);
+    return this.fincasService.findAll(
+      user.empresaId,
+      query.search,
+      query.inactivas,
+    );
   }
 
   @Get(':id')

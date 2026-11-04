@@ -34,11 +34,12 @@ export class FincasService {
   async findAll(
     empresaId: string,
     search?: string,
+    inactivas = false,
   ): Promise<Array<Finca & { cuartelesActivos: number }>> {
     const fincas = await this.fincaRepository.find({
       where: {
         empresaId,
-        activa: true,
+        activa: !inactivas,
         ...(search ? { nombre: ILike(`%${search}%`) } : {}),
       },
       order: { nombre: 'ASC' },
