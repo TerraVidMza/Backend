@@ -109,4 +109,13 @@ export class RegistroLabor {
 
   @Column({ type: 'decimal', precision: 10, scale: 7, nullable: true })
   longitud: number | null;
+
+  @Column({ name: 'anulado_por', type: 'uuid', nullable: true })
+  anuladoPorId: string | null;
+
+  @Column({ name: 'motivo_anulacion', type: 'text', nullable: true })
+  motivoAnulacion: string | null;
+
+  @Column({ name: 'fecha_anulacion', type: 'timestamptz', nullable: true })
+  fechaAnulacion: Date | null;
 }
