@@ -23,12 +23,18 @@ name: terravid
 
 services:
   db:
-    # `postgres` y no `postgis/postgis` como en desarrollo: el esquema no usa
-    # tipos espaciales y la única extensión que piden las migraciones es
-    # `btree_gist`, que viene en contrib (D-018). Si alguna vez se agrega una
-    # columna `geometry`, esta imagen hay que cambiarla — en desarrollo el
-    # cambio pasaría inadvertido porque ahí PostGIS sí está instalado.
-    image: postgres:16-alpine
+    # PostGIS desde D-037: la migración `PoligonosPostgis` ejecuta
+    # `CREATE EXTENSION postgis`, que en `postgres:16-alpine` no existe.
+    #
+    # La variante alpine y la 3.6 a propósito: la 3.6 trae el mismo PostgreSQL
+    # que la imagen anterior (16.15, musl), así que el volumen se abre tal cual,
+    # sin dump ni restore. La 16-3.4-alpine trae 16.4 y sería bajar de versión
+    # menor; la Debian cambia de libc y con eso el orden de colación de los
+    # índices de texto. Ensayado sobre una copia del esquema de producción.
+    #
+    # Este cambio tiene que llegar a `main` en un commit propio, antes que la
+    # migración: actualizar.sh migra primero y recrea la base después.
+    image: postgis/postgis:16-3.6-alpine
     container_name: terravid-db
     restart: unless-stopped
     environment:
