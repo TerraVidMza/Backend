@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   HttpStatus,
+  Patch,
   Post,
   Query,
   Res,
@@ -14,6 +15,7 @@ import type { Response } from 'express';
 import { PesajeVendimiaService } from './pesaje-vendimia.service';
 import { CreatePesajeDto } from './dto/create-pesaje.dto';
 import { SyncPesajeDto } from './dto/sync-pesaje.dto';
+import { CorregirPesajeDto } from './dto/corregir-pesaje.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { RolesGuard } from '../../common/guards/roles.guard';
@@ -67,6 +69,17 @@ export class PesajeVendimiaController {
     return this.pesajeVendimiaService.getEstadoCosechaPorCuartel(cuartelId);
   }
 
+  /**
+   * Pesajes que quedaron observados por el rechazo de un remito, de toda la
+   * empresa. Es lo que ve el Capataz para saber qué tiene que corregir. Va
+   * antes de `:id` para que "observados" no se lea como un UUID.
+   */
+  @Get('observados')
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
+  findObservados(@CurrentUser() user: AuthenticatedUser) {
+    return this.pesajeVendimiaService.findObservados(user.empresaId);
+  }
+
   @Get(':id')
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO, RolNombre.CAPATAZ)
   findOne(
@@ -74,6 +87,24 @@ export class PesajeVendimiaController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.pesajeVendimiaService.findById(id, user.empresaId);
+  }
+
+  @Patch(':id')
+  @Auditar({
+    accion: 'CORREGIR_PESAJE',
+    entidad: 'pesaje_vendimia',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.CAPATAZ, RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
+  async corregir(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CorregirPesajeDto,
+  ) {
+    if (dto.cuadrillaId) {
+      await this.alcance.verificarCuadrilla(dto.cuadrillaId, user.empresaId);
+    }
+    return this.pesajeVendimiaService.corregir(id, dto, user.empresaId);
   }
 
   @Post()

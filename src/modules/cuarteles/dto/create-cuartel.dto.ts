@@ -9,6 +9,8 @@ import {
   Min,
 } from 'class-validator';
 import { EsAnioImplantacionValido } from '../../../common/validators/anio-implantacion.validator';
+import { EsPoligonoGeoJson } from '../../../common/geo/es-poligono-geojson.validator';
+import type { PoligonoGeoJson } from '../../../common/geo/poligono';
 
 export class CreateCuartelDto {
   @IsUUID()
@@ -55,4 +57,13 @@ export class CreateCuartelDto {
   @Min(-180)
   @Max(180)
   longitud?: number;
+
+  /**
+   * Contorno del cuartel en GeoJSON (`[longitud, latitud]`). Con polígono,
+   * `hectareas`, `latitud` y `longitud` se derivan de él. En una edición,
+   * `null` quita el polígono y devuelve el cuartel a la carga manual.
+   */
+  @IsOptional()
+  @EsPoligonoGeoJson()
+  poligono?: PoligonoGeoJson | null;
 }

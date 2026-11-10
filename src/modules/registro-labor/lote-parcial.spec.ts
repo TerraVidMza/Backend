@@ -8,6 +8,7 @@ import { DetalleInsumoLabor } from './entities/detalle-insumo-labor.entity';
 import { TipoLaborService } from '../tipo-labor/tipo-labor.service';
 import { InsumosService } from '../insumos/insumos.service';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
+import { CampaniasService } from '../campanias/campanias.service';
 import { EstadoSync } from '../../common/enums/estado-sync.enum';
 import type { CreateRegistroLaborDto } from './dto/create-registro-labor.dto';
 
@@ -109,6 +110,7 @@ describe('RegistroLaborService.sincronizarLote — lote parcial', () => {
         { provide: TipoLaborService, useValue: tipoLabor },
         { provide: InsumosService, useValue: { getCostoVigente: jest.fn() } },
         { provide: NotificacionesService, useValue: notificaciones },
+        { provide: CampaniasService, useValue: { findAll: jest.fn() } },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();

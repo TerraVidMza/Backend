@@ -150,4 +150,19 @@ export class CuartelesController {
     await this.alcance.verificarCuartel(id, user.empresaId);
     return this.cuartelesService.desactivar(id, user.empresaId);
   }
+
+  @Patch(':id/activar')
+  @Auditar({
+    accion: 'ACTIVAR_CUARTEL',
+    entidad: 'cuartel',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO)
+  async activar(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.alcance.verificarCuartel(id, user.empresaId);
+    return this.cuartelesService.activar(id);
+  }
 }

@@ -5,6 +5,7 @@ import { ConflictException, NotFoundException } from '@nestjs/common';
 import { FincasService } from './fincas.service';
 import { Finca } from './entities/finca.entity';
 import { CuartelesService } from '../cuarteles/cuarteles.service';
+import { GeoService } from '../../common/geo/geo.service';
 
 const EMPRESA_ID = '11111111-1111-1111-1111-111111111111';
 const OTRA_EMPRESA_ID = '22222222-2222-2222-2222-222222222222';
@@ -22,8 +23,18 @@ describe('FincasService', () => {
     contarActivosPorFinca: jest.Mock;
     contarActivos: jest.Mock;
   };
+  let geoService: {
+    derivar: jest.Mock;
+    advertenciaCuartelesFueraDelContorno: jest.Mock;
+  };
 
   beforeEach(async () => {
+    geoService = {
+      derivar: jest.fn(() => Promise.resolve({})),
+      advertenciaCuartelesFueraDelContorno: jest.fn(() =>
+        Promise.resolve(null),
+      ),
+    };
     repo = {
       find: jest.fn(() => Promise.resolve([])),
       findOne: jest.fn(() => Promise.resolve(null)),
@@ -40,6 +51,9 @@ describe('FincasService', () => {
         FincasService,
         { provide: getRepositoryToken(Finca), useValue: repo },
         { provide: CuartelesService, useValue: cuartelesService },
+        // La lógica espacial se prueba en `geo.service.spec.ts` y contra
+        // PostGIS en el e2e; acá solo importa cómo la usa el servicio.
+        { provide: GeoService, useValue: geoService },
       ],
     }).compile();
 
@@ -141,6 +155,106 @@ describe('FincasService', () => {
       expect(repo.save).toHaveBeenCalledWith(
         expect.objectContaining({ activa: false }),
       );
+    });
+  });
+
+  describe('polígono (HU-08)', () => {
+    const poligono = {
+      type: 'Polygon' as const,
+      coordinates: [
+        [
+          [-68.9, -33.0],
+          [-68.89, -33.0],
+          [-68.89, -33.01],
+          [-68.9, -33.01],
+          [-68.9, -33.0],
+        ],
+      ],
+    };
+
+    it('al crear, lo derivado del polígono pisa las hectáreas y el punto del pedido', async () => {
+      geoService.derivar.mockResolvedValueOnce({
+        hectareas: 103.64,
+        latitud: -33.005,
+        longitud: -68.895,
+      });
+
+      await service.create(
+        { nombre: 'La Esperanza', hectareas: 999, poligono },
+        'user-1',
+        EMPRESA_ID,
+      );
+
+      expect(repo.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          hectareas: 103.64,
+          latitud: -33.005,
+          poligono,
+          empresaId: EMPRESA_ID,
+        }),
+      );
+    });
+
+    it('al editar sin tocar el polígono, no consulta si hay cuarteles afuera', async () => {
+      repo.findOne.mockResolvedValueOnce({
+        id: FINCA_ID,
+        empresaId: EMPRESA_ID,
+      });
+
+      await service.update(FINCA_ID, { nombre: 'Otra' }, EMPRESA_ID);
+
+      expect(
+        geoService.advertenciaCuartelesFueraDelContorno,
+      ).not.toHaveBeenCalled();
+    });
+
+    it('al cambiar el contorno, adjunta la advertencia si algún cuartel queda afuera', async () => {
+      repo.findOne.mockResolvedValueOnce({
+        id: FINCA_ID,
+        empresaId: EMPRESA_ID,
+      });
+      geoService.advertenciaCuartelesFueraDelContorno.mockResolvedValueOnce(
+        'Un cuartel con polígono queda fuera del nuevo contorno de la finca: C1.',
+      );
+
+      const resultado = await service.update(
+        FINCA_ID,
+        { poligono },
+        EMPRESA_ID,
+      );
+
+      expect(resultado.advertencias).toEqual([
+        'Un cuartel con polígono queda fuera del nuevo contorno de la finca: C1.',
+      ]);
+      expect(repo.save).toHaveBeenCalled(); // advertir no impide guardar
+    });
+
+    it('si no hay nada que advertir, la respuesta no trae el campo `advertencias`', async () => {
+      repo.findOne.mockResolvedValueOnce({
+        id: FINCA_ID,
+        empresaId: EMPRESA_ID,
+      });
+
+      const resultado = await service.update(
+        FINCA_ID,
+        { poligono },
+        EMPRESA_ID,
+      );
+
+      expect(resultado).not.toHaveProperty('advertencias');
+    });
+
+    it('si el polígono es inválido, no guarda nada', async () => {
+      repo.findOne.mockResolvedValueOnce({
+        id: FINCA_ID,
+        empresaId: EMPRESA_ID,
+      });
+      geoService.derivar.mockRejectedValueOnce(new Error('polígono inválido'));
+
+      await expect(
+        service.update(FINCA_ID, { poligono }, EMPRESA_ID),
+      ).rejects.toThrow('polígono inválido');
+      expect(repo.save).not.toHaveBeenCalled();
     });
   });
 });

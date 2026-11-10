@@ -111,4 +111,18 @@ export class TipoLaborController {
   ) {
     return this.tipoLaborService.desactivar(id, user.empresaId);
   }
+
+  @Patch(':id/activar')
+  @Auditar({
+    accion: 'ACTIVAR_TIPO_LABOR',
+    entidad: 'tipo_labor',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO)
+  activar(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.tipoLaborService.activar(id, user.empresaId);
+  }
 }

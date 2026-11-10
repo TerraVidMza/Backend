@@ -23,6 +23,7 @@ import { RolNombre } from '../../common/enums/rol.enum';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from '../auth/strategies/jwt.strategy';
 import { Auditar } from '../../common/audit/auditar.decorator';
+import { EstadoTicket } from './entities/ticket-soporte.entity';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -89,5 +90,41 @@ export class AyudaController {
   @Roles(RolNombre.PROPIETARIO)
   findTickets(@CurrentUser() user: AuthenticatedUser) {
     return this.ticketSoporteService.findAll(user.empresaId);
+  }
+
+  @Patch('tickets/:id/cerrar')
+  @Auditar({
+    accion: 'CERRAR_TICKET',
+    entidad: 'ticket_soporte',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO)
+  cerrarTicket(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketSoporteService.cambiarEstado(
+      id,
+      EstadoTicket.CERRADO,
+      user.empresaId,
+    );
+  }
+
+  @Patch('tickets/:id/reabrir')
+  @Auditar({
+    accion: 'REABRIR_TICKET',
+    entidad: 'ticket_soporte',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO)
+  reabrirTicket(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.ticketSoporteService.cambiarEstado(
+      id,
+      EstadoTicket.ABIERTO,
+      user.empresaId,
+    );
   }
 }

@@ -409,4 +409,16 @@ export class UsuariosService {
 
     await this.usuarioRepository.update(id, { activo: false });
   }
+
+  /**
+   * Reactiva a un usuario dado de baja. Idempotente. Conserva su contraseña y
+   * sus fincas asignadas: la baja nunca las tocó.
+   */
+  async activate(id: string, empresaId: string): Promise<void> {
+    const usuario = await this.findById(id, empresaId);
+    if (!usuario) {
+      throw new NotFoundException('Usuario no encontrado');
+    }
+    await this.usuarioRepository.update(id, { activo: true });
+  }
 }

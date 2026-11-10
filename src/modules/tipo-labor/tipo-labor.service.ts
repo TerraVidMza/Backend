@@ -81,6 +81,13 @@ export class TipoLaborService {
     return this.tipoLaborRepository.save(tipoLabor);
   }
 
+  /** Reactiva un tipo de labor dado de baja. Idempotente. */
+  async activar(id: string, empresaId: string): Promise<TipoLabor> {
+    const tipoLabor = await this.findById(id, empresaId);
+    tipoLabor.activo = true;
+    return this.tipoLaborRepository.save(tipoLabor);
+  }
+
   async setCosto(
     tipoLaborId: string,
     dto: SetCostoLaborDto,

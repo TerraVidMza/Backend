@@ -157,6 +157,13 @@ export class DynsecService implements OnApplicationBootstrap {
     });
   }
 
+  /** Un sensor reactivado vuelve a poder conectarse con la credencial que ya tenía. */
+  async habilitar(codigo: string): Promise<void> {
+    await this.ejecutar([{ command: 'enableClient', username: codigo }], {
+      ignorarErrores: true,
+    });
+  }
+
   /** Al renombrar un sensor, la credencial del código viejo deja de existir. */
   async eliminar(codigo: string): Promise<void> {
     await this.ejecutar(

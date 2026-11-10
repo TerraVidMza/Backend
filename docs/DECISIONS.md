@@ -849,3 +849,27 @@ Los hallazgos de tests y workflows (contraseñas de fixtures, actions sin SHA fi
 **Despliegue:** primero el Backend y después la Web. Una Web nueva con un backend viejo no recibe el permiso `manual` y oculta la sección Ayuda hasta el próximo inicio de sesión.
 
 **Estado:** ✅ Vigente.
+
+---
+
+## D-037 — Polígonos de fincas y cuarteles con PostGIS
+
+**Contexto:** la ubicación de fincas y cuarteles era un punto (`latitud`/`longitud`, `decimal(10,7)`) y las hectáreas se cargaban a mano. Era una decisión deliberada —ver el comentario que había en `cuartel.entity.ts`: "un punto suelto no justifica PostGIS"— pero deja dos problemas: el mapa no puede mostrar el contorno real, y las hectáreas tipeadas pueden contradecir lo que de verdad hay plantado, que es el dato del que salen costo por hectárea, margen por hectárea y rendimiento (HU-15, HU-31).
+
+**Decisión:**
+
+- **Modelo.** Columna `poligono geometry(Polygon,4326)` **opcional** en `fincas` y en `cuarteles`, con índice GIST y un `CHECK (ST_IsValid(...))` que rechaza polígonos que se cruzan a sí mismos aunque se escriba por fuera de la API. La migración `PoligonosPostgis1793752681903` crea la extensión. Los registros existentes no se migran: siguen con su punto y sus hectáreas.
+- **Contrato.** GeoJSON `Polygon` con vértices `[longitud, latitud]`, en el campo `poligono` de los DTO de alta y edición y de las respuestas. Es el formato que produce Leaflet y el que consume `ST_GeomFromGeoJSON`. El cambio es **aditivo**: ni la Web ni la app móvil actuales necesitan tocarse.
+- **Un solo origen de verdad.** Con polígono, `hectareas`, `latitud` y `longitud` se **derivan** de él (`ST_Area` sobre `geography`; `ST_PointOnSurface`, que a diferencia del centroide nunca cae afuera de un polígono cóncavo). Mientras haya polígono no se pueden cambiar a mano (400); `poligono: null` lo quita y devuelve la entidad a la carga manual. Las hectáreas dejan de ser obligatorias en el alta de una finca si viene polígono.
+- **Validación.** Forma (anillos cerrados, 4 o más vértices, rangos, hasta 10 anillos y 5.000 vértices), validez topológica con el motivo de PostGIS, y superficie entre 0,01 y 100.000 ha (un polígono de millones de hectáreas casi siempre es `[latitud, longitud]` al revés).
+- **Un cuartel debe estar dentro de su finca, pero hoy se avisa y no se rechaza.** Si ambos tienen polígono y el del cuartel se sale (tolerancia de 15 m), el alta se guarda y la respuesta trae `advertencias` con el porcentaje que queda afuera. Lo mismo al achicar el contorno de una finca: lista los cuarteles que quedan afuera. El campo `advertencias` solo aparece cuando hay alguna. Se eligió advertir porque un contorno dibujado a mano sobre un mapa rara vez coincide al metro con el de al lado; **queda abierto endurecerlo a error** cuando la Web lo permita corregir en el momento.
+- **Alternativas descartadas:** polígono solo en cuarteles (deja la finca como un punto con hectáreas tipeadas, justo lo que se quiere dejar de tener); calcular superficie y punto en JavaScript (no hay elipsoide ni validez topológica sin PostGIS); un trigger en la base (la lógica quedaría invisible y fuera de los tests); rechazar la contención (ver arriba).
+
+**Despliegue — leer antes de mezclar a `main`.** La base de producción usa `postgres:16-alpine`, que **no trae PostGIS**, y `deploy/actualizar.sh` corre las migraciones en cada despliegue. Con la imagen actual, esta migración falla en `CREATE EXTENSION postgis`: el script corta antes de levantar la versión nueva (la vieja sigue sirviendo), pero el despliegue queda bloqueado. El orden es:
+
+1. Cambiar la imagen de la base en `deploy/docker-compose.prod.yml` a `postgis/postgis:16-3.4-alpine` —la variante **alpine**: pasar de alpine (musl) a una imagen Debian (glibc) cambia el orden de colación de los textos y puede invalidar los índices existentes—, con backup previo (`pg_dump`) y ensayándolo antes sobre una copia.
+2. Recién después, desplegar esta rama.
+
+La variante de Cloud SQL no necesita cambiar de imagen: la extensión se habilita con `CREATE EXTENSION`.
+
+**Estado:** 🟡 En desarrollo en `feature/postgis-poligonos-finca` (Backend listo y probado; falta la Web). No desplegado: `deploy/docker-compose.prod.yml` todavía no se tocó.

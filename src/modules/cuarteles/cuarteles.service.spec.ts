@@ -8,6 +8,7 @@ import { RegistroLabor } from '../registro-labor/entities/registro-labor.entity'
 import { PesajeVendimia } from '../pesaje-vendimia/entities/pesaje-vendimia.entity';
 import { CatalogoItem } from '../catalogo-item/entities/catalogo-item.entity';
 import { CampaniasService } from '../campanias/campanias.service';
+import { GeoService } from '../../common/geo/geo.service';
 
 const EMPRESA_ID = '11111111-1111-1111-1111-111111111111';
 const CUARTEL_ID = '22222222-2222-2222-2222-222222222222';
@@ -23,8 +24,16 @@ describe('CuartelesService', () => {
   let laborRepo: { count: jest.Mock };
   let pesajeRepo: { count: jest.Mock };
   let campaniasService: { getActual: jest.Mock };
+  let geoService: {
+    derivar: jest.Mock;
+    advertenciaCuartelFueraDeFinca: jest.Mock;
+  };
 
   beforeEach(async () => {
+    geoService = {
+      derivar: jest.fn(() => Promise.resolve({})),
+      advertenciaCuartelFueraDeFinca: jest.fn(() => Promise.resolve(null)),
+    };
     cuartelRepo = {
       findOne: jest.fn(() => Promise.resolve(null)),
       findAndCount: jest.fn(() => Promise.resolve([[], 0])),
@@ -43,6 +52,9 @@ describe('CuartelesService', () => {
         { provide: getRepositoryToken(PesajeVendimia), useValue: pesajeRepo },
         { provide: getRepositoryToken(CatalogoItem), useValue: {} },
         { provide: CampaniasService, useValue: campaniasService },
+        // La lógica espacial se prueba en `geo.service.spec.ts` y contra
+        // PostGIS en el e2e; acá solo importa cómo la usa el servicio.
+        { provide: GeoService, useValue: geoService },
       ],
     }).compile();
 
@@ -130,6 +142,81 @@ describe('CuartelesService', () => {
       const resultado = await service.contarActivosPorFinca([]);
 
       expect(resultado.size).toBe(0);
+    });
+  });
+
+  describe('polígono (HU-09)', () => {
+    const FINCA_ID = '44444444-4444-4444-4444-444444444444';
+    const poligono = {
+      type: 'Polygon' as const,
+      coordinates: [
+        [
+          [-68.898, -33.002],
+          [-68.894, -33.002],
+          [-68.894, -33.006],
+          [-68.898, -33.006],
+          [-68.898, -33.002],
+        ],
+      ],
+    };
+    const dto = {
+      fincaId: FINCA_ID,
+      variedadId: 'v',
+      sistemaConduccionId: 's',
+      nombre: 'Cuartel 1',
+      poligono,
+    };
+
+    it('al crear, deriva las hectáreas del polígono', async () => {
+      geoService.derivar.mockResolvedValueOnce({
+        hectareas: 16.58,
+        latitud: -33.004,
+        longitud: -68.896,
+      });
+
+      await service.create(dto);
+
+      expect(cuartelRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ hectareas: 16.58, poligono, activo: true }),
+      );
+    });
+
+    it('al crear, guarda igual y adjunta la advertencia si se sale de la finca', async () => {
+      geoService.advertenciaCuartelFueraDeFinca.mockResolvedValueOnce(
+        'El polígono del cuartel se sale del contorno de la finca (aprox. 40 % queda afuera).',
+      );
+
+      const resultado = await service.create(dto);
+
+      expect(cuartelRepo.save).toHaveBeenCalled();
+      expect(resultado.advertencias).toHaveLength(1);
+      expect(geoService.advertenciaCuartelFueraDeFinca).toHaveBeenCalledWith(
+        FINCA_ID,
+        poligono,
+      );
+    });
+
+    it('sin polígono, ni consulta la contención ni agrega `advertencias`', async () => {
+      const sinPoligono = { ...dto, poligono: undefined };
+
+      const resultado = await service.create(sinPoligono);
+
+      expect(geoService.advertenciaCuartelFueraDeFinca).not.toHaveBeenCalled();
+      expect(resultado).not.toHaveProperty('advertencias');
+    });
+
+    it('al editar, compara contra la finca del cuartel guardado, no contra una del pedido', async () => {
+      cuartelRepo.findOne.mockResolvedValueOnce({
+        id: CUARTEL_ID,
+        fincaId: FINCA_ID,
+      });
+
+      await service.update(CUARTEL_ID, { poligono });
+
+      expect(geoService.advertenciaCuartelFueraDeFinca).toHaveBeenCalledWith(
+        FINCA_ID,
+        poligono,
+      );
     });
   });
 });

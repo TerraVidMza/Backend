@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { LessThanOrEqual, Repository } from 'typeorm';
 import { Cuadrilla } from './entities/cuadrilla.entity';
@@ -79,6 +83,26 @@ export class CuadrillasService {
     const cuadrilla = await this.findById(id);
     cuadrilla.activa = false;
     return this.cuadrillaRepository.save(cuadrilla);
+  }
+
+  /**
+   * Reactiva una cuadrilla dada de baja. Idempotente. El nombre es único entre
+   * las activas de la finca: si mientras tanto se creó otra con el mismo nombre,
+   * el índice lo rechaza y se responde 409 en vez de un error de base.
+   */
+  async activar(id: string): Promise<Cuadrilla> {
+    const cuadrilla = await this.findById(id);
+    cuadrilla.activa = true;
+    try {
+      return await this.cuadrillaRepository.save(cuadrilla);
+    } catch (error) {
+      if ((error as { code?: string }).code === '23505') {
+        throw new ConflictException(
+          'Ya hay una cuadrilla activa con ese nombre en la finca.',
+        );
+      }
+      throw error;
+    }
   }
 
   async setTarifa(

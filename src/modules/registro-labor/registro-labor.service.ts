@@ -1,4 +1,10 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   DataSource,
@@ -11,6 +17,8 @@ import { RegistroLabor } from './entities/registro-labor.entity';
 import { DetalleInsumoLabor } from './entities/detalle-insumo-labor.entity';
 import { CreateRegistroLaborDto } from './dto/create-registro-labor.dto';
 import { CosteoQueryDto } from './dto/costeo-query.dto';
+import { CorregirLaborDto } from './dto/corregir-labor.dto';
+import { CampaniasService } from '../campanias/campanias.service';
 import { ListarLaboresDto } from './dto/listar-labores.dto';
 import { TipoLaborService } from '../tipo-labor/tipo-labor.service';
 import { InsumosService } from '../insumos/insumos.service';
@@ -73,6 +81,7 @@ export class RegistroLaborService {
     private readonly tipoLaborService: TipoLaborService,
     private readonly insumosService: InsumosService,
     private readonly notificacionesService: NotificacionesService,
+    private readonly campaniasService: CampaniasService,
     private readonly dataSource: DataSource,
   ) {}
 
@@ -173,6 +182,68 @@ export class RegistroLaborService {
   }
 
   /**
+   * Corrige la cantidad de una labor sincronizada. Solo mientras la campaña a la
+   * que pertenece su fecha siga abierta: cambiar una labor de una campaña
+   * cerrada movería costos ya cerrados. El costo unitario guardado al sincronizar
+   * no cambia, así que el costo se recalcula con la cantidad nueva.
+   */
+  async corregir(
+    id: string,
+    dto: CorregirLaborDto,
+    empresaId: string,
+  ): Promise<RegistroLabor> {
+    const registro = await this.findById(id, empresaId);
+    if (registro.estadoSync !== EstadoSync.SINCRONIZADO) {
+      throw new BadRequestException(
+        'Solo se puede corregir una labor sincronizada y no anulada.',
+      );
+    }
+
+    const campanias = await this.campaniasService.findAll(empresaId);
+    const fecha = String(registro.fecha).slice(0, 10);
+    const campania = campanias.find(
+      (c) =>
+        String(c.fechaDesde).slice(0, 10) <= fecha &&
+        fecha <= String(c.fechaHasta).slice(0, 10),
+    );
+    if (campania?.cerrada) {
+      throw new ConflictException(
+        `La campaña "${campania.nombre}" está cerrada, así que no se puede corregir la labor. Reabrila primero.`,
+      );
+    }
+
+    await this.registroLaborRepository.update(id, { cantidad: dto.cantidad });
+    return this.findById(id, empresaId);
+  }
+
+  /**
+   * Anula una labor sincronizada, con motivo. No se borra: queda con quién,
+   * cuándo y por qué. Sale de todo costeo porque ya no está `sincronizada`
+   * (ver `EstadoSync.ANULADO`). Idempotente solo en el sentido de que anular
+   * una ya anulada responde 400, para no pisar el motivo original.
+   */
+  async anular(
+    id: string,
+    motivoAnulacion: string,
+    anuladoPorId: string,
+    empresaId: string,
+  ): Promise<RegistroLabor> {
+    const registro = await this.findById(id, empresaId);
+    if (registro.estadoSync !== EstadoSync.SINCRONIZADO) {
+      throw new BadRequestException(
+        'Solo se puede anular una labor sincronizada que no esté anulada.',
+      );
+    }
+    await this.registroLaborRepository.update(id, {
+      estadoSync: EstadoSync.ANULADO,
+      motivoAnulacion,
+      anuladoPorId,
+      fechaAnulacion: new Date(),
+    });
+    return this.findById(id, empresaId);
+  }
+
+  /**
    * Sincroniza un registro creado offline.
    *
    * Idempotente por `local_uuid`: reenviar un registro ya sincronizado devuelve
@@ -191,7 +262,12 @@ export class RegistroLaborService {
     if (existente && existente.estadoSync !== EstadoSync.ERROR) {
       return {
         localUuid: dto.localUuid,
-        estado: existente.estadoSync,
+        // Una labor anulada en la oficina ya llegó al servidor: para el
+        // dispositivo el reintento terminó, no hay nada que volver a mandar.
+        estado:
+          existente.estadoSync === EstadoSync.ANULADO
+            ? EstadoSync.SINCRONIZADO
+            : existente.estadoSync,
         registroId: existente.id,
         yaExistia: true,
       };
