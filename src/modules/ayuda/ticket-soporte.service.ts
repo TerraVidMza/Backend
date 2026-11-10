@@ -1,7 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { TicketSoporte } from './entities/ticket-soporte.entity';
+import { EstadoTicket, TicketSoporte } from './entities/ticket-soporte.entity';
 import { CrearTicketDto } from './dto/crear-ticket.dto';
 import { ConfiguracionService } from '../configuracion/configuracion.service';
 import { UsuariosService } from '../usuarios/usuarios.service';
@@ -36,6 +36,27 @@ export class TicketSoporteService {
     }
 
     return guardado;
+  }
+
+  /**
+   * Cierra o reabre un ticket de la empresa. Idempotente. Antes un ticket nacía
+   * abierto y no había forma de cambiarlo: la lista crecía sin distinguir lo
+   * resuelto de lo pendiente.
+   */
+  async cambiarEstado(
+    id: string,
+    estado: EstadoTicket,
+    empresaId: string,
+  ): Promise<TicketSoporte> {
+    const ticket = await this.ticketRepository.findOne({
+      where: { id, usuario: { empresaId } },
+      relations: { usuario: true },
+    });
+    if (!ticket) {
+      throw new NotFoundException('Ticket no encontrado');
+    }
+    ticket.estado = estado;
+    return this.ticketRepository.save(ticket);
   }
 
   /** Solo los tickets de usuarios de la empresa del solicitante. */

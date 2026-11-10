@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   HttpStatus,
+  Patch,
   Post,
   Query,
   Res,
@@ -14,6 +15,7 @@ import type { Response } from 'express';
 import { RegistroLaborService } from './registro-labor.service';
 import { CreateRegistroLaborDto } from './dto/create-registro-labor.dto';
 import { SyncRegistroLaborDto } from './dto/sync-registro-labor.dto';
+import { AnularLaborDto, CorregirLaborDto } from './dto/corregir-labor.dto';
 import { ListarLaboresDto } from './dto/listar-labores.dto';
 import { CosteoQueryDto } from './dto/costeo-query.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -125,6 +127,41 @@ export class RegistroLaborController {
       id,
       user.empresaId,
       sinAlcanceEconomico(user),
+    );
+  }
+
+  @Patch(':id')
+  @Auditar({
+    accion: 'CORREGIR_LABOR',
+    entidad: 'registro_labor',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
+  corregir(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CorregirLaborDto,
+  ) {
+    return this.registroLaborService.corregir(id, dto, user.empresaId);
+  }
+
+  @Post(':id/anular')
+  @Auditar({
+    accion: 'ANULAR_LABOR',
+    entidad: 'registro_labor',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
+  anular(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AnularLaborDto,
+  ) {
+    return this.registroLaborService.anular(
+      id,
+      dto.motivoAnulacion,
+      user.id,
+      user.empresaId,
     );
   }
 

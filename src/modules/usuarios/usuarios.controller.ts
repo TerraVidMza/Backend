@@ -138,4 +138,18 @@ export class UsuariosController {
   ) {
     return this.usuariosService.deactivate(id, user.empresaId);
   }
+
+  @Patch(':id/activar')
+  @Auditar({
+    accion: 'ACTIVAR_USUARIO',
+    entidad: 'usuario',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO)
+  activate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.usuariosService.activate(id, user.empresaId);
+  }
 }

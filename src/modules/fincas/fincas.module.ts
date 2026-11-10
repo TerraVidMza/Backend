@@ -4,9 +4,10 @@ import { Finca } from './entities/finca.entity';
 import { FincasService } from './fincas.service';
 import { FincasController } from './fincas.controller';
 import { CuartelesModule } from '../cuarteles/cuarteles.module';
+import { GeoModule } from '../../common/geo/geo.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Finca]), CuartelesModule],
+  imports: [TypeOrmModule.forFeature([Finca]), CuartelesModule, GeoModule],
   providers: [FincasService],
   controllers: [FincasController],
   exports: [FincasService],

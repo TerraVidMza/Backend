@@ -382,6 +382,72 @@ export class RemitosService {
       });
   }
 
+  /**
+   * Anula un remito **aprobado** por error. Es dinero: reglas estrictas.
+   *
+   * - Solo si la bodega todavía no tiene liquidación cargada. Con liquidación
+   *   ya hay un importe confirmado por un tercero, y deshacer el remito lo
+   *   dejaría huérfano; eso es una corrección contable, no un error de carga.
+   * - Los pesajes vuelven a `pendiente_remito` y se desvinculan del remito: los
+   *   kilos son válidos y entran en el próximo borrador.
+   * - El cuartel vuelve a `en_cosecha`, salvo que otro remito aprobado lo siga
+   *   manteniendo cosechado.
+   * - El remito no se borra: queda `anulado` con quién, cuándo y por qué.
+   */
+  async anular(
+    id: string,
+    anuladoPorId: string,
+    motivoAnulacion: string,
+    empresaId: string,
+  ): Promise<Remito> {
+    return this.dataSource.transaction(async (manager) => {
+      const remito = await manager.findOne(Remito, {
+        where: { id, cuartel: { finca: { empresaId } } },
+        relations: { cuartel: { finca: true } },
+      });
+      if (!remito) {
+        throw new NotFoundException('Remito no encontrado');
+      }
+      if (remito.estado !== EstadoRemito.APROBADO) {
+        throw new BadRequestException(
+          'Solo se puede anular un remito aprobado.',
+        );
+      }
+
+      const liquidacion = await manager.findOne(LiquidacionBodega, {
+        where: { remitoId: id },
+      });
+      if (liquidacion) {
+        throw new ConflictException(
+          'El remito ya tiene la liquidación de la bodega cargada, así que no puede anularse.',
+        );
+      }
+
+      remito.estado = EstadoRemito.ANULADO;
+      remito.anuladoPorId = anuladoPorId;
+      remito.motivoAnulacion = motivoAnulacion;
+      remito.fechaAnulacion = new Date();
+      const guardado = await manager.save(remito);
+
+      await manager.update(
+        PesajeVendimia,
+        { remitoId: id },
+        { estado: EstadoPesaje.PENDIENTE_REMITO, remitoId: null },
+      );
+
+      const otrosAprobados = await manager.count(Remito, {
+        where: { cuartelId: remito.cuartelId, estado: EstadoRemito.APROBADO },
+      });
+      if (otrosAprobados === 0) {
+        await manager.update(Cuartel, remito.cuartelId, {
+          estado: EstadoCuartel.EN_COSECHA,
+        });
+      }
+
+      return guardado;
+    });
+  }
+
   async rechazar(
     id: string,
     rechazadoPorId: string,

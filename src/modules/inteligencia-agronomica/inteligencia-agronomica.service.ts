@@ -222,6 +222,67 @@ export class InteligenciaAgronomicaService {
   }
 
   /**
+   * Recomendaciones ya generadas de toda la empresa, con su finca y cuartel.
+   *
+   * **No evalúa reglas**: solo lee lo persistido. Evaluar es caro (recorre
+   * labores, lecturas y pesajes de cada cuartel) y consultar un listado no debe
+   * escribir; para buscar novedades está `evaluarTodas`.
+   */
+  async listarRecomendaciones(
+    empresaId: string,
+    estado: 'activa' | 'todas' = 'activa',
+    fincaId?: string,
+  ) {
+    return this.recomendacionRepository.find({
+      where: {
+        cuartel: { finca: { empresaId, ...(fincaId ? { id: fincaId } : {}) } },
+        ...(estado === 'activa' ? { estado: EstadoRecomendacion.ACTIVA } : {}),
+      },
+      relations: { cuartel: { finca: true } },
+      order: { createdAt: 'DESC' },
+    });
+  }
+
+  /**
+   * Busca recomendaciones nuevas en todos los cuarteles activos de la empresa
+   * (o de una finca). Reusa la evaluación por cuartel, que es idempotente: no
+   * duplica la recomendación activa de una regla. Devuelve cuántas aparecieron
+   * y cuántos cuarteles no tenían histórico suficiente para evaluarse.
+   */
+  async evaluarTodas(empresaId: string, fincaId?: string) {
+    const cuarteles = await this.cuartelRepository.find({
+      where: {
+        activo: true,
+        finca: { empresaId, ...(fincaId ? { id: fincaId } : {}) },
+      },
+      select: { id: true },
+    });
+
+    const antes = new Set(
+      (await this.listarRecomendaciones(empresaId, 'activa', fincaId)).map(
+        (r) => r.id,
+      ),
+    );
+
+    let sinHistorico = 0;
+    for (const cuartel of cuarteles) {
+      const resultado = await this.getRecomendaciones(cuartel.id, empresaId);
+      if (!resultado.disponible) sinHistorico++;
+    }
+
+    const despues = await this.listarRecomendaciones(
+      empresaId,
+      'activa',
+      fincaId,
+    );
+    return {
+      cuartelesEvaluados: cuarteles.length,
+      sinHistorico,
+      nuevas: despues.filter((r) => !antes.has(r.id)).length,
+    };
+  }
+
+  /**
    * Marca una recomendación como Aplicada o Descartada (HU-30).
    *
    * Solo se resuelven las **activas**: reescribir el estado de una ya resuelta

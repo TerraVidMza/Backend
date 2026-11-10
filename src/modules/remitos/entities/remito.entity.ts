@@ -13,6 +13,8 @@ export enum EstadoRemito {
   BORRADOR = 'borrador',
   APROBADO = 'aprobado',
   RECHAZADO = 'rechazado',
+  /** Aprobado por error y deshecho por el Propietario. No se borra: queda el rastro. */
+  ANULADO = 'anulado',
 }
 
 @Entity('remitos')
@@ -86,4 +88,17 @@ export class Remito {
 
   @Column({ name: 'fecha_rechazo', type: 'timestamptz', nullable: true })
   fechaRechazo: Date | null;
+
+  @Column({ name: 'anulado_por', type: 'uuid', nullable: true })
+  anuladoPorId: string | null;
+
+  @ManyToOne(() => Usuario, { nullable: true })
+  @JoinColumn({ name: 'anulado_por' })
+  anuladoPor: Usuario | null;
+
+  @Column({ name: 'motivo_anulacion', type: 'text', nullable: true })
+  motivoAnulacion: string | null;
+
+  @Column({ name: 'fecha_anulacion', type: 'timestamptz', nullable: true })
+  fechaAnulacion: Date | null;
 }

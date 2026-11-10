@@ -19,6 +19,11 @@ import {
 } from '../../common/dto/pagination-query.dto';
 import { rangoDeFechasComoTexto } from '../../common/fechas/rango-fechas';
 import { CampaniasService } from '../campanias/campanias.service';
+import { GeoService } from '../../common/geo/geo.service';
+import {
+  ConAdvertencias,
+  conAdvertencias,
+} from '../../common/geo/advertencias';
 
 @Injectable()
 export class CuartelesService {
@@ -30,6 +35,7 @@ export class CuartelesService {
     @InjectRepository(PesajeVendimia)
     private readonly pesajeRepository: Repository<PesajeVendimia>,
     private readonly campaniasService: CampaniasService,
+    private readonly geoService: GeoService,
   ) {}
 
   findByFinca(fincaId: string): Promise<Cuartel[]> {
@@ -111,15 +117,45 @@ export class CuartelesService {
     return cuartel;
   }
 
-  create(dto: CreateCuartelDto): Promise<Cuartel> {
-    const cuartel = this.cuartelRepository.create({ ...dto, activo: true });
-    return this.cuartelRepository.save(cuartel);
+  /**
+   * Alta de cuartel (HU-09). Con `poligono`, las hectáreas y el punto del mapa
+   * se derivan de él, y si la finca también tiene polígono se avisa (sin
+   * rechazar) cuando el cuartel se sale de su contorno.
+   */
+  async create(dto: CreateCuartelDto): Promise<ConAdvertencias<Cuartel>> {
+    const derivados = await this.geoService.derivar(dto, null, 'cuartel');
+    const cuartel = this.cuartelRepository.create({
+      ...dto,
+      ...derivados,
+      activo: true,
+    });
+    const guardado = await this.cuartelRepository.save(cuartel);
+
+    const advertencia = dto.poligono
+      ? await this.geoService.advertenciaCuartelFueraDeFinca(
+          dto.fincaId,
+          dto.poligono,
+        )
+      : null;
+    return conAdvertencias(guardado, [advertencia]);
   }
 
-  async update(id: string, dto: UpdateCuartelDto): Promise<Cuartel> {
+  async update(
+    id: string,
+    dto: UpdateCuartelDto,
+  ): Promise<ConAdvertencias<Cuartel>> {
     const cuartel = await this.findById(id);
-    Object.assign(cuartel, dto);
-    return this.cuartelRepository.save(cuartel);
+    const derivados = await this.geoService.derivar(dto, cuartel, 'cuartel');
+    Object.assign(cuartel, dto, derivados);
+    const guardado = await this.cuartelRepository.save(cuartel);
+
+    const advertencia = dto.poligono
+      ? await this.geoService.advertenciaCuartelFueraDeFinca(
+          cuartel.fincaId,
+          dto.poligono,
+        )
+      : null;
+    return conAdvertencias(guardado, [advertencia]);
   }
 
   /**
@@ -164,6 +200,23 @@ export class CuartelesService {
     }
 
     cuartel.activo = false;
+    return this.cuartelRepository.save(cuartel);
+  }
+
+  /**
+   * Reactiva un cuartel dado de baja. Idempotente. Exige que su finca esté
+   * activa: un cuartel activo colgando de una finca de baja quedaría invisible
+   * en los listados pero seguiría aceptando labores y pesajes (el mismo problema
+   * que la baja de finca evita con un 409).
+   */
+  async activar(id: string): Promise<Cuartel> {
+    const cuartel = await this.findById(id);
+    if (!cuartel.finca.activa) {
+      throw new ConflictException(
+        'La finca del cuartel está dada de baja. Reactivala primero.',
+      );
+    }
+    cuartel.activo = true;
     return this.cuartelRepository.save(cuartel);
   }
 

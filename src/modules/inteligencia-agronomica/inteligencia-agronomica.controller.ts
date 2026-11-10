@@ -5,6 +5,7 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -12,6 +13,10 @@ import { InteligenciaAgronomicaService } from './inteligencia-agronomica.service
 import { CompararCampaniasDto } from './dto/comparar-campanias.dto';
 import { CorrelacionDto } from './dto/correlacion.dto';
 import { ResolverRecomendacionDto } from './dto/resolver-recomendacion.dto';
+import {
+  EvaluarRecomendacionesDto,
+  ListarRecomendacionesDto,
+} from './dto/listar-recomendaciones.dto';
 import { EstadoRecomendacion } from './entities/recomendacion.entity';
 import { Auditar } from '../../common/audit/auditar.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -51,6 +56,38 @@ export class InteligenciaAgronomicaController {
       query.desde,
       query.hasta,
       user.empresaId,
+    );
+  }
+
+  /** Listado general de la empresa: lo ya generado, sin evaluar reglas. */
+  @Get('recomendaciones')
+  listarRecomendaciones(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListarRecomendacionesDto,
+  ) {
+    return this.inteligenciaAgronomicaService.listarRecomendaciones(
+      user.empresaId,
+      query.estado,
+      query.fincaId,
+    );
+  }
+
+  /** Busca recomendaciones nuevas en todos los cuarteles (o los de una finca). */
+  @Post('recomendaciones/evaluar')
+  @Auditar({
+    accion: 'EVALUAR_RECOMENDACIONES',
+    entidad: 'recomendacion',
+  })
+  async evaluarRecomendaciones(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: EvaluarRecomendacionesDto,
+  ) {
+    if (dto.fincaId) {
+      await this.alcance.verificarFinca(dto.fincaId, user.empresaId);
+    }
+    return this.inteligenciaAgronomicaService.evaluarTodas(
+      user.empresaId,
+      dto.fincaId,
     );
   }
 

@@ -9,6 +9,7 @@ import { DetalleInsumoLabor } from './entities/detalle-insumo-labor.entity';
 import { TipoLaborService } from '../tipo-labor/tipo-labor.service';
 import { InsumosService } from '../insumos/insumos.service';
 import { NotificacionesService } from '../notificaciones/notificaciones.service';
+import { CampaniasService } from '../campanias/campanias.service';
 import { Usuario } from '../usuarios/entities/usuario.entity';
 import { EstadoSync } from '../../common/enums/estado-sync.enum';
 
@@ -87,6 +88,7 @@ describe('RegistroLaborService — costos según el alcance del rol', () => {
         { provide: TipoLaborService, useValue: {} },
         { provide: InsumosService, useValue: {} },
         { provide: NotificacionesService, useValue: { crear: jest.fn() } },
+        { provide: CampaniasService, useValue: { findAll: jest.fn() } },
         { provide: DataSource, useValue: { transaction: jest.fn() } },
       ],
     }).compile();

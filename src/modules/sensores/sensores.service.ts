@@ -184,4 +184,13 @@ export class SensoresService {
     await this.alBroker((d) => d.deshabilitar(sensor.codigo));
     return guardado;
   }
+
+  /** Reactiva un sensor dado de baja y le devuelve el acceso al broker. Idempotente. */
+  async activar(id: string): Promise<Sensor> {
+    const sensor = await this.findById(id);
+    sensor.activo = true;
+    const guardado = await this.sensorRepository.save(sensor);
+    await this.alBroker((d) => d.habilitar(sensor.codigo));
+    return guardado;
+  }
 }

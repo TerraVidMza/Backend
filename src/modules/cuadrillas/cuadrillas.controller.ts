@@ -121,4 +121,19 @@ export class CuadrillasController {
     await this.alcance.verificarCuadrilla(id, user.empresaId);
     return this.cuadrillasService.desactivar(id);
   }
+
+  @Patch(':id/activar')
+  @Auditar({
+    accion: 'ACTIVAR_CUADRILLA',
+    entidad: 'cuadrilla',
+    idDesde: 'param:id',
+  })
+  @Roles(RolNombre.PROPIETARIO)
+  async activar(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    await this.alcance.verificarCuadrilla(id, user.empresaId);
+    return this.cuadrillasService.activar(id);
+  }
 }

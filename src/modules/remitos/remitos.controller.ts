@@ -12,6 +12,7 @@ import {
 import { RemitosService } from './remitos.service';
 import { GenerarRemitoDto } from './dto/generar-remito.dto';
 import { RechazarRemitoDto } from './dto/rechazar-remito.dto';
+import { AnularRemitoDto } from './dto/anular-remito.dto';
 import { ListarRemitosDto } from './dto/listar-remitos.dto';
 import { RegistrarLiquidacionDto } from './dto/registrar-liquidacion.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -108,6 +109,22 @@ export class RemitosController {
     @CurrentUser() user: AuthenticatedUser,
   ) {
     return this.remitosService.aprobar(id, user.id, user.empresaId);
+  }
+
+  @Post(':id/anular')
+  @Auditar({ accion: 'ANULAR_REMITO', entidad: 'remito', idDesde: 'param:id' })
+  @Roles(RolNombre.PROPIETARIO)
+  anular(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AnularRemitoDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.remitosService.anular(
+      id,
+      user.id,
+      dto.motivoAnulacion,
+      user.empresaId,
+    );
   }
 
   @Post(':id/rechazar')

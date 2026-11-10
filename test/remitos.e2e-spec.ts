@@ -312,6 +312,172 @@ describe('Circuito de remitos (integración)', () => {
     });
   });
 
+  describe('corrección de pesajes observados', () => {
+    const rechazarConUnPesaje = async (kg: number): Promise<string> => {
+      const id = await pesar(kg);
+      const remito = await remitos.generarBorrador(
+        ctx.cuartelId,
+        ctx.usuarioId,
+      );
+      await remitos.rechazar(remito.id, ctx.usuarioId, 'motivo', ctx.empresaId);
+      return id;
+    };
+
+    it('corregir los kilos recalcula la liquidación y lo devuelve al circuito', async () => {
+      const id = await rechazarConUnPesaje(1000);
+
+      const corregido = await pesajes.corregir(
+        id,
+        { kgTotales: 800 },
+        ctx.empresaId,
+      );
+
+      expect(corregido.estado).toBe(EstadoPesaje.PENDIENTE_REMITO);
+      expect(Number(corregido.kgTotales)).toBe(800);
+      // Tarifa de 20 por kg (ver `beforeEach`).
+      expect(Number(corregido.montoLiquidacion)).toBe(16000);
+    });
+
+    it('el pesaje corregido entra al próximo borrador', async () => {
+      const id = await rechazarConUnPesaje(1000);
+      await pesajes.corregir(id, { kgTotales: 800 }, ctx.empresaId);
+
+      const nuevo = await remitos.generarBorrador(ctx.cuartelId, ctx.usuarioId);
+
+      expect(Number(nuevo.totalKg)).toBe(800);
+    });
+
+    it('los observados se listan con el motivo del rechazo y desaparecen al corregirse', async () => {
+      const id = await rechazarConUnPesaje(1000);
+
+      const antes = await pesajes.findObservados(ctx.empresaId);
+      expect(antes.map((p) => p.id)).toContain(id);
+      expect(antes.find((p) => p.id === id)?.remito?.motivoRechazo).toBe(
+        'motivo',
+      );
+
+      await pesajes.corregir(id, { kgTotales: 900 }, ctx.empresaId);
+      const despues = await pesajes.findObservados(ctx.empresaId);
+      expect(despues.map((p) => p.id)).not.toContain(id);
+    });
+
+    it('un pesaje que no está observado no se puede corregir', async () => {
+      const id = await pesar(1000);
+
+      await expect(
+        pesajes.corregir(id, { kgTotales: 800 }, ctx.empresaId),
+      ).rejects.toThrow(/observado/i);
+    });
+
+    it('no corrige pesajes de otra empresa', async () => {
+      const id = await rechazarConUnPesaje(1000);
+
+      await expect(
+        pesajes.corregir(id, { kgTotales: 800 }, randomUUID()),
+      ).rejects.toThrow(/no encontrado/i);
+    });
+  });
+
+  describe('anulación de un remito aprobado', () => {
+    const aprobarConUnPesaje = async () => {
+      const pesajeId = await pesar(1000);
+      const remito = await remitos.generarBorrador(
+        ctx.cuartelId,
+        ctx.usuarioId,
+      );
+      await remitos.aprobar(remito.id, ctx.usuarioId, ctx.empresaId);
+      return { pesajeId, remitoId: remito.id };
+    };
+
+    it('deja el remito anulado, libera los pesajes y reabre la cosecha', async () => {
+      const { pesajeId, remitoId } = await aprobarConUnPesaje();
+      expect(await estadoDeCuartel()).toBe(EstadoCuartel.COSECHADO);
+
+      const anulado = await remitos.anular(
+        remitoId,
+        ctx.usuarioId,
+        'Se aprobó el remito equivocado',
+        ctx.empresaId,
+      );
+
+      expect(anulado.estado).toBe(EstadoRemito.ANULADO);
+      expect(anulado.motivoAnulacion).toMatch(/equivocado/);
+      expect(anulado.anuladoPorId).toBe(ctx.usuarioId);
+      expect(await estadoDePesaje(pesajeId)).toBe(
+        EstadoPesaje.PENDIENTE_REMITO,
+      );
+      expect(await estadoDeCuartel()).toBe(EstadoCuartel.EN_COSECHA);
+    });
+
+    it('los pesajes liberados entran en el próximo borrador', async () => {
+      const { remitoId } = await aprobarConUnPesaje();
+      await remitos.anular(
+        remitoId,
+        ctx.usuarioId,
+        'Se aprobó el remito equivocado',
+        ctx.empresaId,
+      );
+
+      const nuevo = await remitos.generarBorrador(ctx.cuartelId, ctx.usuarioId);
+
+      expect(Number(nuevo.totalKg)).toBe(1000);
+    });
+
+    it('no se puede anular si la bodega ya tiene la liquidación cargada', async () => {
+      const { remitoId } = await aprobarConUnPesaje();
+      await remitos.registrarLiquidacion(
+        remitoId,
+        {
+          bodega: 'Bodega Test',
+          kgAceptados: 1000,
+          precioPorKg: 50,
+          fecha: FECHA,
+        },
+        ctx.usuarioId,
+        ctx.empresaId,
+      );
+
+      await expect(
+        remitos.anular(
+          remitoId,
+          ctx.usuarioId,
+          'Se aprobó el remito equivocado',
+          ctx.empresaId,
+        ),
+      ).rejects.toThrow(/liquidación/i);
+    });
+
+    it('un borrador no se anula: se rechaza', async () => {
+      await pesar(1000);
+      const remito = await remitos.generarBorrador(
+        ctx.cuartelId,
+        ctx.usuarioId,
+      );
+
+      await expect(
+        remitos.anular(
+          remito.id,
+          ctx.usuarioId,
+          'Se aprobó el remito equivocado',
+          ctx.empresaId,
+        ),
+      ).rejects.toThrow(/aprobado/i);
+    });
+
+    it('no anula remitos de otra empresa', async () => {
+      const { remitoId } = await aprobarConUnPesaje();
+
+      await expect(
+        remitos.anular(
+          remitoId,
+          ctx.usuarioId,
+          'Se aprobó el remito equivocado',
+          randomUUID(),
+        ),
+      ).rejects.toThrow(/no encontrado/i);
+    });
+  });
+
   describe('liquidación de la bodega (HU-25, D-010)', () => {
     const aprobarRemito = async (): Promise<string> => {
       await pesar(1000);
