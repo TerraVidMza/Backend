@@ -24,9 +24,32 @@ Ninguno de los cinco requiere administrar un sistema operativo: no hay servidor 
 
 Hasta D-037 la base de producción **no necesitaba PostGIS**: la ubicación de fincas y cuarteles eran dos columnas `decimal(10,7)` y la única extensión que pedían las migraciones era `btree_gist`. Desde la migración `PoligonosPostgis` (polígonos de fincas y cuarteles, [D-037](DECISIONS.md#d-037--polígonos-de-fincas-y-cuarteles-con-postgis)) **sí hace falta**: la migración ejecuta `CREATE EXTENSION postgis`.
 
-- **VM con Docker (Apéndice A):** `deploy/docker-compose.prod.yml` usa `postgres:16-alpine`, que no la trae. Hay que pasar a `postgis/postgis:16-3.4-alpine` **antes** de desplegar una versión que incluya esa migración. Si no, `actualizar.sh` falla en el paso de migrar y corta antes de levantar la imagen nueva: la versión vieja sigue sirviendo, pero no se puede desplegar. Usar la variante *alpine*, no la Debian: cambiar de libc altera el orden de colación y puede invalidar índices de texto. Hacer backup (`pg_dump`) y ensayar sobre una copia antes.
+- **VM con Docker (Apéndice A):** **hecho el 2026-11-10.** `deploy/docker-compose.prod.yml` pasó de `postgres:16-alpine` a **`postgis/postgis:16-3.6-alpine`** (#104), y después llegó la migración (#105). Detalles abajo.
 - **Cloud SQL (camino principal):** no hay que cambiar de imagen; Cloud SQL para PostgreSQL soporta PostGIS y la migración, que corre con las credenciales de administración, la habilita sola.
-- **Desarrollo:** `docker-compose.yml` ya usa `postgis/postgis`, sin cambios.
+- **Desarrollo:** `docker-compose.yml` usa `postgis/postgis:16-3.4` (Debian), que ya traía PostGIS. No coincide con producción en versión menor ni en libc; para desarrollo no importa, pero un ensayo de producción tiene que hacerse con la imagen de producción.
+
+**Por qué `16-3.6-alpine` y no `16-3.4-alpine`.** Lo que decide es la versión de PostgreSQL que trae la imagen, no la de PostGIS: tiene que ser **la misma que ya corre** sobre el volumen. La `16-3.6-alpine` trae PostgreSQL 16.15 sobre musl, igual que la `postgres:16-alpine` anterior, y abre el volumen tal cual, sin dump ni restore. La `16-3.4-alpine` trae 16.4, que sería bajar de versión menor sobre datos escritos por 16.15. La variante Debian cambia de libc, y con eso el orden de colación de los índices de texto. Antes de cambiar la etiqueta en el futuro, comparar `postgres --version` dentro de `terravid-db` con el de la imagen candidata (`docker run --rm --entrypoint postgres <imagen> --version`).
+
+**El orden importa: la imagen va en un commit propio, antes que la migración.** `actualizar.sh` corre las migraciones **antes** de recrear la base (la recrea solo si cambió el compose). Si la imagen nueva y la migración llegan a `main` en el mismo commit, `CREATE EXTENSION postgis` corre contra la base vieja, falla con `could not open extension control file "postgis.control"` y el despliegue queda trabado. La secuencia que se usó:
+
+1. Backup fresco y verificado: `BUCKET_BACKUPS=terravid-backups /opt/backend/deploy/backup-db.sh` en la VM, y `gunzip -t` sobre el archivo.
+2. Ensayo local con la imagen de producción: el esquema de `main` con datos sobre `postgres:16-alpine`, cambio de imagen sobre el mismo volumen (`pg_dump` idéntico antes y después), migraciones nuevas, y una escritura de polígono como `terravid_app`.
+3. Merge a `main` del cambio de imagen solo. El log de la VM muestra `el compose cambió: levantando todos los servicios` y `OK`.
+4. Merge a `main` de la versión con la migración. El log muestra las tres migraciones (`PoligonosPostgis`, `AnularRemitos`, `AnularLabores`) y `OK`.
+5. Recién entonces la Web, que llama a los endpoints nuevos.
+
+**Versiones en producción (VM), relevadas el 2026-11-10:**
+
+| Componente | Imagen / origen | Versión |
+|---|---|---|
+| Sistema operativo | `ubuntu-2404-lts-amd64` | Ubuntu 24.04.4 LTS |
+| Docker / Compose | `get.docker.com` | 29.7.2 / 5.5.0 |
+| Base | `postgis/postgis:16-3.6-alpine` | PostgreSQL 16.15 (Alpine 3.24), PostGIS 3.6.4, `btree_gist` 1.7 |
+| API | `api:<sha>` desde el `Dockerfile` (`node:24-slim`) | Node 24.22 |
+| Proxy | `caddy:2-alpine` | Caddy 2.11.4 |
+| Broker MQTT | `eclipse-mosquitto:2` | Mosquitto 2.1.2 |
+
+Las etiquetas de Caddy y Mosquitto son de versión mayor: la versión exacta es la que estaba en el registro el día del último `docker compose pull`. La de la base, en cambio, se fija a propósito, por lo de arriba.
 
 ---
 
