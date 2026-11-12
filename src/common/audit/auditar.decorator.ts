@@ -21,6 +21,14 @@ export interface OpcionesAuditoria {
    * propia tabla.
    */
   datos?: 'cuerpo' | 'ninguno';
+  /**
+   * Cambio de estado que produce la acción (HU-27: «estado anterior y estado
+   * nuevo»). `desde` es el único estado de partida que el service acepta para
+   * esa acción —si fuera otro, la respuesta es un error y no se audita—, así
+   * que no hace falta leerlo antes. El estado nuevo se toma del campo `campo`
+   * de lo que devuelve el handler.
+   */
+  transicion?: { campo: string; desde: string };
 }
 
 /**

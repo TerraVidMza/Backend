@@ -31,6 +31,13 @@ import { NotificacionesService } from '../notificaciones/notificaciones.service'
 import { UsuariosService } from '../usuarios/usuarios.service';
 import { hoyLocal } from '../../common/fechas/rango-fechas';
 
+/** Quién resolvió el remito, para mostrarlo en el detalle (HU-27). */
+export interface NombresResolucion {
+  aprobadoPorNombre: string | null;
+  rechazadoPorNombre: string | null;
+  anuladoPorNombre: string | null;
+}
+
 @Injectable()
 export class RemitosService {
   private readonly logger = new Logger(RemitosService.name);
@@ -93,14 +100,30 @@ export class RemitosService {
   async findByIdConDetalle(
     id: string,
     empresaId: string,
-  ): Promise<Remito & { pesajes: PesajeVendimia[] }> {
+  ): Promise<Remito & { pesajes: PesajeVendimia[] } & NombresResolucion> {
     const remito = await this.remitoRepository.findOne({
       where: { id, cuartel: { finca: { empresaId } } },
-      relations: { cuartel: { finca: true, variedad: true } },
+      relations: {
+        cuartel: { finca: true, variedad: true },
+        aprobadoPor: true,
+        rechazadoPor: true,
+        anuladoPor: true,
+      },
     });
     if (!remito) {
       throw new NotFoundException('Remito no encontrado');
     }
+
+    // HU-27: la vista del remito aprobado muestra quién lo aprobó. Se exponen
+    // solo los nombres: el usuario completo arrastraría email, rol y estado.
+    const nombres: NombresResolucion = {
+      aprobadoPorNombre: remito.aprobadoPor?.nombre ?? null,
+      rechazadoPorNombre: remito.rechazadoPor?.nombre ?? null,
+      anuladoPorNombre: remito.anuladoPor?.nombre ?? null,
+    };
+    delete (remito as Partial<Remito>).aprobadoPor;
+    delete (remito as Partial<Remito>).rechazadoPor;
+    delete (remito as Partial<Remito>).anuladoPor;
 
     const pesajes = await this.pesajeRepository.find({
       where: { remitoId: id },
@@ -108,7 +131,7 @@ export class RemitosService {
       order: { fecha: 'ASC' },
     });
 
-    return Object.assign(remito, { pesajes });
+    return Object.assign(remito, { pesajes }, nombres);
   }
 
   /**
@@ -327,7 +350,7 @@ export class RemitosService {
         tipo: aprobado ? 'remito_aprobado' : 'remito_rechazado',
         titulo: `Remito ${remito.numeroRemito} ${aprobado ? 'aprobado' : 'rechazado'}`,
         descripcion: aprobado
-          ? `El remito por ${remito.totalKg} kg fue aprobado y la liquidación quedó confirmada.`
+          ? `El remito por ${remito.totalKg} kg fue aprobado y ya es el documento de despacho para la bodega. La liquidación de la bodega se carga aparte.`
           : `El remito fue rechazado. Motivo: ${motivo ?? 'sin especificar'}. Los pesajes quedaron en revisión.`,
         urlAccion: `/remitos/${remito.id}`,
       });

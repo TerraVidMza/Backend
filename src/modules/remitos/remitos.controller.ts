@@ -102,7 +102,12 @@ export class RemitosController {
   }
 
   @Post(':id/aprobar')
-  @Auditar({ accion: 'APROBAR_REMITO', entidad: 'remito', idDesde: 'param:id' })
+  @Auditar({
+    accion: 'APROBAR_REMITO',
+    entidad: 'remito',
+    idDesde: 'param:id',
+    transicion: { campo: 'estado', desde: 'borrador' },
+  })
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
   aprobar(
     @Param('id', ParseUUIDPipe) id: string,
@@ -112,7 +117,12 @@ export class RemitosController {
   }
 
   @Post(':id/anular')
-  @Auditar({ accion: 'ANULAR_REMITO', entidad: 'remito', idDesde: 'param:id' })
+  @Auditar({
+    accion: 'ANULAR_REMITO',
+    entidad: 'remito',
+    idDesde: 'param:id',
+    transicion: { campo: 'estado', desde: 'aprobado' },
+  })
   @Roles(RolNombre.PROPIETARIO)
   anular(
     @Param('id', ParseUUIDPipe) id: string,
@@ -132,6 +142,7 @@ export class RemitosController {
     accion: 'RECHAZAR_REMITO',
     entidad: 'remito',
     idDesde: 'param:id',
+    transicion: { campo: 'estado', desde: 'borrador' },
   })
   @Roles(RolNombre.PROPIETARIO, RolNombre.AGRONOMO)
   rechazar(

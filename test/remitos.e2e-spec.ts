@@ -225,6 +225,29 @@ describe('Circuito de remitos (integración)', () => {
       expect(await estadoDeCuartel()).toBe(EstadoCuartel.COSECHADO);
     });
 
+    it('el detalle muestra quién aprobó, sin exponer al usuario completo', async () => {
+      await pesar(1000);
+      const remito = await remitos.generarBorrador(
+        ctx.cuartelId,
+        ctx.usuarioId,
+      );
+      await remitos.aprobar(remito.id, ctx.usuarioId, ctx.empresaId);
+
+      const detalle = await remitos.findByIdConDetalle(
+        remito.id,
+        ctx.empresaId,
+      );
+      const filas = await dataSource.query<{ nombre: string }[]>(
+        'SELECT nombre FROM usuarios WHERE id = $1',
+        [ctx.usuarioId],
+      );
+
+      expect(detalle.aprobadoPorNombre).toBe(filas[0].nombre);
+      expect(detalle.fechaAprobacion).toBeTruthy();
+      expect(detalle.rechazadoPorNombre).toBeNull();
+      expect(detalle).not.toHaveProperty('aprobadoPor');
+    });
+
     it('no se aprueba dos veces', async () => {
       await pesar(1000);
       const remito = await remitos.generarBorrador(

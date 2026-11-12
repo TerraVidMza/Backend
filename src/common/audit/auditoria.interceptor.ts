@@ -46,6 +46,9 @@ export class AuditoriaInterceptor implements NestInterceptor {
         if (!actorId) return;
 
         const contexto = contextoActual();
+        const cuerpo =
+          opciones.datos === 'ninguno' ? null : this.extraerCuerpo(request);
+        const transicion = this.resolverTransicion(opciones, resultado);
         // Sin await: la auditoría no puede demorar la respuesta, y
         // `registrar()` ya absorbe sus propios errores fuera de transacción.
         void this.logAuditoria.registrar({
@@ -53,8 +56,10 @@ export class AuditoriaInterceptor implements NestInterceptor {
           accion: opciones.accion,
           entidad: opciones.entidad,
           entidadId: this.resolverEntidadId(opciones, request, resultado),
-          datosNuevos:
-            opciones.datos === 'ninguno' ? null : this.extraerCuerpo(request),
+          datosAnteriores: transicion?.anterior ?? null,
+          datosNuevos: transicion
+            ? { ...(cuerpo ?? {}), ...transicion.nuevo }
+            : cuerpo,
           ipAddress: contexto?.ip ?? null,
         });
       }),
@@ -77,6 +82,26 @@ export class AuditoriaInterceptor implements NestInterceptor {
       return typeof id === 'string' ? id : null;
     }
     return null;
+  }
+
+  /**
+   * `{ estado: 'borrador' }` → `{ estado: 'aprobado' }`. Si el handler no
+   * devuelve el campo, no se inventa el estado nuevo: se omite la transición.
+   */
+  private resolverTransicion(
+    opciones: OpcionesAuditoria,
+    resultado: unknown,
+  ): {
+    anterior: Record<string, unknown>;
+    nuevo: Record<string, unknown>;
+  } | null {
+    if (!opciones.transicion) return null;
+    const { campo, desde } = opciones.transicion;
+    if (!resultado || typeof resultado !== 'object' || !(campo in resultado)) {
+      return null;
+    }
+    const nuevo = (resultado as Record<string, unknown>)[campo];
+    return { anterior: { [campo]: desde }, nuevo: { [campo]: nuevo } };
   }
 
   /**
